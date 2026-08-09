@@ -22,8 +22,10 @@ with Flyology_TUI.Components.Selectors;
 with Flyology_TUI.Components.Sparklines;
 with Flyology_TUI.Components.Spinners;
 with Flyology_TUI.Components.Split_Panes;
+with Flyology_TUI.Components.Syntax_Editors;
 with Flyology_TUI.Components.Tables;
 with Flyology_TUI.Components.Tabs;
+with Flyology_TUI.Components.Text_Areas;
 with Flyology_TUI.Components.Text_Inputs;
 with Flyology_TUI.Components.Trees;
 with Flyology_TUI.Components.Viewports;
@@ -57,10 +59,92 @@ procedure Kitchen_Sink is
      (Item_Type => Text.Unbounded_Wide_Wide_String,
       Label     => Text_Label);
 
+   type Ada_Token is
+     (Ada_Keyword, Ada_String, Ada_Comment, Ada_Identifier);
+   type Ada_Lexer_State is (Ada_Normal);
+
+   function Is_Name_Character (Value : Wide_Wide_Character) return Boolean is
+     (Value in 'a' .. 'z'
+      or else Value in 'A' .. 'Z'
+      or else Value in '0' .. '9'
+      or else Value = '_');
+
+   function Is_Keyword (Value : Wide_Wide_String) return Boolean is
+     (Value = "begin"
+      or else Value = "end"
+      or else Value = "function"
+      or else Value = "package"
+      or else Value = "procedure"
+      or else Value = "return"
+      or else Value = "type"
+      or else Value = "with");
+
+   procedure Next_Ada_Token
+     (Line        : Wide_Wide_String;
+      Initial     : Ada_Lexer_State;
+      From        : Natural;
+      Kind        : out Ada_Token;
+      First, Last : out Natural;
+      Final       : out Ada_Lexer_State;
+      Has_Token   : out Boolean)
+   is
+      Position : Natural := From;
+   begin
+      Final := Initial;
+      Kind := Ada_Identifier;
+      while Position < Line'Length
+        and then not Is_Name_Character (Line (Line'First + Position))
+        and then Line (Line'First + Position) /= '"'
+        and then not
+          (Line (Line'First + Position) = '-'
+           and then Position + 1 < Line'Length
+           and then Line (Line'First + Position + 1) = '-')
+      loop
+         Position := Position + 1;
+      end loop;
+      First := Position;
+      Last := Position;
+      Has_Token := Position < Line'Length;
+      if not Has_Token then
+         return;
+      elsif Line (Line'First + Position) = '-'
+        and then Position + 1 < Line'Length
+        and then Line (Line'First + Position + 1) = '-'
+      then
+         Kind := Ada_Comment;
+         Last := Line'Length;
+      elsif Line (Line'First + Position) = '"' then
+         Kind := Ada_String;
+         Last := Position + 1;
+         while Last < Line'Length loop
+            Last := Last + 1;
+            exit when Line (Line'First + Last - 1) = '"';
+         end loop;
+      else
+         while Last < Line'Length
+           and then Is_Name_Character (Line (Line'First + Last))
+         loop
+            Last := Last + 1;
+         end loop;
+         Kind :=
+           (if Is_Keyword
+              (Line (Line'First + First .. Line'First + Last - 1))
+            then Ada_Keyword else Ada_Identifier);
+      end if;
+   end Next_Ada_Token;
+
+   package Ada_Editors is new Flyology_TUI.Components.Syntax_Editors
+     (Token_Kind              => Ada_Token,
+      Lexer_State             => Ada_Lexer_State,
+      Initial_State           => Ada_Normal,
+      Maximum_Tokens_Per_Line => 24,
+      Next_Token              => Next_Ada_Token);
+
    type Page_Id is
      (Basics_Page,
       Controls_Page,
       Navigation_Page,
+      Editors_Page,
       Telemetry_Page,
       Windows_Page);
 
@@ -71,6 +155,7 @@ procedure Kitchen_Sink is
          when Basics_Page   => "Basics",
          when Controls_Page => "Controls",
          when Navigation_Page => "Navigation",
+         when Editors_Page => "Editors",
          when Telemetry_Page => "Telemetry",
          when Windows_Page   => "Windows");
 
@@ -285,6 +370,8 @@ procedure Kitchen_Sink is
       Table_Field,
       Tree_Field,
       Accordion_Field,
+      Text_Area_Field,
+      Syntax_Field,
       Telemetry_Field,
       Window_Field,
       Split_Field,
@@ -300,6 +387,8 @@ procedure Kitchen_Sink is
       Selector_Capture,
       Dropdown_Capture,
       Accordion_Capture,
+      Text_Area_Capture,
+      Syntax_Capture,
       First_Window_Capture,
       Second_Window_Capture,
       Split_Capture,
@@ -341,6 +430,10 @@ procedure Kitchen_Sink is
      (X => 38, Y => 8);
    Accordion_Origin : constant Flyology_TUI.Geometry.Point :=
      (X => 38, Y => 18);
+   Text_Area_Origin : constant Flyology_TUI.Geometry.Point :=
+     (X => 2, Y => 8);
+   Syntax_Origin : constant Flyology_TUI.Geometry.Point :=
+     (X => 36, Y => 8);
    Windows_Page_Origin : constant Flyology_TUI.Geometry.Point :=
      (X => 0, Y => 4);
    Window_Workspace : constant Flyology_TUI.Geometry.Rectangle :=
@@ -362,6 +455,7 @@ procedure Kitchen_Sink is
           ([Basics_Page,
             Controls_Page,
             Navigation_Page,
+            Editors_Page,
             Telemetry_Page,
             Windows_Page]);
       Input    : Flyology_TUI.Components.Text_Inputs.Model :=
@@ -406,6 +500,14 @@ procedure Kitchen_Sink is
       Accordion : Kitchen_Sink.Accordions.Model :=
         Kitchen_Sink.Accordions.Create
           ([Overview_Section, Identity_Section, Composition_Section]);
+      Text_Area : Flyology_TUI.Components.Text_Areas.Model
+        (2_048, 128, 32, 8_192) :=
+        Flyology_TUI.Components.Text_Areas.Create
+          (2_048, 128, 32, 8_192, 28, 13, "Write bounded notes...");
+      Syntax : Kitchen_Sink.Ada_Editors.Model
+        (4_096, 256, 32, 12_288) :=
+        Kitchen_Sink.Ada_Editors.Create
+          (4_096, 256, 32, 12_288, 28, 13, "Ada source");
       Samples  : Kitchen_Sink.Samples.Series :=
         Kitchen_Sink.Samples.Create (32);
       Work     : Kitchen_Sink.Work_Progress.Model :=
@@ -491,6 +593,8 @@ procedure Kitchen_Sink is
       Item.Split.Blur;
       Item.Vertical_Scroll.Blur;
       Item.Horizontal_Scroll.Blur;
+      Item.Text_Area.Blur;
+      Item.Syntax.Blur;
       Item.Focus := Target;
       case Item.Focus is
          when Text_Field => Item.Input.Focus;
@@ -518,6 +622,8 @@ procedure Kitchen_Sink is
          when Split_Field => Item.Split.Focus;
          when Vertical_Scroll_Field => Item.Vertical_Scroll.Focus;
          when Horizontal_Scroll_Field => Item.Horizontal_Scroll.Focus;
+         when Text_Area_Field => Item.Text_Area.Focus;
+         when Syntax_Field => Item.Syntax.Focus;
          when others => null;
       end case;
    end Activate;
@@ -573,6 +679,42 @@ procedure Kitchen_Sink is
         (Total => 100, Page_Size => 20, First => 18);
       Item.Horizontal_Scroll.Configure
         (Total => 180, Page_Size => 68, First => 42);
+      declare
+         Accepted : Boolean;
+      begin
+         Item.Text_Area.Try_Set_Text
+           ("No-wrap scratchpad — λ and 🐝 stay whole."
+            & Wide_Wide_Character'Val (10)
+            & "Use arrows, selection, paste, undo, and the mouse."
+            & Wide_Wide_Character'Val (10)
+            & "This deliberately long line demonstrates horizontal "
+            & "scrolling without changing the shared editor model.",
+            Accepted);
+         if not Accepted then
+            raise Program_Error with "kitchen-sink text area seed overflow";
+         end if;
+         Item.Text_Area.Set_Wrap
+           (Flyology_TUI.Components.Text_Areas.No_Wrap);
+         Item.Syntax.Try_Set_Text
+           ("with Ada.Text_IO;" & Wide_Wide_Character'Val (10)
+            & Wide_Wide_Character'Val (10)
+            & "procedure Hello is" & Wide_Wide_Character'Val (10)
+            & "   Message : constant String := ""Hello, λ!"";"
+            & Wide_Wide_Character'Val (10)
+            & "begin" & Wide_Wide_Character'Val (10)
+            & "   --  Highlighting advances on the app's budget."
+            & Wide_Wide_Character'Val (10)
+            & "   Ada.Text_IO.Put_Line (Message);"
+            & Wide_Wide_Character'Val (10)
+            & "end Hello;",
+            Accepted);
+         if not Accepted then
+            raise Program_Error with "kitchen-sink syntax seed overflow";
+         end if;
+         Item.Syntax.Set_Wrap
+           (Flyology_TUI.Components.Text_Areas.Soft_Wrap);
+         Item.Syntax.Advance_Highlighting (32);
+      end;
       Transitions.Run (Next, Wait_For_Tick);
    end Initialize;
 
@@ -680,6 +822,30 @@ procedure Kitchen_Sink is
                    when Accordion_Field  => Page_Navigation,
                    when others           => Breadcrumb_Field));
          end if;
+      when Editors_Page =>
+         if Item.Focus not in
+           Page_Navigation | Text_Area_Field | Syntax_Field
+         then
+            Activate (Item, Text_Area_Field);
+            return;
+         end if;
+         if Backwards then
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Syntax_Field,
+                   when Text_Area_Field => Page_Navigation,
+                   when Syntax_Field    => Text_Area_Field,
+                   when others          => Text_Area_Field));
+         else
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Text_Area_Field,
+                   when Text_Area_Field => Syntax_Field,
+                   when Syntax_Field    => Page_Navigation,
+                   when others          => Text_Area_Field));
+         end if;
       when Windows_Page =>
          if Item.Focus not in
            Page_Navigation | Window_Field .. Horizontal_Scroll_Field
@@ -739,6 +905,12 @@ procedure Kitchen_Sink is
               Page_Navigation | Breadcrumb_Field .. Accordion_Field
             then
                Activate (Item, Breadcrumb_Field);
+            end if;
+         when Editors_Page =>
+            if Item.Focus not in
+              Page_Navigation | Text_Area_Field | Syntax_Field
+            then
+               Activate (Item, Text_Area_Field);
             end if;
          when Windows_Page =>
             if Item.Focus not in
@@ -861,6 +1033,20 @@ procedure Kitchen_Sink is
                Apply_Result
                  (Item, Accordion_Field, Accordion_Capture, Result);
             end;
+         when Text_Area_Capture =>
+            Result := Item.Text_Area.Handle
+              (Flyology_TUI.Mouse.Relative (Event, Text_Area_Origin));
+            Apply_Result
+              (Item, Text_Area_Field, Text_Area_Capture, Result);
+            Normalize_Focus (Item);
+         when Syntax_Capture =>
+            Result := Item.Syntax.Handle
+              (Flyology_TUI.Mouse.Relative (Event, Syntax_Origin));
+            Apply_Result (Item, Syntax_Field, Syntax_Capture, Result);
+            if Result.Changed then
+               Item.Syntax.Advance_Highlighting (4);
+            end if;
+            Normalize_Focus (Item);
          when First_Window_Capture =>
             Page_Event :=
               Flyology_TUI.Mouse.Relative (Event, Windows_Page_Origin);
@@ -1036,6 +1222,39 @@ procedure Kitchen_Sink is
       end if;
    end Handle_Navigation_Mouse;
 
+   procedure Handle_Editors_Mouse
+     (Item  : in out Model;
+      Event : Flyology_TUI.Events.Mouse_Event) is
+      use Flyology_TUI.Components.Interactions;
+      Point : constant Flyology_TUI.Geometry.Point :=
+        (X => Integer (Event.X), Y => Integer (Event.Y));
+      Text_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        (X      => Text_Area_Origin.X,
+         Y      => Text_Area_Origin.Y,
+         Width  => Item.Text_Area.Width,
+         Height => Item.Text_Area.Height);
+      Syntax_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        (X      => Syntax_Origin.X,
+         Y      => Syntax_Origin.Y,
+         Width  => Item.Syntax.Width,
+         Height => Item.Syntax.Height);
+      Result : Update_Result;
+   begin
+      if Flyology_TUI.Geometry.Contains (Text_Bounds, Point) then
+         Result := Item.Text_Area.Handle
+           (Flyology_TUI.Mouse.Relative (Event, Text_Area_Origin));
+         Apply_Result
+           (Item, Text_Area_Field, Text_Area_Capture, Result);
+      elsif Flyology_TUI.Geometry.Contains (Syntax_Bounds, Point) then
+         Result := Item.Syntax.Handle
+           (Flyology_TUI.Mouse.Relative (Event, Syntax_Origin));
+         Apply_Result (Item, Syntax_Field, Syntax_Capture, Result);
+         if Result.Changed then
+            Item.Syntax.Advance_Highlighting (4);
+         end if;
+      end if;
+   end Handle_Editors_Mouse;
+
    procedure Handle_Windows_Mouse
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Mouse_Event) is
@@ -1153,6 +1372,7 @@ procedure Kitchen_Sink is
          Result := Item.Pages.Handle
            (Flyology_TUI.Mouse.Relative (Event.Mouse, Page_Tabs_Origin));
          Apply_Result (Item, Page_Navigation, Page_Capture, Result);
+         Normalize_Focus (Item);
          return;
       end if;
 
@@ -1193,6 +1413,8 @@ procedure Kitchen_Sink is
          Handle_Telemetry_Mouse (Item, Event.Mouse);
       when Navigation_Page =>
          Handle_Navigation_Mouse (Item, Event.Mouse);
+      when Editors_Page =>
+         Handle_Editors_Mouse (Item, Event.Mouse);
       when Windows_Page =>
          Handle_Windows_Mouse (Item, Event.Mouse);
       end case;
@@ -1240,6 +1462,16 @@ procedure Kitchen_Sink is
             Result := Item.Accordion.Handle (Event);
             Apply_Result
               (Item, Accordion_Field, Accordion_Capture, Result);
+         when Text_Area_Field =>
+            Result := Item.Text_Area.Handle (Event);
+            Apply_Result
+              (Item, Text_Area_Field, Text_Area_Capture, Result);
+         when Syntax_Field =>
+            Result := Item.Syntax.Handle (Event);
+            Apply_Result (Item, Syntax_Field, Syntax_Capture, Result);
+            if Result.Changed then
+               Item.Syntax.Advance_Highlighting (4);
+            end if;
          when Telemetry_Field =>
             Result := Item.Work.Handle (Event);
             Apply_Result (Item, Telemetry_Field, No_Capture, Result);
@@ -1293,6 +1525,7 @@ procedure Kitchen_Sink is
    begin
       if Event.Kind = Events.Application_Message then
          Item.Spinner.Tick;
+         Item.Syntax.Advance_Highlighting (2);
          Item.Telemetry_Tick := (Item.Telemetry_Tick + 1) mod 1_000;
          Item.Samples.Append
            (Integer (Item.Telemetry_Tick mod 23) - 11);
@@ -1524,6 +1757,50 @@ procedure Kitchen_Sink is
       return Canvas;
    end Navigation_View;
 
+   function Text_Area_Look
+     return Flyology_TUI.Components.Text_Areas.Appearance
+   is
+      Result : Flyology_TUI.Components.Text_Areas.Appearance :=
+        Flyology_TUI.Components.Text_Areas.From_Theme (Visual);
+   begin
+      Result.Current_Line := Visual.Input;
+      Result.Cursor := Visual.Focused;
+      return Result;
+   end Text_Area_Look;
+
+   function Syntax_Look return Ada_Editors.Appearance is
+      Result : Ada_Editors.Appearance := Ada_Editors.From_Theme (Visual);
+   begin
+      Result.Editor.Current_Line := Visual.Input;
+      Result.Editor.Cursor := Visual.Focused;
+      Result.Tokens (Ada_Keyword) := Visual.Focused;
+      Result.Tokens (Ada_String) := Visual.Success;
+      Result.Tokens (Ada_Comment) := Visual.Muted;
+      Result.Tokens (Ada_Identifier) := Visual.Primary;
+      return Result;
+   end Syntax_Look;
+
+   function Editors_View
+     (Item : Model) return Flyology_TUI.Surfaces.Surface
+   is
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (68, 20);
+      Text_View : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Text area · no wrap",
+           Item.Text_Area.Render (Text_Area_Look),
+           Item.Focus = Text_Area_Field, Visual.Border, Visual.Muted);
+      Code_View : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Syntax editor · soft wrap",
+           Item.Syntax.Render (Syntax_Look),
+           Item.Focus = Syntax_Field, Visual.Border, Visual.Muted);
+   begin
+      Canvas.Overlay_Clipped (Text_View, 0, 0);
+      Canvas.Overlay_Clipped (Code_View, 34, 0);
+      return Canvas;
+   end Editors_View;
+
    function Windows_View
      (Item : Model) return Flyology_TUI.Surfaces.Surface
    is
@@ -1599,6 +1876,113 @@ procedure Kitchen_Sink is
    end Windows_View;
 
    function Present (Item : Model) return Flyology_TUI.Views.View is
+      procedure Place_Text_Cursor
+        (Target : in out Flyology_TUI.Views.View)
+      is
+         Here : constant Flyology_TUI.Components.Text_Areas.Position :=
+           Item.Text_Area.Cursor_Position;
+         Offset : constant Natural := Item.Text_Area.Cursor_Offset;
+         Gutter : constant Positive := Item.Text_Area.Gutter_Columns;
+      begin
+         for Row in 0 .. Item.Text_Area.Height - 1 loop
+            declare
+               Line, Next_Line : Positive;
+               First, Last, Next_First, Next_Last : Natural;
+               Exists, Next_Exists : Boolean;
+            begin
+               Item.Text_Area.Visible_Segment
+                 (Row, Line, First, Last, Exists);
+               exit when not Exists;
+               Item.Text_Area.Visible_Segment
+                 (Row + 1, Next_Line, Next_First, Next_Last, Next_Exists);
+               if Line = Here.Line
+                 and then Offset >= First
+                 and then
+                   (Offset < Last
+                    or else
+                      (Offset = Last
+                       and then not
+                         (Next_Exists
+                          and then Next_Line = Line
+                          and then Next_First = Last)))
+                 and then Here.Cell_Column >= Item.Text_Area.Viewport_Cell
+               then
+                  declare
+                     Relative : constant Natural :=
+                       Here.Cell_Column - Item.Text_Area.Viewport_Cell;
+                  begin
+                     if Gutter + Relative < Item.Text_Area.Width then
+                        Target.Cursor :=
+                          (Visible => True,
+                           X       => Text_Area_Origin.X + Gutter + Relative,
+                           Y       => Text_Area_Origin.Y + Row,
+                           Shape   => Flyology_TUI.Views.Cursor_Bar,
+                           Blink   => False);
+                     end if;
+                  end;
+                  return;
+               end if;
+            end;
+         end loop;
+      end Place_Text_Cursor;
+
+      procedure Place_Syntax_Cursor
+        (Target : in out Flyology_TUI.Views.View)
+      is
+         Here : constant Flyology_TUI.Components.Text_Areas.Position :=
+           Item.Syntax.Cursor_Position;
+         Offset : constant Natural := Item.Syntax.Cursor_Offset;
+         Gutter : constant Positive := Item.Syntax.Gutter_Columns;
+      begin
+         for Row in 0 .. Item.Syntax.Height - 1 loop
+            declare
+               Line, Next_Line : Positive;
+               First, Last, Next_First, Next_Last : Natural;
+               Exists, Next_Exists : Boolean;
+            begin
+               Item.Syntax.Visible_Segment
+                 (Row, Line, First, Last, Exists);
+               exit when not Exists;
+               Item.Syntax.Visible_Segment
+                 (Row + 1, Next_Line, Next_First, Next_Last, Next_Exists);
+               if Line = Here.Line
+                 and then Offset >= First
+                 and then
+                   (Offset < Last
+                    or else
+                      (Offset = Last
+                       and then not
+                         (Next_Exists
+                          and then Next_Line = Line
+                          and then Next_First = Last)))
+               then
+                  declare
+                     Start_Cell : constant Natural :=
+                       Item.Syntax.Position_At_Offset (First).Cell_Column;
+                  begin
+                     if Here.Cell_Column >= Start_Cell then
+                        declare
+                           Relative : constant Natural :=
+                             Here.Cell_Column - Start_Cell;
+                        begin
+                           if Gutter + Relative < Item.Syntax.Width then
+                              Target.Cursor :=
+                                (Visible => True,
+                                 X       =>
+                                   Syntax_Origin.X + Gutter + Relative,
+                                 Y       => Syntax_Origin.Y + Row,
+                                 Shape   => Flyology_TUI.Views.Cursor_Bar,
+                                 Blink   => False);
+                           end if;
+                        end;
+                     end if;
+                  end;
+                  return;
+               end if;
+            end;
+         end loop;
+      end Place_Syntax_Cursor;
+
       Header : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Horizontally
           (Item.Spinner.Render (Visual),
@@ -1614,6 +1998,7 @@ procedure Kitchen_Sink is
             when Basics_Page   => Basics_View (Item),
             when Controls_Page => Controls_View (Item),
             when Navigation_Page => Navigation_View (Item),
+            when Editors_Page => Editors_View (Item),
             when Telemetry_Page => Telemetry_View (Item),
             when Windows_Page   => Windows_View (Item));
       Help : constant Flyology_TUI.Surfaces.Surface :=
@@ -1665,6 +2050,14 @@ procedure Kitchen_Sink is
             Result.Cursor.Shape := Flyology_TUI.Views.Cursor_Bar;
             Result.Cursor.Blink := False;
          end;
+      elsif Current_Page (Item) = Editors_Page
+        and then Item.Focus = Text_Area_Field
+      then
+         Place_Text_Cursor (Result);
+      elsif Current_Page (Item) = Editors_Page
+        and then Item.Focus = Syntax_Field
+      then
+         Place_Syntax_Cursor (Result);
       end if;
       return Result;
    end Present;

@@ -17,6 +17,7 @@ executables = [
   "window_components_tests",
   "accordion_tests",
   "data_navigation_tests",
+  "editing_tests",
 ]
 
 [[depends-on]]

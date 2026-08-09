@@ -63,6 +63,8 @@ package Flyology_TUI.Components.Syntax_Editors is
    function Value (Item : Model) return Wide_Wide_String;
    function Cursor_Position
      (Item : Model) return Flyology_TUI.Components.Text_Areas.Position;
+   function Position_At_Offset (Item : Model; Offset : Natural)
+      return Flyology_TUI.Components.Text_Areas.Position;
    function Cursor_Offset (Item : Model) return Natural;
    procedure Set_Cursor_Offset (Item : in out Model; Offset : Natural);
 
@@ -89,6 +91,14 @@ package Flyology_TUI.Components.Syntax_Editors is
      (Item : in out Model; First_Line : Positive; First_Cell : Natural := 0);
    function Viewport_Line (Item : Model) return Positive;
    function Viewport_Cell (Item : Model) return Natural;
+   function Gutter_Columns (Item : Model) return Positive;
+   procedure Visible_Segment
+     (Item          : Model;
+      Row           : Natural;
+      Line          : out Positive;
+      Segment_First : out Natural;
+      Segment_Last  : out Natural;
+      Exists        : out Boolean);
    function Can_Undo (Item : Model) return Boolean;
    function Can_Redo (Item : Model) return Boolean;
    procedure Undo (Item : in out Model);

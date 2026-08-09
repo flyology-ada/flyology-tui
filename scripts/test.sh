@@ -15,6 +15,7 @@ alr build
 ./bin/window_components_tests
 ./bin/accordion_tests
 ./bin/data_navigation_tests
+./bin/editing_tests
 
 cd "$root_dir"
 alr exec -- gprbuild -P examples/examples.gpr -p

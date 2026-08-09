@@ -84,6 +84,10 @@ package body Flyology_TUI.Components.Syntax_Editors is
      (Item : Model) return Flyology_TUI.Components.Text_Areas.Position is
      (Item.Editor.Cursor_Position);
 
+   function Position_At_Offset (Item : Model; Offset : Natural)
+      return Flyology_TUI.Components.Text_Areas.Position is
+     (Item.Editor.Position_At_Offset (Offset));
+
    function Cursor_Offset (Item : Model) return Natural is
      (Item.Editor.Cursor_Offset);
 
@@ -171,6 +175,21 @@ package body Flyology_TUI.Components.Syntax_Editors is
 
    function Viewport_Cell (Item : Model) return Natural is
      (Item.Editor.Viewport_Cell);
+
+   function Gutter_Columns (Item : Model) return Positive is
+     (Item.Editor.Gutter_Columns);
+
+   procedure Visible_Segment
+     (Item          : Model;
+      Row           : Natural;
+      Line          : out Positive;
+      Segment_First : out Natural;
+      Segment_Last  : out Natural;
+      Exists        : out Boolean) is
+   begin
+      Item.Editor.Visible_Segment
+        (Row, Line, Segment_First, Segment_Last, Exists);
+   end Visible_Segment;
 
    function Can_Undo (Item : Model) return Boolean is
      (Item.Editor.Can_Undo);
