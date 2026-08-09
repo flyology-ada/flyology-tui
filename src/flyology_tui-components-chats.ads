@@ -231,6 +231,8 @@ private
      (Index_Type => Natural, Element_Type => Message);
    package Natural_Vectors is new Ada.Containers.Vectors
      (Index_Type => Natural, Element_Type => Natural);
+   package Integer_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Natural, Element_Type => Integer);
    package Id_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Natural,
       Element_Type => Message_Id,
@@ -262,6 +264,8 @@ private
       Header_Regions    : Region_Vectors.Vector;
       Body_Regions      : Region_Vectors.Vector;
       Action_Regions    : Region_Vectors.Vector;
+      Body_Origins      : Integer_Vectors.Vector;
+      Action_Origins    : Integer_Vectors.Vector;
    end record;
 
    type Presentation is record

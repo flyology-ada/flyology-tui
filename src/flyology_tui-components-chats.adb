@@ -361,6 +361,28 @@ package body Flyology_TUI.Components.Chats is
       end if;
    end Signed_Difference;
 
+   function Clip_To_Viewport
+     (Segment_Start : Natural;
+      Segment_End   : Natural;
+      View_Start    : Natural;
+      View_End      : Natural;
+      Width         : Natural) return Flyology_TUI.Geometry.Rectangle
+   is
+      Visible_Start : Natural;
+      Visible_End   : Natural;
+   begin
+      if Segment_Start >= View_End or else Segment_End <= View_Start then
+         return (X => 0, Y => 0, Width => Width, Height => 0);
+      end if;
+      Visible_Start := Natural'Max (Segment_Start, View_Start);
+      Visible_End := Natural'Min (Segment_End, View_End);
+      return
+        (X      => 0,
+         Y      => Integer (Visible_Start - View_Start),
+         Width  => Width,
+         Height => Visible_End - Visible_Start);
+   end Clip_To_Viewport;
+
    function Plan
      (Item            : Model;
       Width           : Natural;
@@ -424,18 +446,24 @@ package body Flyology_TUI.Components.Chats is
                         (Block_Start, Item.First_Cell),
                       Width  => Width,
                       Height => 1));
+                  Result.Body_Origins.Append
+                    (Signed_Difference (Body_Start, Item.First_Cell));
+                  Result.Action_Origins.Append
+                    (Signed_Difference (Action_Start, Item.First_Cell));
                   Result.Body_Regions.Append
-                    ((X      => 0,
-                      Y      => Signed_Difference
-                        (Body_Start, Item.First_Cell),
-                      Width  => Width,
-                      Height => Body_Height));
+                    (Clip_To_Viewport
+                       (Body_Start,
+                        Action_Start,
+                        Item.First_Cell,
+                        View_End,
+                        Width));
                   Result.Action_Regions.Append
-                    ((X      => 0,
-                      Y      => Signed_Difference
-                        (Action_Start, Item.First_Cell),
-                      Width  => Width,
-                      Height => Action_Height));
+                    (Clip_To_Viewport
+                       (Action_Start,
+                        Block_End,
+                        Item.First_Cell,
+                        View_End,
+                        Width));
                end if;
                Block_Start := Block_End;
             end;
@@ -611,13 +639,11 @@ package body Flyology_TUI.Components.Chats is
             Result.Frame_Value.Overlay_Clipped
               (Bodies (Positive (Body_Position)).Content,
                0,
-               Result.Layout_Value.Body_Regions.Element
-                 (Visible - 1).Y);
+               Result.Layout_Value.Body_Origins.Element (Visible - 1));
             Result.Frame_Value.Overlay_Clipped
               (Bodies (Positive (Body_Position)).Actions,
                0,
-               Result.Layout_Value.Action_Regions.Element
-                 (Visible - 1).Y);
+               Result.Layout_Value.Action_Origins.Element (Visible - 1));
          end;
       end loop;
 
@@ -791,6 +817,9 @@ package body Flyology_TUI.Components.Chats is
    is
       Old_Focused : constant Natural := Item.Focused;
       Old_Selected : constant Natural := Item.Selected;
+      Old_First : constant Natural := Item.First_Cell;
+      Old_Follow : constant Boolean := Item.Follow_Tail;
+      Old_Unread : constant Natural := Item.Unread;
       Changed : Boolean := False;
    begin
       if Event.Kind /= Flyology_TUI.Events.Key_Press
@@ -843,7 +872,12 @@ package body Flyology_TUI.Components.Chats is
       end case;
       return
         (Handled => True,
-         Changed => Changed or else Item.Focused /= Old_Focused,
+         Changed =>
+           Changed
+           or else Item.Focused /= Old_Focused
+           or else Item.First_Cell /= Old_First
+           or else Item.Follow_Tail /= Old_Follow
+           or else Item.Unread /= Old_Unread,
          others  => <>);
    end Handle;
 
@@ -868,6 +902,28 @@ package body Flyology_TUI.Components.Chats is
       return 0;
    end Header_Hit;
 
+   function Child_Hit
+     (Layout : Presentation;
+      Event  : Flyology_TUI.Mouse.Local_Event) return Boolean
+   is
+   begin
+      if Layout.Layout_Value.Ids.Is_Empty then
+         return False;
+      end if;
+      for Index in 0 .. Natural (Layout.Layout_Value.Ids.Length) - 1 loop
+         if Flyology_TUI.Geometry.Contains
+           (Layout.Layout_Value.Body_Regions.Element (Index),
+            Event.X, Event.Y)
+           or else Flyology_TUI.Geometry.Contains
+             (Layout.Layout_Value.Action_Regions.Element (Index),
+              Event.X, Event.Y)
+         then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Child_Hit;
+
    function Handle
      (Item   : in out Model;
       Event  : Flyology_TUI.Mouse.Local_Event;
@@ -879,6 +935,11 @@ package body Flyology_TUI.Components.Chats is
       Index   : Natural;
    begin
       if Event.Action = Flyology_TUI.Events.Mouse_Wheel
+        and then Event.Wheel_Y /= 0
+        and then Child_Hit (Layout, Event)
+      then
+         return Flyology_TUI.Components.Interactions.Ignored;
+      elsif Event.Action = Flyology_TUI.Events.Mouse_Wheel
         and then Event.Wheel_Y /= 0
         and then Flyology_TUI.Geometry.Contains
           (Layout.Layout_Value.Transcript_Value, Event.X, Event.Y)

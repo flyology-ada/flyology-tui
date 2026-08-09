@@ -489,6 +489,16 @@ procedure Chat_Tests is
       Assert
         (not Result.Handled,
          "chat consumed an event belonging to a heterogeneous body");
+      Result := Item.Handle
+        (Pointer
+           (Body_Area.X, Body_Area.Y,
+            Flyology_TUI.Events.Mouse_Wheel,
+            Button => Flyology_TUI.Events.No_Button,
+            Wheel_Y => 1),
+         View);
+      Assert
+        (not Result.Handled,
+         "chat consumed wheel input belonging to a heterogeneous body");
 
       Action_Area := Chats.Action_Region (View, One);
       Result := Item.Handle
@@ -499,6 +509,16 @@ procedure Chat_Tests is
       Assert
         (not Result.Handled,
          "chat consumed an event belonging to message actions");
+      Result := Item.Handle
+        (Pointer
+           (Action_Area.X, Action_Area.Y,
+            Flyology_TUI.Events.Mouse_Wheel,
+            Button => Flyology_TUI.Events.No_Button,
+            Wheel_Y => -1),
+         View);
+      Assert
+        (not Result.Handled,
+         "chat consumed wheel input belonging to message actions");
 
       Header := Chats.Header_Region (View, One);
       Result := Item.Handle
@@ -531,6 +551,150 @@ procedure Chat_Tests is
          "zero wheel input reported a chat change");
    end Test_Keyboard_Mouse_And_Pass_Through;
 
+   procedure Test_Navigation_Result_Accuracy is
+      Item : Chats.Model := Chats.Create
+        ((Message (One, Alice, Chats.User),
+          Message (Two, Ada_Bot, Chats.Assistant)), 2);
+      Changed : Boolean;
+      Result : Flyology_TUI.Components.Interactions.Update_Result;
+   begin
+      Item.Reconcile_Measurements
+        (((One, 2, 0), (Two, 1, 0)));
+      Item.Set_Follow_Tail (False);
+      Item.Scroll_Cells (Integer'Last, Changed);
+      Assert
+        (Changed and then Item.First_Visible_Cell = 3
+         and then Item.Follows_Tail,
+         "result test did not establish its tail viewport");
+
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Up_Key));
+      Assert
+        (Result.Handled and then Result.Changed
+         and then Item.Focused_Id = One
+         and then Item.First_Visible_Cell = 0
+         and then not Item.Follows_Tail,
+         "boundary Up omitted viewport and follow-tail changes");
+
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Down_Key));
+      Assert
+        (Result.Changed and then Item.Focused_Id = Two
+         and then Item.First_Visible_Cell = 3,
+         "Down did not expose the newly focused message");
+      Item.Set_Follow_Tail (False);
+      Item.Scroll_Cells (Integer'First, Changed);
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Down_Key));
+      Assert
+        (Result.Changed and then Item.Focused_Id = Two
+         and then Item.First_Visible_Cell = 3
+         and then Item.Follows_Tail,
+         "boundary Down omitted ensure-visible state changes");
+
+      Item.Set_Follow_Tail (False);
+      Result := Item.Handle (Key (Flyology_TUI.Events.End_Key));
+      Assert
+        (Result.Changed and then Item.Focused_Id = Two
+         and then Item.Follows_Tail,
+         "End omitted a follow-tail-only change");
+
+      Result := Item.Handle (Key (Flyology_TUI.Events.Home_Key));
+      Assert
+        (Result.Changed and then Item.Focused_Id = One
+         and then Item.First_Visible_Cell = 0,
+         "Home did not report its navigation changes");
+      Item.Scroll_Cells (Integer'Last, Changed);
+      Result := Item.Handle (Key (Flyology_TUI.Events.Home_Key));
+      Assert
+        (Result.Changed and then Item.Focused_Id = One
+         and then Item.First_Visible_Cell = 0,
+         "boundary Home omitted viewport changes");
+   end Test_Navigation_Result_Accuracy;
+
+   procedure Test_Clipped_Child_Regions is
+      Item : Chats.Model := Chats.Create
+        ((Message (One, Alice, Chats.Assistant, Chats.Streaming),
+          Message (Two, Runtime, Chats.System)), 3);
+      First_Content : constant Flyology_TUI.Surfaces.Surface :=
+        Painted (10, 5, "body");
+      First_Actions : constant Flyology_TUI.Surfaces.Surface :=
+        Painted (10, 2, "actions");
+      No_Surface : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (0, 0);
+      Footer : constant Flyology_TUI.Surfaces.Surface :=
+        Painted (10, 1, "footer");
+      Composer : constant Flyology_TUI.Surfaces.Surface :=
+        Painted (10, 1, "compose");
+      Head_Bodies : constant Chats.Body_Array :=
+        (1 => (One, First_Content, First_Actions));
+      Tail_Bodies : constant Chats.Body_Array :=
+        ((One, First_Content, First_Actions),
+         (Two, No_Surface, No_Surface));
+      Changed : Boolean;
+   begin
+      Item.Reconcile_Measurements
+        (((One, 5, 2), (Two, 0, 0)));
+      Item.Set_Follow_Tail (False);
+      Item.Scroll_Cells (Integer'First, Changed);
+      declare
+         Head : constant Chats.Presentation := Item.Present
+           (Head_Bodies, 10, Footer, Composer,
+            Flyology_TUI.Themes.Charm);
+         Body_Area : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Body_Region (Head, One);
+         Footer_Area : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Footer_Region (Chats.Layout (Head));
+      begin
+         Assert
+           (Body_Area.Y = 1 and then Body_Area.Height = 2
+            and then not Chats.Has_Action_Region (Head, One),
+            "head presentation did not clip body and hidden actions");
+         Assert
+           (Body_Area.Y + Integer (Body_Area.Height) <= Footer_Area.Y,
+            "clipped body region overlapped the external footer");
+      end;
+
+      Item.Scroll_Cells (4, Changed);
+      declare
+         Middle : constant Chats.Presentation := Item.Present
+           (Head_Bodies, 10, Footer, Composer,
+            Flyology_TUI.Themes.Charm);
+         Body_Area : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Body_Region (Middle, One);
+         Action_Area : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Action_Region (Middle, One);
+      begin
+         Assert
+           (Body_Area.Y = 0 and then Body_Area.Height = 2
+            and then Action_Area.Y = 2 and then Action_Area.Height = 1,
+            "middle presentation did not clip both child regions");
+      end;
+
+      Item.Scroll_Cells (Integer'Last, Changed);
+      declare
+         Tail : constant Chats.Presentation := Item.Present
+           (Tail_Bodies, 10, Footer, Composer,
+            Flyology_TUI.Themes.Charm);
+         Body_Area : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Body_Region (Tail, One);
+         Action_Area : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Action_Region (Tail, One);
+         Footer_Area : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Footer_Region (Chats.Layout (Tail));
+         Composer_Area : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Composer_Region (Chats.Layout (Tail));
+      begin
+         Assert
+           (Body_Area.Height = 0
+            and then Chats.Has_Action_Region (Tail, One)
+            and then Action_Area.Y = 0 and then Action_Area.Height = 2,
+            "tail presentation published a wholly clipped body");
+         Assert
+           (Action_Area.Y + Integer (Action_Area.Height) <= Footer_Area.Y
+            and then Footer_Area.Y + Integer (Footer_Area.Height) <=
+              Composer_Area.Y,
+            "child, footer, and composer regions overlap");
+      end;
+   end Test_Clipped_Child_Regions;
+
 begin
    Test_Empty_Tiny_And_Theme;
    Test_Virtualization_And_Mixed_Heights;
@@ -538,5 +702,7 @@ begin
    Test_Atomic_Measurements_And_Dimensions;
    Test_Presentation_Borrowing_And_Validation;
    Test_Keyboard_Mouse_And_Pass_Through;
+   Test_Navigation_Result_Accuracy;
+   Test_Clipped_Child_Regions;
    Ada.Text_IO.Put_Line ("chat tests passed");
 end Chat_Tests;
