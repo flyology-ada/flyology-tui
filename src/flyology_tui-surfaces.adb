@@ -210,4 +210,90 @@ package body Flyology_TUI.Surfaces is
       end loop;
    end Overlay;
 
+   procedure Overlay_Clipped
+     (Target             : in out Surface;
+      Source             : Surface;
+      X, Y               : Integer;
+      Transparent_Spaces : Boolean := False)
+   is
+      subtype Wide_Coordinate is Long_Long_Integer;
+   begin
+      if Source.Rows = 0 or else Source.Columns = 0
+        or else Target.Rows = 0 or else Target.Columns = 0
+      then
+         return;
+      end if;
+
+      for Row in 0 .. Source.Rows - 1 loop
+         declare
+            Target_Y : constant Wide_Coordinate :=
+              Wide_Coordinate (Y) + Wide_Coordinate (Row);
+         begin
+            if Target_Y >= 0
+              and then Target_Y < Wide_Coordinate (Target.Rows)
+            then
+               for Column in 0 .. Source.Columns - 1 loop
+                  declare
+                     Value : constant Cell := Source.Element (Column, Row);
+                  begin
+                     if not Value.Continuation then
+                        declare
+                           Glyph : constant Wide_Wide_String :=
+                             Text.To_Wide_Wide_String (Value.Glyph);
+                           Is_Transparent : constant Boolean :=
+                             Transparent_Spaces and then Glyph = " ";
+                           Columns : constant Natural :=
+                             (if Column + 1 < Source.Columns
+                                and then Source.Element
+                                  (Column + 1, Row).Continuation
+                              then 2
+                              else 1);
+                           Target_X : constant Wide_Coordinate :=
+                             Wide_Coordinate (X)
+                             + Wide_Coordinate (Column);
+                           Target_Last : constant Wide_Coordinate :=
+                             Target_X + Wide_Coordinate (Columns) - 1;
+                           Fully_Visible : constant Boolean :=
+                             Target_X >= 0
+                             and then Target_Last <
+                               Wide_Coordinate (Target.Columns);
+                        begin
+                           if not Is_Transparent and then Fully_Visible then
+                              Target.Put
+                                (Natural (Target_X),
+                                 Natural (Target_Y),
+                                 Glyph,
+                                 Value.Appearance);
+                           elsif not Is_Transparent
+                             and then Target_Last >= 0
+                             and then Target_X <
+                               Wide_Coordinate (Target.Columns)
+                           then
+                              for Offset in 0 .. Columns - 1 loop
+                                 declare
+                                    Visible_X : constant Wide_Coordinate :=
+                                      Target_X + Wide_Coordinate (Offset);
+                                 begin
+                                    if Visible_X >= 0
+                                      and then Visible_X <
+                                        Wide_Coordinate (Target.Columns)
+                                    then
+                                       Target.Put
+                                         (Natural (Visible_X),
+                                          Natural (Target_Y),
+                                          " ",
+                                          Value.Appearance);
+                                    end if;
+                                 end;
+                              end loop;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end if;
+         end;
+      end loop;
+   end Overlay_Clipped;
+
 end Flyology_TUI.Surfaces;

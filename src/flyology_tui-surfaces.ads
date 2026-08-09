@@ -52,6 +52,14 @@ package Flyology_TUI.Surfaces is
       X, Y               : Natural;
       Transparent_Spaces : Boolean := False);
 
+   --  Overlay at a signed origin. Partially clipped wide glyphs become styled
+   --  blanks in their visible cells, never orphan continuation cells.
+   procedure Overlay_Clipped
+     (Target             : in out Surface;
+      Source             : Surface;
+      X, Y               : Integer;
+      Transparent_Spaces : Boolean := False);
+
 private
    package Cell_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Natural,
