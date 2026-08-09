@@ -685,7 +685,10 @@ procedure Controls_Tests is
          and then Drop.Render (Drop_Look).Element (0, 0).Appearance =
            Drop_Look.Normal
          and then Tabs.Render (Tab_Look).Element (0, 0).Appearance =
-           Tab_Look.Active,
+           Tab_Look.Active
+         and then Tabs.Render
+           (Tab_Look, Has_Focus => True).Element (0, 0).Appearance =
+             Tab_Look.Active,
          "explicit component appearances were not used by Render");
    end Test_Appearances;
 

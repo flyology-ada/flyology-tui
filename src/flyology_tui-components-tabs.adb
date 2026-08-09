@@ -314,8 +314,8 @@ package body Flyology_TUI.Components.Tabs is
          declare
             Style : constant Flyology_TUI.Styles.Style :=
               (if not Item.Enabled then Look.Disabled
-               elsif Has_Focus and then Item.Focused = Index then Look.Focused
                elsif Item.Active = Index then Look.Active
+               elsif Has_Focus and then Item.Focused = Index then Look.Focused
                else Look.Normal);
          begin
             Result.Write
