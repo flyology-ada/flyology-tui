@@ -198,7 +198,6 @@ package body Flyology_TUI.Components.Breadcrumbs is
               or else Right_Marker > Item.Max_Width - Used - Added;
             Used := Used + Added;
             Last := Candidate;
-            Candidate := Candidate + 1;
          end;
       end loop;
    end Window;

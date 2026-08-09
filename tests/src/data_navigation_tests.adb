@@ -186,7 +186,7 @@ procedure Data_Navigation_Tests is
            (Item.Column_Region (Score_Column).X, 0,
             Flyology_TUI.Events.Mouse_Click));
       Assert
-        (Result.Handled and then Result.Changed
+        (Result.Handled and then Result.Changed and then Result.Activated
          and then Item.Sort.Direction = Tables.Ascending
          and then Item.Sort.Column = Score_Column,
          "sortable table header did not apply ascending order");
@@ -195,14 +195,14 @@ procedure Data_Navigation_Tests is
            (Item.Column_Region (Score_Column).X, 0,
             Flyology_TUI.Events.Mouse_Click));
       Assert
-        (Item.Sort.Direction = Tables.Descending,
+        (Result.Activated and then Item.Sort.Direction = Tables.Descending,
          "second table header click did not reverse order");
       Result := Item.Handle
         (Mouse
            (Item.Column_Region (Score_Column).X, 0,
             Flyology_TUI.Events.Mouse_Click));
       Assert
-        (Item.Sort.Direction = Tables.Unsorted,
+        (Result.Activated and then Item.Sort.Direction = Tables.Unsorted,
          "third table header click did not clear sorting");
 
       Item.Select_Id (Item.Row_Id (1));
@@ -234,6 +234,34 @@ procedure Data_Navigation_Tests is
         (Result.Changed and then Item.Focus_Zone = Tables.Row_Area
          and then Item.Selected_Id = Before_Id,
          "table keyboard focus did not return to stable row selection");
+
+      Item.Select_Id (Item.Row_Id (1));
+      Before_Id := Item.Selected_Id;
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Up_Key));
+      Result := Item.Handle
+        (Mouse
+           (0, 0, Flyology_TUI.Events.Mouse_Wheel,
+            Flyology_TUI.Events.No_Button, Integer'Last));
+      Assert
+        (Result.Handled and then Result.Changed and then Result.Focus_Requested
+         and then Item.Focus_Zone = Tables.Row_Area
+         and then Item.Selected_Id = Before_Id,
+         "table wheel leaving header focus lost its zone-only change");
+
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Up_Key));
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Right_Key));
+      declare
+         Before_Column : constant Column := Item.Focused_Column;
+         Divider_X : constant Integer :=
+           Item.Column_Region (Name_Column).X +
+             Integer (Item.Column_Region (Name_Column).Width);
+      begin
+         Result := Item.Handle
+           (Mouse (Divider_X, 0, Flyology_TUI.Events.Mouse_Click));
+         Assert
+           (not Result.Handled and then Item.Focused_Column = Before_Column,
+            "table divider click changed the focused header column");
+      end;
 
       Result := Item.Handle
         (Mouse (1, 1, Flyology_TUI.Events.Mouse_Click));
@@ -339,6 +367,31 @@ procedure Data_Navigation_Tests is
       end;
       Assert (Raised,
               "table creation accepted an overflowing Natural'Last height");
+      Raised := False;
+      declare
+         Minimal : constant Tables.Column_Definitions :=
+           (others =>
+              (Heading       => Text.Null_Unbounded_Wide_Wide_String,
+               Width         => 0,
+               Minimum_Width => 1,
+               Align         => Tables.Align_Left,
+               Sortable      => False));
+      begin
+         begin
+            declare
+               Product_Overflow : constant Tables.Model :=
+                 Tables.Create
+                   (Tables.Item_Array'(1 => R1), Minimal, Natural'Last - 1);
+               pragma Unreferenced (Product_Overflow);
+            begin
+               null;
+            end;
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+      end;
+      Assert (Raised,
+              "table accepted a width-by-height allocation overflow");
 
       Assert
         (Empty.Is_Empty and then Empty.Visible_Row_Count = 0
@@ -375,6 +428,37 @@ procedure Data_Navigation_Tests is
            (Natural (Item.Column_Region (Score_Column).X), 0).Appearance =
            Flyology_TUI.Themes.Charm.Focused,
          "table did not render keyboard/mouse header focus distinctly");
+      Item.Sort_By (Name_Column, Tables.Unsorted);
+      Item.Select_Id (Item.Row_Id (1));
+      Frame := Item.Render
+        (Look => Tables.Appearance'
+           (Header   => Flyology_TUI.Themes.Charm.Error,
+            Normal   => Flyology_TUI.Themes.Charm.Success,
+            Selected => Flyology_TUI.Themes.Charm.Selected,
+            Focused  => Flyology_TUI.Themes.Charm.Focused,
+            Muted    => Flyology_TUI.Themes.Charm.Muted,
+            Divider  => Flyology_TUI.Themes.Charm.Border),
+         Has_Focus => True);
+      Assert
+        (Frame.Element
+           (Natural (Item.Column_Region (Name_Column).X), 1).Appearance =
+           Flyology_TUI.Themes.Charm.Focused,
+         "table row area did not render its focused row");
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Up_Key));
+      Frame := Item.Render
+        (Look => Tables.Appearance'
+           (Header   => Flyology_TUI.Themes.Charm.Error,
+            Normal   => Flyology_TUI.Themes.Charm.Success,
+            Selected => Flyology_TUI.Themes.Charm.Selected,
+            Focused  => Flyology_TUI.Themes.Charm.Focused,
+            Muted    => Flyology_TUI.Themes.Charm.Muted,
+            Divider  => Flyology_TUI.Themes.Charm.Border),
+         Has_Focus => True);
+      Assert
+        (Frame.Element
+           (Natural (Item.Column_Region (Name_Column).X), 1).Appearance =
+           Flyology_TUI.Themes.Charm.Selected,
+         "table header focus leaked focused styling into the selected row");
       Assert
         (Tables.From_Theme (Flyology_TUI.Themes.Charm).Selected =
            Flyology_TUI.Themes.Charm.Selected,
@@ -425,6 +509,23 @@ procedure Data_Navigation_Tests is
       Raised : Boolean := False;
       Frame  : Flyology_TUI.Surfaces.Surface;
    begin
+      declare
+         Constrained : Breadcrumbs.Model :=
+           Breadcrumbs.Create ((R1, R2, R3, R4), Maximum_Width => 20);
+         Constrained_Frame : Flyology_TUI.Surfaces.Surface;
+      begin
+         Constrained.Set_Active (1);
+         Constrained_Frame :=
+           Constrained.Render (Theme => Flyology_TUI.Themes.Charm);
+         Assert
+           (Constrained.Item_Region (1).Width = 5
+            and then Constrained.Item_Region (2).Width = 4
+            and then Constrained.Item_Region (3).Width = 0
+            and then Constrained.Item_Region (4).Width = 0
+            and then Glyph (Constrained_Frame, 19, 0) = "…",
+            "breadcrumb constrained window skipped an item or exposed " &
+            "invalid regions");
+      end;
       Assert
         (Item.Visible_Length = 2,
          "collapsed tree exposed descendants");
@@ -519,12 +620,25 @@ procedure Data_Navigation_Tests is
       Item.Set_Enabled (True);
 
       Item.Set_Expanded (1);
-      Item.Set_Viewport_Rows (Natural'Last);
+      declare
+         Old_Rows : constant Natural := Item.Viewport_Rows;
+      begin
+         begin
+            Item.Set_Viewport_Rows (Natural'Last);
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+         Assert
+           (Raised and then Item.Viewport_Rows = Old_Rows,
+            "tree Natural'Last allocation failure was not atomic");
+      end;
+      Raised := False;
+      Item.Set_Viewport_Rows (Natural'Last / Item.Width);
       Result := Item.Handle (Key (Flyology_TUI.Events.Page_Down_Key));
       Assert
         (Result.Handled and then Item.Selected_Id = 5
-         and then Item.Height = Natural'Last,
-         "Natural'Last tree viewport overflowed page navigation");
+         and then Item.Height = Natural'Last / Item.Width,
+         "large tree viewport overflowed page navigation");
       Item.Set_Viewport_Rows (3);
 
       begin
@@ -568,6 +682,18 @@ procedure Data_Navigation_Tests is
               "tree capacity failure was not atomic");
 
       Item.Set_Maximum_Width (1);
+      Item.Set_Viewport_Rows (Natural'Last);
+      begin
+         Item.Set_Maximum_Width (2);
+      exception
+         when Flyology_TUI.Components.Capacity_Error => Raised := True;
+      end;
+      Assert
+        (Raised and then Item.Width = 1
+         and then Item.Viewport_Rows = Natural'Last,
+         "tree maximum-width allocation failure was not atomic");
+      Raised := False;
+      Item.Set_Viewport_Rows (3);
       Frame := Item.Render (Flyology_TUI.Themes.Charm, Has_Focus => True);
       Assert
         (Frame.Width = 1 and then Frame.Height = 3,

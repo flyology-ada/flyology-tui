@@ -54,6 +54,41 @@ package body Flyology_TUI.Components.Trees is
       end loop;
    end Validate;
 
+   function Node_Width (Value : Item_Type) return Natural is
+     (Depth_Of (Value) * 2 + 2 +
+        Flyology_TUI.Glyphs.Width_Of (Label (Value)));
+
+   function Required_Width (Values : Item_Array) return Natural is
+      Result : Natural := 0;
+   begin
+      for Value of Values loop
+         Result := Natural'Max (Result, Node_Width (Value));
+      end loop;
+      return Result;
+   end Required_Width;
+
+   function Required_Width (Item : Model) return Natural is
+      Result : Natural := 0;
+   begin
+      for Value of Item.Values loop
+         Result := Natural'Max (Result, Node_Width (Value));
+      end loop;
+      return Result;
+   end Required_Width;
+
+   procedure Validate_Renderable
+     (Natural_Width, Rows, Maximum_Width : Natural)
+   is
+      Rendered_Width : constant Natural :=
+        Natural'Min (Natural_Width, Maximum_Width);
+   begin
+      if Rendered_Width > 0
+        and then Rows > Natural'Last / Rendered_Width
+      then
+         raise Flyology_TUI.Components.Capacity_Error;
+      end if;
+   end Validate_Renderable;
+
    function Length (Item : Model) return Natural is
      (Natural (Item.Values.Length));
    function Is_Empty (Item : Model) return Boolean is (Item.Values.Is_Empty);
@@ -198,6 +233,8 @@ package body Flyology_TUI.Components.Trees is
       New_Selected : Natural := 0;
    begin
       Validate (Values);
+      Validate_Renderable
+        (Required_Width (Values), Item.Rows, Item.Max_Width);
       for Value of Values loop
          New_Values.Append (Value);
          declare
@@ -266,12 +303,14 @@ package body Flyology_TUI.Components.Trees is
 
    procedure Set_Viewport_Rows (Item : in out Model; Rows : Natural) is
    begin
+      Validate_Renderable (Required_Width (Item), Rows, Item.Max_Width);
       Item.Rows := Rows;
       Ensure_Selected_Visible (Item);
    end Set_Viewport_Rows;
 
    procedure Set_Maximum_Width (Item : in out Model; Width : Natural) is
    begin
+      Validate_Renderable (Required_Width (Item), Item.Rows, Width);
       Item.Max_Width := Width;
    end Set_Maximum_Width;
 
@@ -281,16 +320,7 @@ package body Flyology_TUI.Components.Trees is
    end Set_Enabled;
 
    function Natural_Width (Item : Model) return Natural is
-      Result : Natural := 0;
-   begin
-      for Value of Item.Values loop
-         Result := Natural'Max
-           (Result,
-            Depth_Of (Value) * 2 + 2 +
-              Flyology_TUI.Glyphs.Width_Of (Label (Value)));
-      end loop;
-      return Result;
-   end Natural_Width;
+     (Required_Width (Item));
 
    function Width (Item : Model) return Natural is
      (Natural'Min (Natural_Width (Item), Item.Max_Width));

@@ -24,6 +24,8 @@ package body Flyology_TUI.Components.Tables is
      (Columns : Column_Definitions; Rows : Natural)
    is
       Remaining : Natural;
+      Total     : Natural := 2;
+      Height    : Natural;
    begin
       if Rows = Natural'Last then
          raise Flyology_TUI.Components.Capacity_Error;
@@ -37,13 +39,19 @@ package body Flyology_TUI.Components.Tables is
             raise Flyology_TUI.Components.Capacity_Error;
          end if;
          Remaining := Remaining - Effective_Width (Columns (Column));
+         Total := Total + Effective_Width (Columns (Column));
          if Column /= Column_Id'Last then
             if Remaining = 0 then
                raise Flyology_TUI.Components.Capacity_Error;
             end if;
             Remaining := Remaining - 1;
+            Total := Total + 1;
          end if;
       end loop;
+      Height := Rows + 1;
+      if Total > 0 and then Height > Natural'Last / Total then
+         raise Flyology_TUI.Components.Capacity_Error;
+      end if;
    end Validate_Dimensions;
 
    procedure Validate (Values : Item_Array) is
@@ -497,21 +505,26 @@ package body Flyology_TUI.Components.Tables is
       return (Handled => True, Changed => Changed, others => <>);
    end Handle;
 
-   function Hit_Column (Item : Model; X : Integer) return Column_Id is
-      Last : Column_Id := Column_Id'First;
+   type Column_Hit (Found : Boolean := False) is record
+      case Found is
+         when True => Column : Column_Id;
+         when False => null;
+      end case;
+   end record;
+
+   function Hit_Column (Item : Model; X : Integer) return Column_Hit is
    begin
       for Column in Column_Id loop
-         Last := Column;
          declare
             Region : constant Flyology_TUI.Geometry.Rectangle :=
               Column_Region (Item, Column);
          begin
             if Flyology_TUI.Geometry.Contains (Region, X, 0) then
-               return Column;
+               return (Found => True, Column => Column);
             end if;
          end;
       end loop;
-      return Last;
+      return (Found => False);
    end Hit_Column;
 
    function Handle
@@ -528,14 +541,20 @@ package body Flyology_TUI.Components.Tables is
         and then Event.Y >= 0 and then Event.Y < Integer (Height (Item))
         and then Event.Wheel_Y /= 0 and then not Item.Values.Is_Empty
       then
+         Changed := Item.Focus_Zone_Value /= Row_Area;
          Item.Focus_Zone_Value := Row_Area;
-         if Event.Wheel_Y > 0 then
-            Move_Focus
-              (Item, Toward_Start, Magnitude (Event.Wheel_Y), Changed);
-         else
-            Move_Focus
-              (Item, Toward_End, Magnitude (Event.Wheel_Y), Changed);
-         end if;
+         declare
+            Row_Changed : Boolean := False;
+         begin
+            if Event.Wheel_Y > 0 then
+               Move_Focus
+                 (Item, Toward_Start, Magnitude (Event.Wheel_Y), Row_Changed);
+            else
+               Move_Focus
+                 (Item, Toward_End, Magnitude (Event.Wheel_Y), Row_Changed);
+            end if;
+            Changed := Changed or else Row_Changed;
+         end;
          return
            (Handled => True, Changed => Changed, Focus_Requested => True,
             others => <>);
@@ -546,35 +565,27 @@ package body Flyology_TUI.Components.Tables is
       then
          return Flyology_TUI.Components.Interactions.Ignored;
       elsif Event.Y = 0 then
-         if Event.X >= 2 then
-            declare
-               Column : constant Column_Id := Hit_Column (Item, Event.X);
-            begin
-               Changed := Item.Focus_Zone_Value /= Header_Area
-                 or else Item.Header_Column /= Column;
-               Item.Focus_Zone_Value := Header_Area;
-               Item.Header_Column := Column;
-               if Item.Definitions (Column).Sortable
-                 and then Flyology_TUI.Geometry.Contains
-                   (Column_Region (Item, Column), Event.X, 0)
-               then
-                  Sort_By
-                    (Item, Column, Next_Sort (Item, Column));
-                  return
-                    (Handled => True, Changed => True,
-                     Focus_Requested => True, others => <>);
-               end if;
-            end;
-         end if;
-         if Item.Focus_Zone_Value /= Header_Area then
+         declare
+            Hit : constant Column_Hit := Hit_Column (Item, Event.X);
+         begin
+            if not Hit.Found then
+               return Flyology_TUI.Components.Interactions.Ignored;
+            end if;
+            Changed := Item.Focus_Zone_Value /= Header_Area
+              or else Item.Header_Column /= Hit.Column;
             Item.Focus_Zone_Value := Header_Area;
-            Changed := True;
-         end if;
-         return
-           (Handled => True,
-            Changed => Changed,
-            Focus_Requested => True,
-            others => <>);
+            Item.Header_Column := Hit.Column;
+            if Item.Definitions (Hit.Column).Sortable then
+               Sort_By
+                 (Item, Hit.Column, Next_Sort (Item, Hit.Column));
+               return
+                 (Handled => True, Changed => True, Activated => True,
+                  Focus_Requested => True, others => <>);
+            end if;
+            return
+              (Handled => True, Changed => Changed,
+               Focus_Requested => True, others => <>);
+         end;
       else
          declare
             Visible : constant Natural := Natural (Event.Y);
@@ -709,7 +720,9 @@ package body Flyology_TUI.Components.Tables is
             Source  : constant Natural := Source_At (Item, Display);
             Selected : constant Boolean := Item.Selected = Source + 1;
             Focused : constant Boolean :=
-              Has_Focus and then Item.Focused = Display;
+              Has_Focus
+              and then Item.Focus_Zone_Value = Row_Area
+              and then Item.Focused = Display;
             Style : constant Flyology_TUI.Styles.Style :=
               (if not Item.Enabled then Look.Muted
                elsif Focused then Look.Focused
