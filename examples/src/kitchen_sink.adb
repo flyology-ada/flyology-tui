@@ -10,10 +10,13 @@ with Flyology_TUI.Components.Dropdowns;
 with Flyology_TUI.Components.Forms;
 with Flyology_TUI.Components.Help;
 with Flyology_TUI.Components.Interactions;
+with Flyology_TUI.Components.Indicators;
 with Flyology_TUI.Components.Lists;
 with Flyology_TUI.Components.Progress;
+with Flyology_TUI.Components.Progress_Groups;
 with Flyology_TUI.Components.Radio_Groups;
 with Flyology_TUI.Components.Selectors;
+with Flyology_TUI.Components.Sparklines;
 with Flyology_TUI.Components.Spinners;
 with Flyology_TUI.Components.Tabs;
 with Flyology_TUI.Components.Text_Inputs;
@@ -22,6 +25,7 @@ with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Layouts;
 with Flyology_TUI.Mouse;
+with Flyology_TUI.Numeric_Series;
 with Flyology_TUI.Runners;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
@@ -44,14 +48,15 @@ procedure Kitchen_Sink is
      (Item_Type => Text.Unbounded_Wide_Wide_String,
       Label     => Text_Label);
 
-   type Page_Id is (Basics_Page, Controls_Page);
+   type Page_Id is (Basics_Page, Controls_Page, Telemetry_Page);
 
    function Page_Identity (Item : Page_Id) return Page_Id is (Item);
 
    function Page_Label (Item : Page_Id) return Wide_Wide_String is
      (case Item is
          when Basics_Page   => "Basics",
-         when Controls_Page => "Controls");
+         when Controls_Page => "Controls",
+         when Telemetry_Page => "Telemetry");
 
    package Pages is new Flyology_TUI.Components.Tabs
      (Item_Type => Page_Id,
@@ -91,6 +96,23 @@ procedure Kitchen_Sink is
       Label     => Choice_Label,
       Capacity  => 8);
 
+   package Samples is new Flyology_TUI.Numeric_Series
+     (Sample_Type      => Integer,
+      Maximum_Capacity => 64);
+
+   function Sample_Value (Value : Integer) return Long_Float is
+     (Long_Float (Value));
+
+   package Sparklines is new Flyology_TUI.Components.Sparklines
+     (Samples       => Samples,
+      To_Long_Float => Sample_Value);
+
+   type Work_Id is (Build_Work, Test_Work, Deploy_Work);
+
+   package Work_Progress is new Flyology_TUI.Components.Progress_Groups
+     (Item_Id       => Work_Id,
+      Maximum_Items => 8);
+
    type Message is (Animation_Tick);
    type Command is (Wait_For_Tick);
    type Focus_Target is
@@ -103,7 +125,8 @@ procedure Kitchen_Sink is
       Check_Field,
       Radio_Field,
       Selector_Field,
-      Dropdown_Field);
+      Dropdown_Field,
+      Telemetry_Field);
    type Capture_Target is
      (No_Capture,
       Page_Capture,
@@ -138,6 +161,8 @@ procedure Kitchen_Sink is
    Selector_Origin : constant Flyology_TUI.Geometry.Point := (X => 2, Y => 17);
    Dropdown_Origin : constant Flyology_TUI.Geometry.Point :=
      (X => 38, Y => 17);
+   Telemetry_Origin : constant Flyology_TUI.Geometry.Point :=
+     (X => 2, Y => 8);
 
    type Model is limited record
       Focus    : Focus_Target := Text_Field;
@@ -147,7 +172,8 @@ procedure Kitchen_Sink is
       Progress : Flyology_TUI.Components.Progress.Model :=
         Flyology_TUI.Components.Progress.Create (32, False);
       Pages    : Kitchen_Sink.Pages.Model :=
-        Kitchen_Sink.Pages.Create ([Basics_Page, Controls_Page]);
+        Kitchen_Sink.Pages.Create
+          ([Basics_Page, Controls_Page, Telemetry_Page]);
       Input    : Flyology_TUI.Components.Text_Inputs.Model :=
         Flyology_TUI.Components.Text_Inputs.Create
           (24, "Type here; Unicode works");
@@ -166,6 +192,11 @@ procedure Kitchen_Sink is
           ([Alpha, Beta, Gamma], Flyology_TUI.Components.Multiple_Selection);
       Dropdown : Kitchen_Sink.Dropdowns.Model :=
         Kitchen_Sink.Dropdowns.Create ([Alpha, Beta, Gamma]);
+      Samples  : Kitchen_Sink.Samples.Series :=
+        Kitchen_Sink.Samples.Create (32);
+      Work     : Kitchen_Sink.Work_Progress.Model :=
+        Kitchen_Sink.Work_Progress.Create (30);
+      Telemetry_Tick : Natural range 0 .. 999 := 0;
    end record;
 
    package Events is new Flyology_TUI.Application_Events (Message);
@@ -226,12 +257,23 @@ procedure Kitchen_Sink is
          Input_Width => 20);
       Item.Selector.Set_Selected (Beta);
       Item.Selector.Set_Selected (Gamma);
+      for Value in -8 .. 8 loop
+         Item.Samples.Append (Value * Value mod 13 - 6);
+      end loop;
+      Item.Work.Add_Determinate
+        (Build_Work, "Build", Relative_Weight => 3.0, Value => 0.35);
+      Item.Work.Add_Determinate
+        (Test_Work, "Tests", Relative_Weight => 2.0, Value => 0.65,
+         Work => Work_Progress.Paused);
+      Item.Work.Add_Indeterminate
+        (Deploy_Work, "Deploy", Relative_Weight => 1.0);
       Transitions.Run (Next, Wait_For_Tick);
    end Initialize;
 
    procedure Next_Focus (Item : in out Model; Backwards : Boolean) is
    begin
-      if Current_Page (Item) = Basics_Page then
+      case Current_Page (Item) is
+      when Basics_Page =>
          if Item.Focus not in Page_Navigation .. Form_Field then
             Activate (Item, Text_Field);
             return;
@@ -257,8 +299,9 @@ procedure Kitchen_Sink is
                    when Form_Field      => Page_Navigation,
                    when others          => Text_Field));
          end if;
-      else
-         if Item.Focus in Text_Field .. Form_Field then
+      when Controls_Page =>
+         if Item.Focus not in Page_Navigation | Button_Field .. Dropdown_Field
+         then
             Activate (Item, Button_Field);
             return;
          end if;
@@ -285,8 +328,44 @@ procedure Kitchen_Sink is
                    when Dropdown_Field  => Page_Navigation,
                    when others          => Button_Field));
          end if;
-      end if;
+      when Telemetry_Page =>
+         if Item.Focus not in Page_Navigation | Telemetry_Field then
+            Activate (Item, Telemetry_Field);
+         elsif Backwards then
+            Activate
+              (Item,
+               (if Item.Focus = Page_Navigation
+                then Telemetry_Field
+                else Page_Navigation));
+         else
+            Activate
+              (Item,
+               (if Item.Focus = Page_Navigation
+                then Telemetry_Field
+                else Page_Navigation));
+         end if;
+      end case;
    end Next_Focus;
+
+   procedure Normalize_Focus (Item : in out Model) is
+   begin
+      case Current_Page (Item) is
+         when Basics_Page =>
+            if Item.Focus not in Page_Navigation .. Form_Field then
+               Activate (Item, Text_Field);
+            end if;
+         when Controls_Page =>
+            if Item.Focus not in
+              Page_Navigation | Button_Field .. Dropdown_Field
+            then
+               Activate (Item, Button_Field);
+            end if;
+         when Telemetry_Page =>
+            if Item.Focus not in Page_Navigation | Telemetry_Field then
+               Activate (Item, Telemetry_Field);
+            end if;
+      end case;
+   end Normalize_Focus;
 
    function Is_Control_C
      (Event : Flyology_TUI.Events.Terminal_Event) return Boolean
@@ -326,15 +405,7 @@ procedure Kitchen_Sink is
             Result := Item.Pages.Handle
               (Flyology_TUI.Mouse.Relative (Event, Page_Tabs_Origin));
             Apply_Result (Item, Page_Navigation, Page_Capture, Result);
-            if Current_Page (Item) = Basics_Page
-              and then Item.Focus in Button_Field .. Dropdown_Field
-            then
-               Activate (Item, Text_Field);
-            elsif Current_Page (Item) = Controls_Page
-              and then Item.Focus in Text_Field .. Form_Field
-            then
-               Activate (Item, Button_Field);
-            end if;
+            Normalize_Focus (Item);
          when Button_Capture =>
             Result := Item.Button.Handle
               (Flyology_TUI.Mouse.Relative (Event, Button_Origin));
@@ -418,6 +489,28 @@ procedure Kitchen_Sink is
       end if;
    end Handle_Controls_Mouse;
 
+   procedure Handle_Telemetry_Mouse
+     (Item  : in out Model;
+      Event : Flyology_TUI.Events.Mouse_Event) is
+      use Flyology_TUI.Components.Interactions;
+      Work_View : constant Flyology_TUI.Surfaces.Surface :=
+        Item.Work.Render (Visual);
+      Work_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        (X => Telemetry_Origin.X,
+         Y => Telemetry_Origin.Y,
+         Width => Flyology_TUI.Surfaces.Width (Work_View),
+         Height => Flyology_TUI.Surfaces.Height (Work_View));
+      Point : constant Flyology_TUI.Geometry.Point :=
+        (X => Integer (Event.X), Y => Integer (Event.Y));
+      Result : Update_Result;
+   begin
+      if Flyology_TUI.Geometry.Contains (Work_Bounds, Point) then
+         Result := Item.Work.Handle
+           (Flyology_TUI.Mouse.Relative (Event, Telemetry_Origin));
+         Apply_Result (Item, Telemetry_Field, No_Capture, Result);
+      end if;
+   end Handle_Telemetry_Mouse;
+
    procedure Handle_Mouse
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event) is
@@ -463,7 +556,8 @@ procedure Kitchen_Sink is
          return;
       end if;
 
-      if Current_Page (Item) = Basics_Page then
+      case Current_Page (Item) is
+      when Basics_Page =>
          if Event.Mouse.Action = Flyology_TUI.Events.Mouse_Click
            and then Event.Mouse.Button = Flyology_TUI.Events.Left_Button
          then
@@ -493,9 +587,11 @@ procedure Kitchen_Sink is
             Item.Form.Update
               (Flyology_TUI.Mouse.Localize (Event, Form_Content));
          end if;
-      else
+      when Controls_Page =>
          Handle_Controls_Mouse (Item, Event.Mouse);
-      end if;
+      when Telemetry_Page =>
+         Handle_Telemetry_Mouse (Item, Event.Mouse);
+      end case;
    end Handle_Mouse;
 
    procedure Handle_Focused_Key
@@ -527,17 +623,11 @@ procedure Kitchen_Sink is
          when Dropdown_Field =>
             Result := Item.Dropdown.Handle (Event);
             Apply_Result (Item, Dropdown_Field, Dropdown_Capture, Result);
+         when Telemetry_Field =>
+            Result := Item.Work.Handle (Event);
+            Apply_Result (Item, Telemetry_Field, No_Capture, Result);
       end case;
-
-      if Current_Page (Item) = Basics_Page
-        and then Item.Focus in Button_Field .. Dropdown_Field
-      then
-         Activate (Item, Text_Field);
-      elsif Current_Page (Item) = Controls_Page
-        and then Item.Focus in Text_Field .. Form_Field
-      then
-         Activate (Item, Button_Field);
-      end if;
+      Normalize_Focus (Item);
    end Handle_Focused_Key;
 
    procedure Update
@@ -547,6 +637,22 @@ procedure Kitchen_Sink is
    begin
       if Event.Kind = Events.Application_Message then
          Item.Spinner.Tick;
+         Item.Telemetry_Tick := (Item.Telemetry_Tick + 1) mod 1_000;
+         Item.Samples.Append
+           (Integer (Item.Telemetry_Tick mod 23) - 11);
+         declare
+            Percent : constant Natural := Item.Telemetry_Tick mod 101;
+         begin
+            Item.Work.Set_Value
+              (Build_Work,
+               Work_Progress.Fraction (Long_Float (Percent) / 100.0));
+            Item.Work.Set_Work_State
+              (Build_Work,
+               (if Percent = 100
+                then Work_Progress.Succeeded
+                else Work_Progress.Running));
+            Item.Work.Advance;
+         end;
          if Item.Progress.Value >= 0.97 then
             Item.Progress.Set (0.0);
          else
@@ -664,6 +770,68 @@ procedure Kitchen_Sink is
       return Canvas;
    end Controls_View;
 
+   function Telemetry_View
+     (Item : Model) return Flyology_TUI.Surfaces.Surface
+   is
+      package Indicators renames Flyology_TUI.Components.Indicators;
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (68, 20);
+      Work_View : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Work progress", Item.Work.Render (Visual),
+           Item.Focus = Telemetry_Field, Visual.Border, Visual.Muted);
+      Spark_View : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Bounded series",
+           Sparklines.Render
+             (Item.Samples, 28, Sparklines.Automatic, Visual),
+           False, Visual.Border, Visual.Muted);
+      Aggregate : constant Work_Progress.Fraction :=
+        Item.Work.Weighted_Total;
+      Summary : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Join_Horizontally
+          (Indicators.Badge
+             ("bounded", Indicators.Success_Tone, Visual),
+           Flyology_TUI.Layouts.Join_Horizontally
+             (Indicators.Gauge
+                (Indicators.Ratio (Aggregate), 20, Visual),
+              Indicators.Key_Value
+                ("aggregate",
+                 Integer'Wide_Wide_Image
+                   (Integer (Long_Float (Aggregate) * 100.0)) & "%",
+                 22,
+                 Visual),
+              Gap => 2),
+           Gap => 2);
+      Status : constant Flyology_TUI.Surfaces.Surface :=
+        Indicators.Status_Line
+          ([Indicators.Make_Segment
+             ("RUNNING", Indicators.Critical, Indicators.Success_Tone),
+            Indicators.Make_Segment
+              ("paused tests", Indicators.Normal, Indicators.Warning_Tone),
+            Indicators.Make_Segment
+              ("ring:32", Indicators.Low, Indicators.Neutral)],
+           64,
+           Visual);
+      Indicator_Content : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Join_Vertically
+          (Indicators.Divider (64, "telemetry", Visual),
+           Flyology_TUI.Layouts.Join_Vertically
+             (Summary,
+              Flyology_TUI.Layouts.Join_Vertically
+                (Item.Work.Render_Segments (64, Visual), Status),
+              Gap => 1));
+      Indicator_View : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Immediate indicators", Indicator_Content,
+           False, Visual.Border, Visual.Muted);
+   begin
+      Canvas.Overlay_Clipped (Work_View, 0, 0);
+      Canvas.Overlay_Clipped (Spark_View, 36, 0);
+      Canvas.Overlay_Clipped (Indicator_View, 0, 9);
+      return Canvas;
+   end Telemetry_View;
+
    function Present (Item : Model) return Flyology_TUI.Views.View is
       Header : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Horizontally
@@ -676,9 +844,10 @@ procedure Kitchen_Sink is
       Page_Bar : constant Flyology_TUI.Surfaces.Surface :=
         Item.Pages.Render (Visual, Item.Focus = Page_Navigation);
       Page : constant Flyology_TUI.Surfaces.Surface :=
-        (if Current_Page (Item) = Basics_Page
-         then Basics_View (Item)
-         else Controls_View (Item));
+        (case Current_Page (Item) is
+            when Basics_Page   => Basics_View (Item),
+            when Controls_Page => Controls_View (Item),
+            when Telemetry_Page => Telemetry_View (Item));
       Help : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Components.Help.Render
           ([(Key => U ("tab"),

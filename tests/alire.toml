@@ -9,7 +9,12 @@ licenses = "MIT OR Apache-2.0"
 website = "https://github.com/flyology-ada/flyology-tui"
 tags = ["ada", "tui", "tests"]
 
-executables = ["flyology_tui_tests", "foundation_layout_tests", "controls_tests"]
+executables = [
+  "flyology_tui_tests",
+  "foundation_layout_tests",
+  "controls_tests",
+  "visual_components_tests",
+]
 
 [[depends-on]]
 flyology_tui = "*"
