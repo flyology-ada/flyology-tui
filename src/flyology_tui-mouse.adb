@@ -58,6 +58,18 @@ package body Flyology_TUI.Mouse is
       Wheel_Y  => Event.Wheel_Y);
 
    function Relative
+     (Event  : Local_Event;
+      Origin : Flyology_TUI.Geometry.Point) return Local_Event
+   is
+     (X        => Saturating_Difference (Event.X, Origin.X),
+      Y        => Saturating_Difference (Event.Y, Origin.Y),
+      Button   => Event.Button,
+      Action   => Event.Action,
+      Modified => Event.Modified,
+      Wheel_X  => Event.Wheel_X,
+      Wheel_Y  => Event.Wheel_Y);
+
+   function Relative
      (Event : Flyology_TUI.Events.Mouse_Event;
       Item  : Region) return Local_Event
    is (Relative

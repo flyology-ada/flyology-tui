@@ -53,6 +53,11 @@ procedure Foundation_Layout_Tests is
           (Flyology_TUI.Events.Mouse_Event'
              (X => Natural'Last, Y => 0, others => <>),
            Flyology_TUI.Geometry.Point'(X => Integer'First, Y => 0));
+      Negative_Saturated : constant Flyology_TUI.Mouse.Local_Event :=
+        Flyology_TUI.Mouse.Relative
+          (Flyology_TUI.Mouse.Local_Event'
+             (X => Integer'First, Y => Integer'First, others => <>),
+           Flyology_TUI.Geometry.Point'(X => 1, Y => Integer'Last));
    begin
       Assert
         (Flyology_TUI.Geometry.Contains
@@ -74,6 +79,10 @@ procedure Foundation_Layout_Tests is
       Assert
         (Saturated.X = Integer'Last,
          "signed mouse localization did not saturate overflow");
+      Assert
+        (Negative_Saturated.X = Integer'First
+         and then Negative_Saturated.Y = Integer'First,
+         "signed mouse relocalization did not saturate underflow");
    end Test_Geometry_And_Mouse;
 
    procedure Test_Clipped_Overlay is
@@ -121,6 +130,48 @@ procedure Foundation_Layout_Tests is
         (Cell_Text (Target, 2, 0) = " "
          and then not Target.Element (2, 0).Continuation,
          "right-clipped wide glyph left an orphan span");
+
+      declare
+         Vertical_Target : Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Surfaces.From_Text
+             ("ab" & Wide_Wide_Character'Val (10) & "cd");
+         Vertical_Source : constant Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Surfaces.From_Text
+             ("12" & Wide_Wide_Character'Val (10) & "34");
+      begin
+         Vertical_Target.Overlay_Clipped (Vertical_Source, 0, -1);
+         Assert
+           (Cell_Text (Vertical_Target, 0, 0) = "3"
+            and then Cell_Text (Vertical_Target, 1, 0) = "4"
+            and then Cell_Text (Vertical_Target, 0, 1) = "c",
+            "signed overlay did not clip its top edge");
+
+         Vertical_Target := Flyology_TUI.Surfaces.From_Text
+           ("ab" & Wide_Wide_Character'Val (10) & "cd");
+         Vertical_Target.Overlay_Clipped (Vertical_Source, 0, 1);
+         Assert
+           (Cell_Text (Vertical_Target, 0, 0) = "a"
+            and then Cell_Text (Vertical_Target, 0, 1) = "1"
+            and then Cell_Text (Vertical_Target, 1, 1) = "2",
+            "signed overlay did not clip its bottom edge");
+
+         Vertical_Target := Flyology_TUI.Surfaces.From_Text
+           ("ab" & Wide_Wide_Character'Val (10) & "cd");
+         Vertical_Target.Overlay_Clipped
+           (Vertical_Source, Integer'First, 0);
+         Vertical_Target.Overlay_Clipped
+           (Vertical_Source, Integer'Last, 0);
+         Vertical_Target.Overlay_Clipped
+           (Vertical_Source, 0, Integer'First);
+         Vertical_Target.Overlay_Clipped
+           (Vertical_Source, 0, Integer'Last);
+         Assert
+           (Cell_Text (Vertical_Target, 0, 0) = "a"
+            and then Cell_Text (Vertical_Target, 1, 0) = "b"
+            and then Cell_Text (Vertical_Target, 0, 1) = "c"
+            and then Cell_Text (Vertical_Target, 1, 1) = "d",
+            "extreme signed overlay origin changed the target");
+      end;
    end Test_Clipped_Overlay;
 
    procedure Test_Boxes is
@@ -152,6 +203,103 @@ procedure Foundation_Layout_Tests is
            Width => 2,
            Height => 4,
            Gap => 1);
+      Horizontal_Center : constant Layout_Result :=
+        Horizontally
+          ((1 => Flyology_TUI.Surfaces.From_Text ("h")),
+           (1 => Fixed_Size (3)),
+           Width => 3,
+           Height => 5,
+           Alignment => Center);
+      Horizontal_Start : constant Layout_Result :=
+        Horizontally
+          ((1 => Flyology_TUI.Surfaces.From_Text ("h")),
+           (1 => Fixed_Size (3)),
+           Width => 3,
+           Height => 5,
+           Alignment => Start);
+      Horizontal_Stretch : constant Layout_Result :=
+        Horizontally
+          ((1 => Flyology_TUI.Surfaces.From_Text ("h")),
+           (1 => Fixed_Size (3)),
+           Width => 3,
+           Height => 5,
+           Alignment => Stretch);
+      Horizontal_End : constant Layout_Result :=
+        Horizontally
+          ((1 => Flyology_TUI.Surfaces.From_Text ("h")),
+           (1 => Fixed_Size (3)),
+           Width => 3,
+           Height => 5,
+           Alignment => End_Aligned);
+      Vertical_Center : constant Layout_Result :=
+        Vertically
+          ((1 => Flyology_TUI.Surfaces.From_Text ("v")),
+           (1 => Fixed_Size (3)),
+           Width => 5,
+           Height => 3,
+           Alignment => Center);
+      Vertical_Start : constant Layout_Result :=
+        Vertically
+          ((1 => Flyology_TUI.Surfaces.From_Text ("v")),
+           (1 => Fixed_Size (3)),
+           Width => 5,
+           Height => 3,
+           Alignment => Start);
+      Vertical_Stretch : constant Layout_Result :=
+        Vertically
+          ((1 => Flyology_TUI.Surfaces.From_Text ("v")),
+           (1 => Fixed_Size (3)),
+           Width => 5,
+           Height => 3,
+           Alignment => Stretch);
+      Vertical_End : constant Layout_Result :=
+        Vertically
+          ((1 => Flyology_TUI.Surfaces.From_Text ("v")),
+           (1 => Fixed_Size (3)),
+           Width => 5,
+           Height => 3,
+           Alignment => End_Aligned);
+      High_Items : constant Surface_Array (10 .. 11) :=
+        (10 => Flyology_TUI.Surfaces.From_Text ("L"),
+         11 => Flyology_TUI.Surfaces.From_Text ("R"));
+      High_Rules : constant Constraint_Array (20 .. 21) :=
+        (20 => Content_Size, 21 => Content_Size);
+      High_Box : constant Layout_Result :=
+        Horizontally
+          (High_Items, High_Rules, Width => 4, Height => 1, Gap => 1);
+      Empty_Items : constant Surface_Array (1 .. 0) := (others => <>);
+      Empty_Rules : constant Constraint_Array (1 .. 0) := (others => <>);
+      Empty_Box : constant Layout_Result :=
+        Horizontally
+          (Empty_Items, Empty_Rules, Width => 4, Height => 2, Gap => 1);
+      Zero_Width : constant Layout_Result :=
+        Horizontally
+          ((1 => Flyology_TUI.Surfaces.From_Text ("x")),
+           (1 => Fill_Size),
+           Width => 0,
+           Height => 1);
+      Zero_Height : constant Layout_Result :=
+        Vertically
+          ((1 => Flyology_TUI.Surfaces.From_Text ("x")),
+           (1 => Fill_Size),
+           Width => 1,
+           Height => 0);
+      Oversized_Gap : constant Layout_Result :=
+        Horizontally
+          ((Flyology_TUI.Surfaces.From_Text ("1"),
+            Flyology_TUI.Surfaces.From_Text ("2"),
+            Flyology_TUI.Surfaces.From_Text ("3")),
+           (Content_Size, Content_Size, Content_Size),
+           Width => 2,
+           Height => 1,
+           Gap => 10);
+      Trailing : constant Layout_Result :=
+        Horizontally
+          ((1 => Flyology_TUI.Surfaces.From_Text ("t")),
+           (1 => Content_Size),
+           Width => 4,
+           Height => 1,
+           Alignment => Start);
       Raised : Boolean := False;
    begin
       Assert
@@ -175,6 +323,57 @@ procedure Foundation_Layout_Tests is
          and then Vertical_Box.Region (2).Y = 2
          and then Vertical_Box.Region (2).Height = 2,
          "vertical box placement is incorrect");
+      Assert
+        (Horizontal_Center.Region (1) =
+           (X => 0, Y => 2, Width => 3, Height => 1)
+         and then Cell_Text (Horizontal_Center.Frame, 0, 2) = "h"
+         and then Horizontal_End.Region (1).Y = 4
+         and then Horizontal_Start.Region (1).Y = 0
+         and then Horizontal_Start.Region (1).Height = 1
+         and then Horizontal_Stretch.Region (1).Y = 0
+         and then Horizontal_Stretch.Region (1).Height = 5,
+         "horizontal box cross-axis alignment is incorrect");
+      Assert
+        (Vertical_Center.Region (1) =
+           (X => 2, Y => 0, Width => 1, Height => 3)
+         and then Cell_Text (Vertical_Center.Frame, 2, 0) = "v"
+         and then Vertical_End.Region (1).X = 4
+         and then Vertical_Start.Region (1).X = 0
+         and then Vertical_Start.Region (1).Width = 1
+         and then Vertical_Stretch.Region (1).X = 0
+         and then Vertical_Stretch.Region (1).Width = 5,
+         "vertical box cross-axis alignment is incorrect");
+      Assert
+        (High_Box.Region (1) = (X => 0, Y => 0, Width => 1, Height => 1)
+         and then High_Box.Region (2) =
+           (X => 2, Y => 0, Width => 1, Height => 1)
+         and then Cell_Text (High_Box.Frame, 0, 0) = "L"
+         and then Cell_Text (High_Box.Frame, 2, 0) = "R",
+         "box indexing assumed one-based input arrays");
+      Assert
+        (Empty_Box.Item_Count = 0
+         and then Empty_Box.Frame.Width = 4
+         and then Empty_Box.Frame.Height = 2,
+         "zero-child box did not preserve its requested frame");
+      Assert
+        (Zero_Width.Region (1).Width = 0
+         and then Zero_Width.Frame.Width = 0
+         and then Zero_Height.Region (1).Height = 0
+         and then Zero_Height.Frame.Height = 0,
+         "zero-axis box allocated a nonzero slot");
+      Assert
+        (Oversized_Gap.Region (1) =
+           (X => 0, Y => 0, Width => 0, Height => 1)
+         and then Oversized_Gap.Region (2).X = 1
+         and then Oversized_Gap.Region (2).Width = 0
+         and then Oversized_Gap.Region (3).X = 2
+         and then Oversized_Gap.Region (3).Width = 0,
+         "gap larger than the major axis escaped its frame");
+      Assert
+        (Trailing.Region (1).Width = 1
+         and then Cell_Text (Trailing.Frame, 0, 0) = "t"
+         and then Cell_Text (Trailing.Frame, 3, 0) = " ",
+         "unused major-axis space is not trailing");
 
       begin
          declare
@@ -258,7 +457,8 @@ procedure Foundation_Layout_Tests is
 begin
    Assert
      (Flyology_TUI.Components.Interactions.Ignored.Capture =
-        Flyology_TUI.Components.Interactions.No_Capture_Change,
+        Flyology_TUI.Components.Interactions.No_Capture_Change
+      and then not Flyology_TUI.Components.Interactions.Ignored.Rejected,
       "default update result changes pointer capture");
    Test_Geometry_And_Mouse;
    Test_Clipped_Overlay;

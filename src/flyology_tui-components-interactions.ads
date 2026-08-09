@@ -9,6 +9,7 @@ package Flyology_TUI.Components.Interactions is
       Focus_Requested : Boolean := False;
       Activated       : Boolean := False;
       Changed         : Boolean := False;
+      Rejected        : Boolean := False;
       Capture         : Capture_Action := No_Capture_Change;
    end record;
 

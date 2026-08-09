@@ -56,6 +56,11 @@ package Flyology_TUI.Mouse is
      (Event  : Flyology_TUI.Events.Mouse_Event;
       Origin : Flyology_TUI.Geometry.Point) return Local_Event;
 
+   --  Relocalize an already-signed event for a nested or moving component.
+   function Relative
+     (Event  : Local_Event;
+      Origin : Flyology_TUI.Geometry.Point) return Local_Event;
+
    function Relative
      (Event : Flyology_TUI.Events.Mouse_Event;
       Item  : Region) return Local_Event;

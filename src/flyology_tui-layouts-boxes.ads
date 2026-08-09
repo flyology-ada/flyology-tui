@@ -3,6 +3,9 @@ with Flyology_TUI.Surfaces;
 
 package Flyology_TUI.Layouts.Boxes is
    type Direction is (Horizontal, Vertical);
+   --  End_Aligned names cross-axis end alignment because End is an Ada
+   --  reserved word. Non-stretch slots use the child's intrinsic cross size.
+   type Cross_Axis_Alignment is (Start, Center, End_Aligned, Stretch);
    type Constraint_Kind is (Content, Fixed, Fill);
 
    type Constraint (Kind : Constraint_Kind := Content) is record
@@ -26,27 +29,35 @@ package Flyology_TUI.Layouts.Boxes is
 
    type Layout_Result (Item_Count : Natural) is tagged private;
 
+   --  Content and Fixed slots receive major-axis space in declaration order.
+   --  Fill slots share the remainder. Without a Fill slot, unused major-axis
+   --  space remains trailing and belongs to no returned Region. Every Region
+   --  is the authoritative slot into which its child is clipped.
+
    function Arrange
      (Items       : Surface_Array;
       Constraints : Constraint_Array;
       Width        : Natural;
       Height       : Natural;
       Flow         : Direction;
-      Gap          : Natural := 0) return Layout_Result;
+      Gap          : Natural := 0;
+      Alignment    : Cross_Axis_Alignment := Stretch) return Layout_Result;
 
    function Horizontally
      (Items       : Surface_Array;
       Constraints : Constraint_Array;
       Width        : Natural;
       Height       : Natural;
-      Gap          : Natural := 0) return Layout_Result;
+      Gap          : Natural := 0;
+      Alignment    : Cross_Axis_Alignment := Stretch) return Layout_Result;
 
    function Vertically
      (Items       : Surface_Array;
       Constraints : Constraint_Array;
       Width        : Natural;
       Height       : Natural;
-      Gap          : Natural := 0) return Layout_Result;
+      Gap          : Natural := 0;
+      Alignment    : Cross_Axis_Alignment := Stretch) return Layout_Result;
 
    function Frame
      (Item : Layout_Result) return Flyology_TUI.Surfaces.Surface;

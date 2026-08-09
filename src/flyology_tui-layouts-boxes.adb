@@ -17,13 +17,35 @@ package body Flyology_TUI.Layouts.Boxes is
           when Horizontal => Flyology_TUI.Surfaces.Width (Item),
           when Vertical   => Flyology_TUI.Surfaces.Height (Item));
 
+   function Intrinsic_Cross_Size
+     (Item : Flyology_TUI.Surfaces.Surface;
+      Flow : Direction) return Natural
+   is (case Flow is
+          when Horizontal => Flyology_TUI.Surfaces.Height (Item),
+          when Vertical   => Flyology_TUI.Surfaces.Width (Item));
+
+   function Aligned_Offset
+     (Available : Natural;
+      Used      : Natural;
+      Alignment : Cross_Axis_Alignment) return Natural
+   is
+      Spare : constant Natural := Available - Natural'Min (Available, Used);
+   begin
+      case Alignment is
+         when Start | Stretch => return 0;
+         when Center          => return Spare / 2;
+         when End_Aligned     => return Spare;
+      end case;
+   end Aligned_Offset;
+
    function Arrange
      (Items       : Surface_Array;
       Constraints : Constraint_Array;
       Width        : Natural;
       Height       : Natural;
       Flow         : Direction;
-      Gap          : Natural := 0) return Layout_Result
+      Gap          : Natural := 0;
+      Alignment    : Cross_Axis_Alignment := Stretch) return Layout_Result
    is
       Count : constant Natural := Items'Length;
       Result : Layout_Result (Count);
@@ -52,9 +74,10 @@ package body Flyology_TUI.Layouts.Boxes is
       --  Fill requests share exactly the cells that remain.
       for Ordinal in 1 .. Count loop
          declare
-            Item_Index : constant Positive := Items'First + Ordinal - 1;
+            Item_Index : constant Positive :=
+              Items'First + (Ordinal - 1);
             Constraint_Index : constant Positive :=
-              Constraints'First + Ordinal - 1;
+              Constraints'First + (Ordinal - 1);
             Rule : constant Constraint := Constraints (Constraint_Index);
             Requested : Natural := 0;
          begin
@@ -84,7 +107,7 @@ package body Flyology_TUI.Layouts.Boxes is
             for Ordinal in 1 .. Count loop
                declare
                   Constraint_Index : constant Positive :=
-                    Constraints'First + Ordinal - 1;
+                    Constraints'First + (Ordinal - 1);
                   Rule : constant Constraint :=
                     Constraints (Constraint_Index);
                begin
@@ -103,16 +126,27 @@ package body Flyology_TUI.Layouts.Boxes is
 
       for Ordinal in 1 .. Count loop
          declare
-            Item_Index : constant Positive := Items'First + Ordinal - 1;
+            Item_Index : constant Positive :=
+              Items'First + (Ordinal - 1);
+            Child_Cross : constant Natural :=
+              Intrinsic_Cross_Size (Items (Item_Index), Flow);
+            Available_Cross : constant Natural :=
+              (if Flow = Horizontal then Height else Width);
+            Slot_Cross : constant Natural :=
+              (if Alignment = Stretch
+               then Available_Cross
+               else Natural'Min (Child_Cross, Available_Cross));
+            Cross_Offset : constant Natural :=
+              Aligned_Offset (Available_Cross, Slot_Cross, Alignment);
             Area : constant Flyology_TUI.Geometry.Rectangle :=
               (if Flow = Horizontal
                then (X      => Integer (Offset),
-                     Y      => 0,
+                     Y      => Integer (Cross_Offset),
                      Width  => Sizes (Ordinal),
-                     Height => Height)
-               else (X      => 0,
+                     Height => Slot_Cross)
+               else (X      => Integer (Cross_Offset),
                      Y      => Integer (Offset),
-                     Width  => Width,
+                     Width  => Slot_Cross,
                      Height => Sizes (Ordinal)));
          begin
             Result.Regions (Ordinal) := Area;
@@ -142,16 +176,20 @@ package body Flyology_TUI.Layouts.Boxes is
       Constraints : Constraint_Array;
       Width        : Natural;
       Height       : Natural;
-      Gap          : Natural := 0) return Layout_Result
-   is (Arrange (Items, Constraints, Width, Height, Horizontal, Gap));
+      Gap          : Natural := 0;
+      Alignment    : Cross_Axis_Alignment := Stretch) return Layout_Result
+   is (Arrange
+         (Items, Constraints, Width, Height, Horizontal, Gap, Alignment));
 
    function Vertically
      (Items       : Surface_Array;
       Constraints : Constraint_Array;
       Width        : Natural;
       Height       : Natural;
-      Gap          : Natural := 0) return Layout_Result
-   is (Arrange (Items, Constraints, Width, Height, Vertical, Gap));
+      Gap          : Natural := 0;
+      Alignment    : Cross_Axis_Alignment := Stretch) return Layout_Result
+   is (Arrange
+         (Items, Constraints, Width, Height, Vertical, Gap, Alignment));
 
    function Frame
      (Item : Layout_Result) return Flyology_TUI.Surfaces.Surface
