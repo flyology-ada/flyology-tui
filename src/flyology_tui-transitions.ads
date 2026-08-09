@@ -1,6 +1,8 @@
 generic
    type Command_Type is private;
 package Flyology_TUI.Transitions is
+   subtype Command is Command_Type;
+
    --  One command request emitted by an update. Command_Type may itself encode
    --  batching or sequencing, matching the single-command transition used by
    --  Elm-style runtimes without making command payloads dynamically typed.

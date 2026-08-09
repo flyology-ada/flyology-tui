@@ -9,3 +9,6 @@ alr build
 cd "$root_dir/tests"
 alr build
 ./bin/flyology_tui_tests
+
+cd "$root_dir"
+alr exec -- gprbuild -P examples/examples.gpr -p

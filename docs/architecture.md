@@ -1,60 +1,125 @@
 # Architecture
 
-## Core data flow
+## Data flow
 
 Flyology TUI uses Elm semantics with Ada mechanics:
 
-1. One owner serially dispatches events to the application model.
-2. `Update` mutates that model in place and may declare one typed command.
-3. A runner executes commands outside the update call.
-4. Command results return as typed application messages.
-5. `Present` describes the complete desired view without performing I/O.
-6. A backend reconciles that view with terminal state and restores all modes on
-   close.
+1. A runner owns the application model on its calling task.
+2. Terminal events and command results enter one bounded inbox.
+3. `Update` mutates the model serially and may declare one typed command.
+4. A single command worker executes commands outside `Update`.
+5. Command results return as typed application messages.
+6. `Present` constructs the complete desired view without performing I/O.
+7. The backend reconciles that view with terminal state.
 
-A command value may encode a batch or sequence. This keeps the transition
-record bounded and definite while allowing applications and future component
-packages to define richer effect policies.
+One command value may encode application-defined batching or sequencing. The
+runner applies bounded backpressure instead of creating a task for every
+effect. On shutdown it stops accepting new messages, drains accepted command
+work, interrupts terminal input, waits for both workers, and closes the backend.
+An unexpected worker exception becomes `Runner_Error` after orderly cleanup.
 
-## Package boundaries
+`Programs` remains a task-free kernel for applications that want to supply a
+different orchestration policy.
 
-- `Flyology_TUI.Events` defines terminal input independently from any operating
-  system decoder.
-- `Flyology_TUI.Application_Events` combines terminal input with one
-  application-defined message type.
-- `Flyology_TUI.Transitions` records typed command and quit requests.
-- `Flyology_TUI.Programs` invokes application transition and presentation
-  callbacks. It performs no I/O and owns no task.
-- `Flyology_TUI.Views` declares content and terminal modes.
-- `Flyology_TUI.Backends` separates program semantics from terminal I/O.
+## Presentation pipeline
 
-## Runtime independence
+The view pipeline has typed boundaries:
 
-The core crate does not depend on Flyology. A mandatory dependency would make a
-custom GNAT runtime part of every TUI application's build even when native Ada
-tasking is sufficient.
+```text
+component models -> styled surfaces -> declarative view -> cell differ -> bytes
+```
 
-The backend interface leaves room for a separate adapter that waits through
-Flyology I/O and runs command executors as lightweight tasks. That adapter must
-not introduce a second application model or a second update path.
+A `Surface` is a value containing a rectangular vector of cells. Each origin
+cell holds one grapheme-like glyph and a style. A two-column glyph owns a
+continuation cell; overwriting either half clears the old span first. Writes and
+overlays clip at surface boundaries.
 
-## Platform plan
+`Layouts` builds new surfaces through padding, borders, alignment, horizontal
+joins, and vertical joins. It does not retain parent pointers or application
+callbacks.
 
-The first terminal backend targets macOS and Linux and will use direct POSIX
-terminal control, a wake descriptor, and an ANSI/DEC input parser. The public
-backend interface contains no POSIX descriptor or `termios` type. A future
-Windows console backend can therefore implement the same lifecycle, input, and
-rendering operations without changing applications.
+A `View` pairs its frame with declarative alternate-screen, mouse, focus,
+bracketed-paste, title, and cursor state. `Renderers` compares it with the prior
+view, emits changed cells, and reconciles terminal modes. Applications never
+construct cursor-motion or SGR byte strings.
+
+## Input pipeline
+
+`Input.Parser` accepts arbitrary byte fragments. It retains incomplete UTF-8
+and escape sequences between calls and emits typed events for:
+
+- printable and control keys;
+- navigation and function keys, including xterm modifiers;
+- focus changes;
+- SGR mouse clicks, releases, motion, drag, and wheel input;
+- bounded bracketed paste.
+
+A lone escape is intentionally ambiguous. The POSIX backend waits for one poll
+interval before calling `Flush_Escape`; tests can invoke that boundary directly.
+Unknown complete control sequences are consumed without exposing raw terminal
+commands to applications.
+
+## Backend contract
+
+`Backends.Backend` defines `Open`, `Next_Event`, `Render`, `Interrupt`, and
+`Close`. It contains no file descriptor, `termios`, signal, or Windows console
+type. `Close` is idempotent and must restore every terminal mode enabled by the
+backend, including after partial initialization.
+
+`Backends.POSIX` currently supplies macOS and Linux operation:
+
+- standard input is placed in raw mode;
+- a nonblocking pipe wakes a blocked input poll;
+- terminal size is observed at bounded intervals;
+- the Ada parser handles all input policy;
+- the Ada renderer handles frame and mode policy;
+- controlled finalization provides a final restoration guard.
+
+The C translation unit is a narrow ABI bridge for opaque `termios` storage,
+`winsize`, `pollfd`, and descriptor flag macros. Parsing, retries beyond EINTR,
+timeouts, rendering, ownership order, and error policy stay in Ada. See
+[posix-bridge.md](posix-bridge.md).
+
+`Backends.Headless` provides a bounded event source and records the most recent
+view and render count. It exercises the same runner without changing a process
+terminal.
+
+## Components
+
+Components own only local interaction state and return surfaces. They do not
+start tasks, execute commands, or retain a backend. The current set includes:
+
+- spinner and progress indicators;
+- scrollable viewports;
+- grapheme-aware text editing and horizontal cursor scrolling;
+- generic selectable lists;
+- key-binding help;
+- multi-field forms composed from text inputs.
+
+Applications decide how component state fits into their model and route events
+explicitly. This keeps focus, validation, and command policy visible in the
+application update function.
+
+## Runtime independence and future platforms
+
+The crate does not depend on Flyology. Requiring Flyology would make a custom
+GNAT runtime part of applications for which native Ada tasking is sufficient.
+A future Flyology adapter may replace backend waiting or command execution, but
+must preserve one model owner and one serial update path.
+
+A Windows console implementation can implement the same backend lifecycle and
+typed events. No Windows source is currently included, and POSIX behavior is
+not conditionally embedded in the public interface.
 
 ## Invariants
 
-- Only the event-loop owner mutates or presents the model.
-- `Initialize`, `Update`, and `Present` do not block on external I/O.
-- A command never receives a live model reference.
-- Every dispatch begins with an empty transition; effects cannot leak from a
-  prior event.
+- Only the runner owner mutates or presents the application model.
+- `Initialize`, `Update`, and `Present` perform no external blocking I/O.
+- A command receives a copied command value, never a model reference.
+- Every dispatch begins with an empty transition.
+- Terminal input and command queues are bounded.
+- A submitted command is completed before structured runner shutdown returns.
 - Backend `Close` is idempotent and safe after partial initialization.
-- Backend `Interrupt` is task-safe and wakes a blocked `Next_Event` promptly.
-- Terminal bytes and capability replies are untrusted, bounded input.
-- The renderer will compare typed cells, not application-provided cursor
-  commands.
+- Backend `Interrupt` wakes a blocked `Next_Event` promptly.
+- Terminal bytes are bounded, incremental, untrusted input.
+- Renderer state consists of typed cells and modes, not application bytecode.

@@ -1,0 +1,315 @@
+with Ada.Exceptions;
+with Ada.Strings.Wide_Wide_Unbounded;
+with Ada.Text_IO;
+with Flyology_TUI.Application_Events;
+with Flyology_TUI.Backends;
+with Flyology_TUI.Backends.POSIX;
+with Flyology_TUI.Colors;
+with Flyology_TUI.Components.Forms;
+with Flyology_TUI.Components.Help;
+with Flyology_TUI.Components.Lists;
+with Flyology_TUI.Components.Progress;
+with Flyology_TUI.Components.Spinners;
+with Flyology_TUI.Components.Text_Inputs;
+with Flyology_TUI.Components.Viewports;
+with Flyology_TUI.Events;
+with Flyology_TUI.Layouts;
+with Flyology_TUI.Runners;
+with Flyology_TUI.Styles;
+with Flyology_TUI.Surfaces;
+with Flyology_TUI.Transitions;
+with Flyology_TUI.Views;
+
+procedure Kitchen_Sink is
+   package Text renames Ada.Strings.Wide_Wide_Unbounded;
+
+   function U (Value : Wide_Wide_String)
+      return Text.Unbounded_Wide_Wide_String
+   is (Text.To_Unbounded_Wide_Wide_String (Value));
+
+   function Label (Value : Text.Unbounded_Wide_Wide_String)
+      return Wide_Wide_String
+   is (Text.To_Wide_Wide_String (Value));
+
+   package Lists is new Flyology_TUI.Components.Lists
+     (Item_Type => Text.Unbounded_Wide_Wide_String,
+      Label     => Label);
+
+   type Message is (Animation_Tick);
+   type Command is (Wait_For_Tick);
+   type Pane is (Text_Pane, List_Pane, Viewport_Pane, Form_Pane);
+
+   type Model is limited record
+      Active   : Pane := Text_Pane;
+      Spinner  : Flyology_TUI.Components.Spinners.Model :=
+        Flyology_TUI.Components.Spinners.Create;
+      Progress : Flyology_TUI.Components.Progress.Model :=
+        Flyology_TUI.Components.Progress.Create (32, False);
+      Input    : Flyology_TUI.Components.Text_Inputs.Model :=
+        Flyology_TUI.Components.Text_Inputs.Create
+          (24, "Type here; Unicode works");
+      Choices  : Lists.Model := Lists.Create (25, 4);
+      Viewport : Flyology_TUI.Components.Viewports.Model :=
+        Flyology_TUI.Components.Viewports.Create (31, 5);
+      Form     : Flyology_TUI.Components.Forms.Model;
+   end record;
+
+   package Events is new Flyology_TUI.Application_Events (Message);
+   package Transitions is new Flyology_TUI.Transitions (Command);
+   use type Events.Event_Kind;
+   use type Flyology_TUI.Events.Key_Kind;
+   use type Flyology_TUI.Events.Terminal_Event_Kind;
+
+   procedure Initialize
+     (Item : in out Model;
+      Next : in out Transitions.Transition) is
+   begin
+      Item.Input.Focus;
+      Item.Choices.Set_Items
+        ([U ("Typed messages"),
+          U ("Declarative views"),
+          U ("Bounded commands"),
+          U ("Headless tests"),
+          U ("POSIX backend"),
+          U ("Windows boundary")]);
+      Item.Viewport.Set_Content
+        (Flyology_TUI.Surfaces.From_Text
+           ("Arrow keys scroll this viewport." & Wide_Wide_Character'Val (10)
+            & "The content is a styled cell surface." &
+              Wide_Wide_Character'Val (10)
+            & "Rendering compares the next frame" &
+              Wide_Wide_Character'Val (10)
+            & "with the previous frame and emits" &
+              Wide_Wide_Character'Val (10)
+            & "only changed terminal cells." & Wide_Wide_Character'Val (10)
+            & "No application ANSI strings."));
+      Item.Form := Flyology_TUI.Components.Forms.Create
+        ([(Label       => U ("Name"),
+           Initial     => U (""),
+           Placeholder => U ("Ada programmer")),
+          (Label       => U ("Project"),
+           Initial     => U ("Flyology TUI"),
+           Placeholder => U ("Project name"))],
+         Input_Width => 20);
+      Transitions.Run (Next, Wait_For_Tick);
+   end Initialize;
+
+   procedure Activate (Item : in out Model; Target : Pane) is
+   begin
+      if Item.Active = Text_Pane then
+         Item.Input.Blur;
+      end if;
+      Item.Active := Target;
+      if Item.Active = Text_Pane then
+         Item.Input.Focus;
+      end if;
+   end Activate;
+
+   procedure Next_Pane (Item : in out Model; Backwards : Boolean) is
+      Position : Integer := Pane'Pos (Item.Active);
+   begin
+      if Backwards then
+         Position :=
+           (Position + Pane'Pos (Pane'Last)) mod (Pane'Pos (Pane'Last) + 1);
+      else
+         Position := (Position + 1) mod (Pane'Pos (Pane'Last) + 1);
+      end if;
+      Activate (Item, Pane'Val (Position));
+   end Next_Pane;
+
+   function Is_Control_C
+     (Event : Flyology_TUI.Events.Terminal_Event) return Boolean
+   is
+     (Event.Kind = Flyology_TUI.Events.Key_Press
+      and then Event.Key.Kind = Flyology_TUI.Events.Text_Key
+      and then Event.Key.Modified.Control
+      and then Text.To_Wide_Wide_String (Event.Key.Value) = "c");
+
+   procedure Update
+     (Item  : in out Model;
+      Event : Events.Event;
+      Next  : in out Transitions.Transition)
+   is
+   begin
+      if Event.Kind = Events.Application_Message then
+         Item.Spinner.Tick;
+         if Item.Progress.Value >= 0.97 then
+            Item.Progress.Set (0.0);
+         else
+            Item.Progress.Set (Item.Progress.Value + 0.03);
+         end if;
+         Transitions.Run (Next, Wait_For_Tick);
+         return;
+      end if;
+
+      if Event.Terminal.Kind = Flyology_TUI.Events.Interrupt
+        or else Is_Control_C (Event.Terminal)
+      then
+         Transitions.Quit (Next);
+      elsif Event.Terminal.Kind = Flyology_TUI.Events.Key_Press
+        and then Event.Terminal.Key.Kind = Flyology_TUI.Events.Tab_Key
+      then
+         Next_Pane (Item, Event.Terminal.Key.Modified.Shift);
+      else
+         case Item.Active is
+            when Text_Pane => Item.Input.Update (Event.Terminal);
+            when List_Pane => Item.Choices.Update (Event.Terminal);
+            when Viewport_Pane => Item.Viewport.Update (Event.Terminal);
+            when Form_Pane => Item.Form.Update (Event.Terminal);
+         end case;
+      end if;
+   end Update;
+
+   function Panel
+     (Name       : Wide_Wide_String;
+      Content    : Flyology_TUI.Surfaces.Surface;
+      Is_Active  : Boolean;
+      Accent     : Flyology_TUI.Styles.Style;
+      Muted      : Flyology_TUI.Styles.Style)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Marker : constant Wide_Wide_String :=
+        [1 => Wide_Wide_Character'Val
+           (if Is_Active then 16#25CF# else 16#25CB#),
+         2 => ' '];
+      Heading : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.From_Text
+          (Marker & Name,
+           (if Is_Active then Accent else Muted));
+      Body_Surface : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Join_Vertically (Heading, Content, Gap => 1);
+      Box : constant Flyology_TUI.Layouts.Block :=
+        (Padding    => (Top => 1, Right => 1, Bottom => 1, Left => 1),
+         Border     => Flyology_TUI.Layouts.Rounded,
+         Appearance => (if Is_Active then Accent else Muted),
+         others     => <>);
+   begin
+      return Flyology_TUI.Layouts.Render (Box, Body_Surface);
+   end Panel;
+
+   function Present (Item : Model) return Flyology_TUI.Views.View is
+      Accent : constant Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Emphasized
+          (Flyology_TUI.Styles.With_Foreground
+             (Flyology_TUI.Styles.Default,
+              Flyology_TUI.Colors.True_Color (214, 159, 255)));
+      Cyan : constant Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.With_Foreground
+          (Flyology_TUI.Styles.Default,
+           Flyology_TUI.Colors.True_Color (110, 231, 255));
+      Muted : constant Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.With_Foreground
+          (Flyology_TUI.Styles.Default,
+           Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Bright_Black));
+      Selected : constant Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.With_Background
+          (Accent, Flyology_TUI.Colors.Palette (236));
+      Header : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Join_Horizontally
+          (Item.Spinner.Render (Accent),
+           Flyology_TUI.Surfaces.From_Text
+             ("Flyology TUI kitchen sink", Accent),
+           Gap => 1);
+      Meter : constant Flyology_TUI.Surfaces.Surface :=
+        Item.Progress.Render (Cyan, Muted);
+      Input_Panel : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Text input",
+           Item.Input.Render (Cyan, Muted),
+           Item.Active = Text_Pane,
+           Accent,
+           Muted);
+      List_Panel : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Generic list",
+           Item.Choices.Render (Muted, Selected),
+           Item.Active = List_Pane,
+           Accent,
+           Muted);
+      Viewport_Panel : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Viewport",
+           Item.Viewport.Render,
+           Item.Active = Viewport_Pane,
+           Accent,
+           Muted);
+      Form_Panel : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ((if Item.Form.Submitted then "Form done" else "Form"),
+           Item.Form.Render (Muted, Cyan, Accent),
+           Item.Active = Form_Pane,
+           Accent,
+           Muted);
+      Columns : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Join_Horizontally
+          (Flyology_TUI.Layouts.Join_Vertically
+             (Input_Panel, List_Panel, Gap => 1),
+           Flyology_TUI.Layouts.Join_Vertically
+             (Viewport_Panel, Form_Panel, Gap => 1),
+           Gap => 2);
+      Help : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Components.Help.Render
+          ([(Key         => U ("tab"),
+             Description => U ("next panel"),
+             Enabled     => True),
+            (Key         => U ("arrows"),
+             Description => U ("interact"),
+             Enabled     => True),
+            (Key         => U ("enter"),
+             Description => U ("advance form"),
+             Enabled     => True),
+            (Key         => U ("ctrl-c"),
+             Description => U ("quit"),
+             Enabled     => True)],
+           Width             => 66,
+           Vertical          => False,
+           Key_Appearance    => Accent,
+           Detail_Appearance => Muted);
+      Dashboard : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Join_Vertically
+          (Flyology_TUI.Layouts.Join_Horizontally (Header, Meter, Gap => 3),
+           Flyology_TUI.Layouts.Join_Vertically (Columns, Help, Gap => 1),
+           Gap => 1);
+      Result : Flyology_TUI.Views.View :=
+        Flyology_TUI.Views.From_Surface (Dashboard);
+   begin
+      Result.Alternate_Screen := True;
+      Result.Report_Focus := True;
+      Result.Bracketed_Paste := True;
+      Result.Window_Title := U ("Flyology TUI kitchen sink");
+      return Result;
+   end Present;
+
+   procedure Execute
+     (Item     : Command;
+      Result   : out Message;
+      Produced : out Boolean)
+   is
+      pragma Unreferenced (Item);
+   begin
+      delay 0.12;
+      Result := Animation_Tick;
+      Produced := True;
+   end Execute;
+
+   package Runtime is new Flyology_TUI.Runners
+     (Events      => Events,
+      Transitions => Transitions,
+      Model_Type  => Model,
+      Initialize  => Initialize,
+      Update      => Update,
+      Present     => Present,
+      Execute     => Execute,
+      Event_Capacity => 64,
+      Command_Capacity => 4);
+
+   State : Model;
+   Terminal : Flyology_TUI.Backends.POSIX.POSIX_Backend;
+begin
+   Runtime.Run (State, Terminal);
+exception
+   when Error : Flyology_TUI.Backends.Backend_Error =>
+      Ada.Text_IO.Put_Line
+        (Ada.Text_IO.Standard_Error,
+         "kitchen_sink: " & Ada.Exceptions.Exception_Message (Error));
+end Kitchen_Sink;

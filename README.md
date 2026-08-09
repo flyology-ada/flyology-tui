@@ -1,38 +1,40 @@
 # Flyology TUI
 
 Flyology TUI is an experimental, typed terminal user-interface toolkit for
-Ada. It follows the model/message/update/view structure associated with Elm and
-Bubble Tea while retaining Ada value types, in-place model updates, and normal
-tasking semantics.
+Ada. Its implementation follows the model/message/update/view architecture of
+Elm and Bubble Tea, with Ada value types, in-place model updates, and structured
+tasking.
 
 The crate is independent from the Flyology runtime and builds with stock GNAT.
-Its backend boundary is intended to support a native POSIX implementation
-first, a Windows console implementation later, and an optional Flyology-aware
-adapter without changing application code.
+It currently supports interactive terminals on macOS and Linux. The backend
+contract contains no POSIX types so a Windows console backend and an optional
+Flyology-aware adapter can be added separately.
 
-## Status
+## What is implemented
 
-The repository currently contains the transition kernel and the public backend
-contract:
+- application-defined message, command, and model types;
+- serial initialize/update/present dispatch with one model owner;
+- one bounded command worker whose results re-enter as typed messages;
+- incremental UTF-8, CSI, SGR mouse, focus, and bracketed-paste input parsing;
+- terminal-oriented grapheme clusters and one- or two-cell glyph widths;
+- typed RGB, indexed, and ANSI colors plus text attributes;
+- clipped cell surfaces, compositing, borders, padding, alignment, and joins;
+- stateful cell diffing and declarative ANSI/DEC terminal modes;
+- raw-mode POSIX lifecycle, resize observation, and interruptible waits;
+- deterministic headless backend;
+- spinner, progress, viewport, text input, list, help, and form components;
+- an interactive counter example and nested behavioral test crate.
 
-- strongly typed terminal and application events;
-- application-defined, strongly typed command values;
-- serial `Initialize` and `Update` transitions;
-- declarative terminal view properties;
-- a limited backend interface for input, rendering, restoration, and wakeup;
-- behavioral tests for transition reset, message dispatch, command emission,
-  view construction, and termination.
-
-There is not yet a terminal renderer. The next milestone is the POSIX session,
-input decoder, styled cell surface, and frame differ.
+Unicode handling covers the combining marks, variation selectors, emoji
+modifiers, ZWJ sequences, and wide ranges commonly used by terminals. It is a
+bounded terminal-width implementation, not a complete implementation of every
+Unicode grapheme-boundary and locale-dependent ambiguous-width rule.
 
 ## Programming model
 
-An application declares its own model, message, and command types. Instantiating
-`Flyology_TUI.Application_Events` produces the closed event sum; instantiating
-`Flyology_TUI.Transitions` produces typed effect declarations. A
-`Flyology_TUI.Programs` instance connects those types to the application's
-callbacks.
+An application declares its own model, application messages, and command
+values. Generic instances close those types without string tags or unchecked
+payloads.
 
 ```ada
 type Model is limited record
@@ -43,31 +45,80 @@ type Message is record
    Amount : Integer;
 end record;
 
-type Command is (No_Command, Save);
+type Command is (Load, Save);
 
 package Events is new Flyology_TUI.Application_Events (Message);
 package Transitions is new Flyology_TUI.Transitions (Command);
 ```
 
-Only the event-loop owner passes the model to `Start`, `Dispatch`, and
-`Current_View`. Other tasks communicate by posting application messages.
-Blocking work belongs in command executors, and command results re-enter through
-`Events.From_Message`.
+`Initialize` and `Update` mutate the model on the runner's calling task. They
+may request one command or quit through a transition. `Present` returns the
+complete desired `View`; it does not write terminal bytes. A command executor
+runs on the runner's worker task and returns an optional application message.
 
-The model is deliberately mutable. The architecture requires unidirectional
-ownership and explicit effects, not functional data structures or model copies.
+```ada
+package Runtime is new Flyology_TUI.Runners
+  (Events      => Events,
+   Transitions => Transitions,
+   Model_Type  => Model,
+   Initialize  => Initialize,
+   Update      => Update,
+   Present     => Present,
+   Execute     => Execute);
+
+State    : Model;
+Terminal : Flyology_TUI.Backends.POSIX.POSIX_Backend;
+
+Runtime.Run (State, Terminal);
+```
+
+The model is deliberately mutable. The invariant is unidirectional ownership:
+only the runner calls initialize, update, and present. Commands never receive a
+live model reference.
+
+## Layers
+
+- `Events`, `Application_Events`, `Transitions`, and `Programs` form the
+  backend-free transition kernel.
+- `Colors`, `Styles`, `Glyphs`, `Surfaces`, `Layouts`, and `Views` form the
+  presentation model.
+- `Input` and `Renderers` translate terminal bytes without owning a terminal.
+- `Backends.POSIX` owns real terminal state; `Backends.Headless` is for tests.
+- `Runners` supplies bounded input/effect orchestration.
+- `Components.*` supplies reusable models and surface renderers.
+
+See [docs/architecture.md](docs/architecture.md) for ownership and shutdown
+details. [examples/src/counter.adb](examples/src/counter.adb) is the compact
+starting point; [examples/src/kitchen_sink.adb](examples/src/kitchen_sink.adb)
+composes every component and uses a repeating typed command for animation.
 
 ## Build and test
 
-Alire 2.1 or newer is recommended.
+Alire 2.1 or newer is recommended. GNAT 13 through 16 is accepted by the crate.
 
 ```sh
 alr build
 alr test
 ```
 
+The test action builds the library, runs the nested headless behavioral suite,
+and compiles the POSIX counter example. To run the example in a terminal:
+
+```sh
+alr exec -- ./examples/bin/counter
+alr exec -- ./examples/bin/kitchen_sink
+```
+
 The test suite is a nested Alire crate pinned to the parent library, keeping
 test-only build state outside the published dependency set.
+
+## Platform boundary
+
+The released backend interface is deliberately expressed only in Flyology TUI
+types. `Backends.POSIX` is implemented for macOS and Linux. Windows is preserved
+as an architectural boundary but is not implemented. There is no dependency on
+the Flyology runtime; a future adapter can replace waiting and command execution
+without adding another model or update path.
 
 ## License
 
