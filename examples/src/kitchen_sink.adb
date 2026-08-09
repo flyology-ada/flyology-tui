@@ -230,39 +230,62 @@ procedure Kitchen_Sink is
    end Initialize;
 
    procedure Next_Focus (Item : in out Model; Backwards : Boolean) is
-      First : Focus_Target;
-      Last  : Focus_Target;
-      Value : Integer;
    begin
       if Current_Page (Item) = Basics_Page then
-         First := Page_Navigation;
-         Last := Form_Field;
          if Item.Focus not in Page_Navigation .. Form_Field then
             Activate (Item, Text_Field);
             return;
          end if;
+         if Backwards then
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Form_Field,
+                   when Text_Field      => Page_Navigation,
+                   when List_Field      => Text_Field,
+                   when Viewport_Field  => List_Field,
+                   when Form_Field      => Viewport_Field,
+                   when others          => Text_Field));
+         else
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Text_Field,
+                   when Text_Field      => List_Field,
+                   when List_Field      => Viewport_Field,
+                   when Viewport_Field  => Form_Field,
+                   when Form_Field      => Page_Navigation,
+                   when others          => Text_Field));
+         end if;
       else
-         First := Page_Navigation;
-         Last := Dropdown_Field;
          if Item.Focus in Text_Field .. Form_Field then
             Activate (Item, Button_Field);
             return;
          end if;
-      end if;
-
-      Value := Focus_Target'Pos (Item.Focus);
-      if Backwards then
-         if Item.Focus = First then
-            Value := Focus_Target'Pos (Last);
+         if Backwards then
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Dropdown_Field,
+                   when Button_Field    => Page_Navigation,
+                   when Check_Field     => Button_Field,
+                   when Radio_Field     => Check_Field,
+                   when Selector_Field  => Radio_Field,
+                   when Dropdown_Field  => Selector_Field,
+                   when others          => Button_Field));
          else
-            Value := Value - 1;
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Button_Field,
+                   when Button_Field    => Check_Field,
+                   when Check_Field     => Radio_Field,
+                   when Radio_Field     => Selector_Field,
+                   when Selector_Field  => Dropdown_Field,
+                   when Dropdown_Field  => Page_Navigation,
+                   when others          => Button_Field));
          end if;
-      elsif Item.Focus = Last then
-         Value := Focus_Target'Pos (First);
-      else
-         Value := Value + 1;
       end if;
-      Activate (Item, Focus_Target'Val (Value));
    end Next_Focus;
 
    function Is_Control_C
@@ -372,13 +395,6 @@ procedure Kitchen_Sink is
         (X => Integer (Event.X), Y => Integer (Event.Y));
       Result : Update_Result;
    begin
-      if Item.Dropdown.Is_Open
-        and then not Flyology_TUI.Geometry.Contains (Dropdown_Bounds, Point)
-      then
-         Result := Item.Dropdown.Dismiss;
-         Apply_Result (Item, Dropdown_Field, Dropdown_Capture, Result);
-      end if;
-
       if Flyology_TUI.Geometry.Contains (Button_Bounds, Point) then
          Result := Item.Button.Handle
            (Flyology_TUI.Mouse.Relative (Event, Button_Origin));
@@ -418,6 +434,26 @@ procedure Kitchen_Sink is
       if Item.Capture /= No_Capture then
          Route_Captured_Mouse (Item, Event.Mouse);
          return;
+      end if;
+
+      if Current_Page (Item) = Controls_Page
+        and then Item.Dropdown.Is_Open
+        and then Event.Mouse.Action = Flyology_TUI.Events.Mouse_Click
+        and then Event.Mouse.Button = Flyology_TUI.Events.Left_Button
+      then
+         declare
+            Dropdown_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+              (X => Dropdown_Origin.X,
+               Y => Dropdown_Origin.Y,
+               Width => Item.Dropdown.Width,
+               Height => Item.Dropdown.Height);
+         begin
+            if not Flyology_TUI.Geometry.Contains (Dropdown_Bounds, Point) then
+               Result := Item.Dropdown.Dismiss;
+               Apply_Result
+                 (Item, Dropdown_Field, Dropdown_Capture, Result);
+            end if;
+         end;
       end if;
 
       if Flyology_TUI.Geometry.Contains (Tabs_Bounds, Point) then
