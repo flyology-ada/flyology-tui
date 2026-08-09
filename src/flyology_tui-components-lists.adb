@@ -142,4 +142,10 @@ package body Flyology_TUI.Components.Lists is
       return Result;
    end Render;
 
+   function Render
+     (Item  : Model;
+      Theme : Flyology_TUI.Themes.Theme)
+      return Flyology_TUI.Surfaces.Surface
+   is (Render (Item, Theme.Muted, Theme.Selected));
+
 end Flyology_TUI.Components.Lists;

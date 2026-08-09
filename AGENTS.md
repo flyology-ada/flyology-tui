@@ -18,6 +18,8 @@
 - `Present` declares a complete view and performs no I/O.
 - Styled surfaces own rectangular cell values. A two-column glyph owns its
   continuation cell; overwriting either half must clear the old span.
+- Themes are borrowed render-time values. Keep explicit style parameters as
+  the low-level API, and do not retain a theme in component model state.
 - Input parsing is incremental and bounded. Preserve incomplete UTF-8, escape,
   and bracketed-paste sequences across reads without exposing raw control
   strings to applications.

@@ -8,6 +8,7 @@ with Flyology_TUI.Application_Events;
 with Flyology_TUI.Backends;
 with Flyology_TUI.Backends.Headless;
 with Flyology_TUI.Colors;
+with Flyology_TUI.Components.Help;
 with Flyology_TUI.Components.Lists;
 with Flyology_TUI.Components.Forms;
 with Flyology_TUI.Components.Progress;
@@ -24,6 +25,7 @@ with Flyology_TUI.Renderers;
 with Flyology_TUI.Runners;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
+with Flyology_TUI.Themes;
 with Flyology_TUI.Transitions;
 with Flyology_TUI.Views;
 
@@ -35,6 +37,7 @@ procedure Flyology_TUI_Tests is
    use type Flyology_TUI.Events.Mouse_Action;
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Flyology_TUI.Styles.Style;
    use type Interfaces.C.int;
 
    ESC : constant Character := Ada.Characters.Latin_1.ESC;
@@ -524,6 +527,117 @@ procedure Flyology_TUI_Tests is
       end;
    end Test_Components;
 
+   procedure Test_Themes is
+      Custom : Flyology_TUI.Themes.Theme := Flyology_TUI.Themes.Charm;
+      Input  : Flyology_TUI.Components.Text_Inputs.Model :=
+        Flyology_TUI.Components.Text_Inputs.Create (4, "hint");
+      Empty_Input : constant Flyology_TUI.Components.Text_Inputs.Model :=
+        Flyology_TUI.Components.Text_Inputs.Create (4, "hint");
+      Spinner : constant Flyology_TUI.Components.Spinners.Model :=
+        Flyology_TUI.Components.Spinners.Create;
+      Progress : Flyology_TUI.Components.Progress.Model :=
+        Flyology_TUI.Components.Progress.Create (2, False);
+      List : Integer_Lists.Model := Integer_Lists.Create (8, 2);
+      Form : constant Flyology_TUI.Components.Forms.Model :=
+        Flyology_TUI.Components.Forms.Create
+          (Flyology_TUI.Components.Forms.Field_Array'
+             (1 =>
+                (Label       => Text.To_Unbounded_Wide_Wide_String ("N"),
+                 Initial     => Text.To_Unbounded_Wide_Wide_String ("x"),
+                 Placeholder => Text.Null_Unbounded_Wide_Wide_String)),
+           Input_Width => 4);
+      Override : constant Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.With_Foreground
+          (Flyology_TUI.Styles.Default,
+           Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Bright_Red));
+   begin
+      Assert
+        (Flyology_TUI.Themes.Default.Primary = Flyology_TUI.Styles.Default
+         and then Flyology_TUI.Themes.Default.Success =
+           Flyology_TUI.Styles.Default,
+         "default theme changed terminal defaults");
+      Custom.Input := Override;
+      Input.Set_Value ("x");
+      declare
+         Rendered : constant Flyology_TUI.Surfaces.Surface :=
+           Input.Render (Custom);
+      begin
+         Assert
+           (Rendered.Element (0, 0).Appearance = Override,
+            "text input did not use the theme Input role");
+      end;
+      Assert
+        (Custom.Primary = Flyology_TUI.Themes.Charm.Primary,
+         "overriding one theme role changed another role");
+
+      declare
+         Rendered : constant Flyology_TUI.Surfaces.Surface :=
+           Empty_Input.Render (Custom);
+      begin
+         Assert
+           (Rendered.Element (0, 0).Appearance = Custom.Placeholder,
+            "text input did not use the theme Placeholder role");
+      end;
+
+      declare
+         Rendered : constant Flyology_TUI.Surfaces.Surface :=
+           Spinner.Render (Custom);
+      begin
+         Assert
+           (Rendered.Element (0, 0).Appearance = Custom.Primary,
+            "spinner did not use the theme Primary role");
+      end;
+
+      Progress.Set (0.5);
+      declare
+         Rendered : constant Flyology_TUI.Surfaces.Surface :=
+           Progress.Render (Custom);
+      begin
+         Assert
+           (Rendered.Element (0, 0).Appearance = Custom.Primary
+            and then Rendered.Element (1, 0).Appearance = Custom.Muted,
+            "progress did not map its theme roles");
+      end;
+
+      List.Set_Items ((1, 2));
+      declare
+         Rendered : constant Flyology_TUI.Surfaces.Surface :=
+           List.Render (Custom);
+      begin
+         Assert
+           (Rendered.Element (0, 0).Appearance = Custom.Selected
+            and then Rendered.Element (0, 1).Appearance = Custom.Muted,
+            "list did not map its theme roles");
+      end;
+
+      declare
+         Rendered : constant Flyology_TUI.Surfaces.Surface :=
+           Form.Render (Custom);
+      begin
+         Assert
+           (Rendered.Element (0, 0).Appearance = Custom.Muted
+            and then Rendered.Element (3, 0).Appearance = Custom.Focused,
+            "form did not map its theme roles");
+      end;
+
+      declare
+         Rendered : constant Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Components.Help.Render
+             (Flyology_TUI.Components.Help.Binding_Array'
+                (1 =>
+                   (Key         => Text.To_Unbounded_Wide_Wide_String ("k"),
+                    Description => Text.To_Unbounded_Wide_Wide_String ("key"),
+                    Enabled     => True)),
+              Width => 8,
+              Theme => Custom);
+      begin
+         Assert
+           (Rendered.Element (0, 0).Appearance = Custom.Primary
+            and then Rendered.Element (3, 0).Appearance = Custom.Muted,
+            "help did not map its theme roles");
+      end;
+   end Test_Themes;
+
    type Runner_Model is limited record
       Count : Integer := 0;
    end record;
@@ -663,5 +777,6 @@ begin
    Test_Mouse;
    Test_POSIX_Poll;
    Test_Components;
+   Test_Themes;
    Test_Runner;
 end Flyology_TUI_Tests;

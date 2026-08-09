@@ -43,6 +43,28 @@ bracketed-paste, title, and cursor state. `Renderers` compares it with the prior
 view, emits changed cells, and reconciles terminal modes. Applications never
 construct cursor-motion or SGR byte strings.
 
+## Theme boundary
+
+`Themes.Theme` groups semantic style roles without changing component state or
+the low-level rendering API. An application can copy `Themes.Charm`, replace
+individual roles, and pass the value to component `Render` overloads. The
+original explicit style parameters remain available when a component needs a
+one-off treatment.
+
+| Component | Theme roles |
+| --- | --- |
+| Spinner | `Primary` |
+| Progress | `Primary`, `Muted` |
+| List | `Muted`, `Selected` |
+| Text input | `Input`, `Placeholder` |
+| Form | `Muted`, `Input`, `Focused` |
+| Help | `Primary`, `Muted` |
+
+`Border`, `Error`, and `Success` are application-facing roles for layout and
+status presentation. Components borrow a theme only during rendering; models
+never retain it. `Themes.Default` preserves terminal defaults, while
+`Themes.Charm` is an optional restrained dark-terminal preset.
+
 ## Input pipeline
 
 `Input.Parser` accepts byte fragments up to its configured pending-byte bound.

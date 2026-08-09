@@ -4,7 +4,6 @@ with Ada.Text_IO;
 with Flyology_TUI.Application_Events;
 with Flyology_TUI.Backends;
 with Flyology_TUI.Backends.POSIX;
-with Flyology_TUI.Colors;
 with Flyology_TUI.Components.Forms;
 with Flyology_TUI.Components.Help;
 with Flyology_TUI.Components.Lists;
@@ -18,6 +17,7 @@ with Flyology_TUI.Mouse;
 with Flyology_TUI.Runners;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
+with Flyology_TUI.Themes;
 with Flyology_TUI.Transitions;
 with Flyology_TUI.Views;
 
@@ -80,6 +80,9 @@ procedure Kitchen_Sink is
    use type Flyology_TUI.Events.Mouse_Action;
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+
+   Visual : constant Flyology_TUI.Themes.Theme :=
+     Flyology_TUI.Themes.Charm;
 
    procedure Initialize
      (Item : in out Model;
@@ -244,58 +247,42 @@ procedure Kitchen_Sink is
    end Panel;
 
    function Present (Item : Model) return Flyology_TUI.Views.View is
-      Accent : constant Flyology_TUI.Styles.Style :=
-        Flyology_TUI.Styles.Emphasized
-          (Flyology_TUI.Styles.With_Foreground
-             (Flyology_TUI.Styles.Default,
-              Flyology_TUI.Colors.True_Color (214, 159, 255)));
-      Cyan : constant Flyology_TUI.Styles.Style :=
-        Flyology_TUI.Styles.With_Foreground
-          (Flyology_TUI.Styles.Default,
-           Flyology_TUI.Colors.True_Color (110, 231, 255));
-      Muted : constant Flyology_TUI.Styles.Style :=
-        Flyology_TUI.Styles.With_Foreground
-          (Flyology_TUI.Styles.Default,
-           Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Bright_Black));
-      Selected : constant Flyology_TUI.Styles.Style :=
-        Flyology_TUI.Styles.With_Background
-          (Accent, Flyology_TUI.Colors.Palette (236));
       Header : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Horizontally
-          (Item.Spinner.Render (Accent),
+          (Item.Spinner.Render (Visual),
            Flyology_TUI.Surfaces.From_Text
-             ("Flyology TUI kitchen sink", Accent),
+             ("Flyology TUI kitchen sink", Visual.Primary),
            Gap => 1);
       Meter : constant Flyology_TUI.Surfaces.Surface :=
-        Item.Progress.Render (Cyan, Muted);
+        Item.Progress.Render (Visual);
       Input_Panel : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Text input",
-           Item.Input.Render (Cyan, Muted),
+           Item.Input.Render (Visual),
            Item.Active = Text_Pane,
-           Accent,
-           Muted);
+           Visual.Border,
+           Visual.Muted);
       List_Panel : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Generic list",
-           Item.Choices.Render (Muted, Selected),
+           Item.Choices.Render (Visual),
            Item.Active = List_Pane,
-           Accent,
-           Muted);
+           Visual.Border,
+           Visual.Muted);
       Viewport_Panel : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Viewport",
            Item.Viewport.Render,
            Item.Active = Viewport_Pane,
-           Accent,
-           Muted);
+           Visual.Border,
+           Visual.Muted);
       Form_Panel : constant Flyology_TUI.Surfaces.Surface :=
         Panel
-          ((if Item.Form.Submitted then "Form done" else "Form"),
-           Item.Form.Render (Muted, Cyan, Accent),
+           ((if Item.Form.Submitted then "Form done" else "Form"),
+           Item.Form.Render (Visual),
            Item.Active = Form_Pane,
-           Accent,
-           Muted);
+           Visual.Border,
+           Visual.Muted);
       Columns : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Horizontally
           (Flyology_TUI.Layouts.Join_Vertically
@@ -319,8 +306,7 @@ procedure Kitchen_Sink is
              Enabled     => True)],
            Width             => 66,
            Vertical          => False,
-           Key_Appearance    => Accent,
-           Detail_Appearance => Muted);
+           Theme             => Visual);
       Dashboard : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Vertically
           (Flyology_TUI.Layouts.Join_Horizontally (Header, Meter, Gap => 3),

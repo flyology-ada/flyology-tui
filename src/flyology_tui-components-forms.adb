@@ -188,4 +188,10 @@ package body Flyology_TUI.Components.Forms is
       end;
    end Render;
 
+   function Render
+     (Item  : Model;
+      Theme : Flyology_TUI.Themes.Theme)
+      return Flyology_TUI.Surfaces.Surface
+   is (Render (Item, Theme.Muted, Theme.Input, Theme.Focused));
+
 end Flyology_TUI.Components.Forms;

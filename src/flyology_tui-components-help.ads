@@ -1,6 +1,7 @@
 with Ada.Strings.Wide_Wide_Unbounded;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
+with Flyology_TUI.Themes;
 
 package Flyology_TUI.Components.Help is
    package Text renames Ada.Strings.Wide_Wide_Unbounded;
@@ -21,5 +22,13 @@ package Flyology_TUI.Components.Help is
         Flyology_TUI.Styles.Default;
       Detail_Appearance : Flyology_TUI.Styles.Style :=
         Flyology_TUI.Styles.Default)
+      return Flyology_TUI.Surfaces.Surface;
+
+   --  Render keys with Primary and descriptions with Muted.
+   function Render
+     (Bindings : Binding_Array;
+      Width    : Positive;
+      Theme    : Flyology_TUI.Themes.Theme;
+      Vertical : Boolean := True)
       return Flyology_TUI.Surfaces.Surface;
 end Flyology_TUI.Components.Help;

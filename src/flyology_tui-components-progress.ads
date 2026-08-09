@@ -1,5 +1,6 @@
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
+with Flyology_TUI.Themes;
 
 package Flyology_TUI.Components.Progress is
    subtype Fraction is Long_Float range 0.0 .. 1.0;
@@ -17,6 +18,12 @@ package Flyology_TUI.Components.Progress is
      (Item       : Model;
       Complete   : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Remaining  : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default)
+      return Flyology_TUI.Surfaces.Surface;
+
+   --  Render with Complete mapped to Primary and Remaining mapped to Muted.
+   function Render
+     (Item  : Model;
+      Theme : Flyology_TUI.Themes.Theme)
       return Flyology_TUI.Surfaces.Surface;
 
 private

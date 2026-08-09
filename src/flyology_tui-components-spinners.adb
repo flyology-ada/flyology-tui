@@ -70,4 +70,10 @@ package body Flyology_TUI.Components.Spinners is
    is (Flyology_TUI.Surfaces.From_Text
          (Glyph (Item.Kind, Item.Position), Appearance));
 
+   function Render
+     (Item  : Model;
+      Theme : Flyology_TUI.Themes.Theme)
+      return Flyology_TUI.Surfaces.Surface
+   is (Render (Item, Theme.Primary));
+
 end Flyology_TUI.Components.Spinners;

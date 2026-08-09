@@ -47,4 +47,13 @@ package body Flyology_TUI.Components.Help is
       return Result;
    end Render;
 
+   function Render
+     (Bindings : Binding_Array;
+      Width    : Positive;
+      Theme    : Flyology_TUI.Themes.Theme;
+      Vertical : Boolean := True)
+      return Flyology_TUI.Surfaces.Surface
+   is (Render
+         (Bindings, Width, Vertical, Theme.Primary, Theme.Muted));
+
 end Flyology_TUI.Components.Help;

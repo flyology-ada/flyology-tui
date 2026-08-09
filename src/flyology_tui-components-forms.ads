@@ -4,6 +4,7 @@ with Flyology_TUI.Components.Text_Inputs;
 with Flyology_TUI.Events;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
+with Flyology_TUI.Themes;
 
 package Flyology_TUI.Components.Forms is
    package Text renames Ada.Strings.Wide_Wide_Unbounded;
@@ -50,6 +51,13 @@ package Flyology_TUI.Components.Forms is
         Flyology_TUI.Styles.Default;
       Focused_Appearance  : Flyology_TUI.Styles.Style :=
         Flyology_TUI.Styles.Default)
+      return Flyology_TUI.Surfaces.Surface;
+
+   --  Render labels with Muted, inputs with Input, and the active input with
+   --  Focused.
+   function Render
+     (Item  : Model;
+      Theme : Flyology_TUI.Themes.Theme)
       return Flyology_TUI.Surfaces.Surface;
 
 private

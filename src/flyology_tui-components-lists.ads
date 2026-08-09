@@ -3,6 +3,7 @@ with Ada.Strings.Wide_Wide_Unbounded;
 with Flyology_TUI.Events;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
+with Flyology_TUI.Themes;
 
 generic
    type Item_Type is private;
@@ -32,6 +33,12 @@ package Flyology_TUI.Components.Lists is
         Flyology_TUI.Styles.Default;
       Selected_Appearance : Flyology_TUI.Styles.Style :=
         Flyology_TUI.Styles.Default)
+      return Flyology_TUI.Surfaces.Surface;
+
+   --  Render ordinary rows with Muted and the selected row with Selected.
+   function Render
+     (Item  : Model;
+      Theme : Flyology_TUI.Themes.Theme)
       return Flyology_TUI.Surfaces.Surface;
 
 private

@@ -19,6 +19,7 @@ Flyology-aware adapter can be added separately.
 - typed mouse regions, terminal-to-local hit testing, and component interaction;
 - terminal-oriented grapheme clusters and one- or two-cell glyph widths;
 - typed RGB, indexed, and ANSI colors plus text attributes;
+- optional semantic themes with a configurable Charm-inspired preset;
 - clipped cell surfaces, compositing, borders, padding, alignment, and joins;
 - stateful cell diffing and declarative ANSI/DEC terminal modes;
 - raw-mode POSIX lifecycle, resize observation, and interruptible waits;
@@ -81,12 +82,30 @@ live model reference.
 
 - `Events`, `Application_Events`, `Transitions`, and `Programs` form the
   backend-free transition kernel.
-- `Colors`, `Styles`, `Glyphs`, `Surfaces`, `Layouts`, and `Views` form the
-  presentation model.
+- `Colors`, `Styles`, `Themes`, `Glyphs`, `Surfaces`, `Layouts`, and `Views`
+  form the presentation model.
 - `Input` and `Renderers` translate terminal bytes without owning a terminal.
 - `Backends.POSIX` owns real terminal state; `Backends.Headless` is for tests.
 - `Runners` supplies bounded input/effect orchestration.
 - `Components.*` supplies reusable models and surface renderers.
+
+## Themes
+
+Themes are ordinary values passed at render time. Components do not retain
+them, and every explicit style-based `Render` signature remains available.
+
+```ada
+Visual : Flyology_TUI.Themes.Theme := Flyology_TUI.Themes.Charm;
+
+Visual.Primary := Flyology_TUI.Styles.With_Foreground
+  (Visual.Primary, Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Cyan));
+
+Frame := Input.Render (Visual);
+```
+
+`Themes.Default` leaves all roles at terminal defaults. `Themes.Charm` supplies
+the restrained dark-terminal preset used by the kitchen-sink example. An
+application can replace any role without creating a new component type.
 
 See [docs/architecture.md](docs/architecture.md) for ownership and shutdown
 details. [examples/src/counter.adb](examples/src/counter.adb) is the compact

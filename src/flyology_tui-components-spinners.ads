@@ -1,5 +1,6 @@
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
+with Flyology_TUI.Themes;
 
 package Flyology_TUI.Components.Spinners is
    type Spinner_Style is (Dots, Line, Pulse);
@@ -14,6 +15,12 @@ package Flyology_TUI.Components.Spinners is
    function Render
      (Item       : Model;
       Appearance : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default)
+      return Flyology_TUI.Surfaces.Surface;
+
+   --  Render with Primary.
+   function Render
+     (Item  : Model;
+      Theme : Flyology_TUI.Themes.Theme)
       return Flyology_TUI.Surfaces.Surface;
 
 private
