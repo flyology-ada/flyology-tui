@@ -306,6 +306,18 @@ procedure Data_Navigation_Tests is
             Flyology_TUI.Events.No_Button, Integer'First));
       Assert (not Result.Handled and then Item.Selected_Id = Before_Id,
               "disabled table accepted mouse input");
+      Frame := Item.Render
+        (Theme => Flyology_TUI.Themes.Charm, Has_Focus => True);
+      Assert
+        (Frame.Element (0, 0).Appearance = Flyology_TUI.Themes.Charm.Muted
+         and then Frame.Element
+           (Natural (Item.Column_Region (Name_Column).X), 0).Appearance =
+             Flyology_TUI.Themes.Charm.Muted
+         and then Frame.Element
+           (Natural (Item.Column_Region (Name_Column).X) +
+              Item.Column_Region (Name_Column).Width,
+            0).Appearance = Flyology_TUI.Themes.Charm.Muted,
+         "disabled table header retained active control styling");
       Item.Set_Enabled (True);
 
       begin

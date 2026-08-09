@@ -675,7 +675,9 @@ package body Flyology_TUI.Components.Tables is
         Flyology_TUI.Surfaces.Create (Width (Item), Height (Item));
    begin
       if Width (Item) >= 2 then
-         Result.Write (0, 0, "  ", Look.Header);
+         Result.Write
+           (0, 0, "  ",
+            (if Item.Enabled then Look.Header else Look.Muted));
       end if;
       for Column in Column_Id loop
          declare
@@ -683,7 +685,8 @@ package body Flyology_TUI.Components.Tables is
             W : constant Natural :=
               Effective_Width (Item.Definitions (Column));
             Header_Style : constant Flyology_TUI.Styles.Style :=
-              (if Has_Focus
+              (if not Item.Enabled then Look.Muted
+               elsif Has_Focus
                  and then Item.Focus_Zone_Value = Header_Area
                  and then Item.Header_Column = Column
                then Look.Focused else Look.Header);
@@ -709,7 +712,9 @@ package body Flyology_TUI.Components.Tables is
                Result.Overlay (Header_Cell, X, 0);
             end;
             if Column /= Column_Id'Last and then X + W < Width (Item) then
-               Result.Write (X + W, 0, "│", Look.Divider);
+               Result.Write
+                 (X + W, 0, "│",
+                  (if Item.Enabled then Look.Divider else Look.Muted));
             end if;
          end;
       end loop;
