@@ -50,7 +50,9 @@ begin
          Success : Boolean;
       begin
          Item.Text.Try_Set_Text
-           ("bounded notes" & Wide_Wide_Character'Val (10) & "λ", Success);
+           ("bounded notes" & Wide_Wide_Character'Val (10)
+            & Wide_Wide_Character'Val (16#03BB#),
+            Success);
          if not Success then
             raise Program_Error with "text-area lifecycle seed rejected";
          end if;
