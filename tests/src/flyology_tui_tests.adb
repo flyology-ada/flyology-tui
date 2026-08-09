@@ -1,4 +1,5 @@
 with Ada.Characters.Latin_1;
+with Ada.Environment_Variables;
 with Ada.Strings;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
@@ -7,6 +8,8 @@ with Interfaces.C;
 with Flyology_TUI.Application_Events;
 with Flyology_TUI.Backends;
 with Flyology_TUI.Backends.Headless;
+with Flyology_TUI.Backends.POSIX;
+with Flyology_TUI.Color_Profiles;
 with Flyology_TUI.Colors;
 with Flyology_TUI.Components.Help;
 with Flyology_TUI.Components.Lists;
@@ -37,6 +40,9 @@ procedure Flyology_TUI_Tests is
    use type Flyology_TUI.Events.Mouse_Action;
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Flyology_TUI.Color_Profiles.Policy;
+   use type Flyology_TUI.Color_Profiles.Profile;
+   use type Flyology_TUI.Colors.Color;
    use type Flyology_TUI.Styles.Style;
    use type Interfaces.C.int;
 
@@ -259,6 +265,259 @@ procedure Flyology_TUI_Tests is
            (Bytes.To_String (Output), ESC & "[?1000l") /= 0,
          "renderer reset did not disable button mouse mode");
    end Test_Layout_And_Renderer;
+
+   procedure Test_Color_Profiles is
+      package Profiles renames Flyology_TUI.Color_Profiles;
+      package Colors renames Flyology_TUI.Colors;
+
+      function Has (Source, Pattern : String) return Boolean is
+        (Ada.Strings.Fixed.Index (Source, Pattern) /= 0);
+
+      function Rendered_Style
+        (Profile    : Profiles.Profile;
+         Foreground : Colors.Color;
+         Background : Colors.Color := Colors.Default) return String
+      is
+         Appearance : Flyology_TUI.Styles.Style :=
+           Flyology_TUI.Styles.Default;
+         Surface  : Flyology_TUI.Surfaces.Surface;
+         Renderer : Flyology_TUI.Renderers.Renderer;
+         Output   : Bytes.Unbounded_String;
+      begin
+         Appearance.Foreground := Foreground;
+         Appearance.Background := Background;
+         Surface := Flyology_TUI.Surfaces.From_Text ("x", Appearance);
+         Renderer.Set_Color_Profile (Profile);
+         Renderer.Render (Flyology_TUI.Views.From_Surface (Surface), Output);
+         return Bytes.To_String (Output);
+      end Rendered_Style;
+
+      Adapted : Colors.Color;
+   begin
+      Assert
+        (Profiles.Detect (True, "truecolor", "xterm-256color") =
+           Profiles.Monochrome,
+         "NO_COLOR did not suppress detected color support");
+      Assert
+        (Profiles.Detect (False, "TRUECOLOR", "dumb") =
+           Profiles.Truecolor,
+         "COLORTERM truecolor was not detected case-insensitively");
+      Assert
+        (Profiles.Detect (False, "", "xterm-direct") =
+           Profiles.Truecolor,
+         "direct-color TERM was not detected");
+      Assert
+        (Profiles.Detect (False, "", "screen-256color") =
+           Profiles.ANSI_256,
+         "256-color TERM was not detected");
+      Assert
+        (Profiles.Detect (False, "", "xterm") = Profiles.ANSI_16,
+         "ordinary TERM did not conservatively select ANSI16");
+      Assert
+        (Profiles.Detect (False, "", "") = Profiles.Monochrome
+         and then Profiles.Detect (False, "", "dumb") =
+           Profiles.Monochrome,
+         "missing or dumb TERM did not select monochrome");
+      Assert
+        (Profiles.Resolve (Profiles.Automatic, Profiles.ANSI_256) =
+           Profiles.ANSI_256
+         and then
+           Profiles.Resolve
+             (Profiles.Force_Truecolor, Profiles.Monochrome) =
+               Profiles.Truecolor,
+         "explicit color policy did not take precedence over detection");
+
+      Adapted := Profiles.Adapt
+        (Colors.True_Color (64, 0, 0), Profiles.ANSI_16);
+      Assert
+        (Adapted = Colors.Basic (Colors.Black),
+         "ANSI16 nearest-color ties did not choose the lower entry");
+      Adapted := Profiles.Adapt
+        (Colors.True_Color (255, 0, 0), Profiles.ANSI_256);
+      Assert
+        (Adapted = Colors.Palette (9),
+         "ANSI256 duplicate-color ties did not choose the lower index");
+      Adapted := Profiles.Adapt
+        (Colors.True_Color (95, 0, 0), Profiles.ANSI_256);
+      Assert
+        (Adapted = Colors.Palette (52),
+         "RGB color did not quantize to the nearest xterm palette entry");
+      Assert
+        (Profiles.Adapt (Colors.Palette (196), Profiles.ANSI_256) =
+           Colors.Palette (196)
+         and then
+           Profiles.Adapt (Colors.Palette (196), Profiles.ANSI_16) =
+             Colors.Basic (Colors.Bright_Red),
+         "indexed color preservation or ANSI16 degradation is incorrect");
+      Assert
+        (Profiles.Adapt
+           (Colors.Basic (Colors.Bright_Cyan), Profiles.ANSI_16) =
+           Colors.Basic (Colors.Bright_Cyan),
+         "ANSI source color was not preserved by ANSI terminals");
+      Assert
+        (Profiles.Adapt (Colors.True_Color (1, 2, 3), Profiles.Monochrome) =
+           Colors.Default
+         and then Profiles.Adapt (Colors.Default, Profiles.Truecolor) =
+           Colors.Default,
+         "monochrome or terminal-default color adaptation is incorrect");
+
+      declare
+         Monochrome : constant String :=
+           Rendered_Style
+             (Profiles.Monochrome,
+              Colors.True_Color (255, 0, 0),
+              Colors.Palette (25));
+         ANSI16 : constant String :=
+           Rendered_Style
+             (Profiles.ANSI_16,
+              Colors.True_Color (255, 0, 0),
+              Colors.True_Color (0, 0, 255));
+         ANSI256 : constant String :=
+           Rendered_Style
+             (Profiles.ANSI_256,
+              Colors.True_Color (95, 0, 0),
+              Colors.True_Color (0, 0, 255));
+         Truecolor : constant String :=
+           Rendered_Style
+             (Profiles.Truecolor,
+              Colors.True_Color (1, 2, 3),
+              Colors.Palette (25));
+      begin
+         Assert
+           (Has
+              (Monochrome,
+               ESC & "[0m" & ESC & "[39m" & ESC & "[49m"),
+            "monochrome renderer did not emit exact default-color SGR");
+         Assert
+           (Has (ANSI16, ESC & "[0m" & ESC & "[91m" & ESC & "[104m"),
+            "ANSI16 renderer did not emit exact foreground/background SGR");
+         Assert
+           (Has
+              (ANSI256,
+               ESC & "[0m" & ESC & "[38;5;52m" & ESC & "[48;5;12m"),
+            "ANSI256 renderer did not emit exact indexed SGR");
+         Assert
+           (Has
+              (Truecolor,
+               ESC & "[0m" & ESC & "[38;2;1;2;3m" & ESC & "[48;5;25m"),
+            "default truecolor renderer changed source color encoding");
+      end;
+
+      declare
+         Appearance : constant Flyology_TUI.Styles.Style :=
+           Flyology_TUI.Styles.With_Foreground
+             (Flyology_TUI.Styles.Default,
+              Colors.True_Color (255, 0, 0));
+         Surface : constant Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Surfaces.From_Text ("x", Appearance);
+         View : constant Flyology_TUI.Views.View :=
+           Flyology_TUI.Views.From_Surface (Surface);
+         Renderer : Flyology_TUI.Renderers.Renderer;
+         Explicit : Flyology_TUI.Renderers.Renderer;
+         Output : Bytes.Unbounded_String;
+         Explicit_Output : Bytes.Unbounded_String;
+      begin
+         Assert
+           (Renderer.Color_Profile = Profiles.Truecolor,
+            "renderer default profile is not source-compatible truecolor");
+         Renderer.Render (View, Output);
+         Explicit.Set_Color_Profile (Profiles.Truecolor);
+         Explicit.Render (View, Explicit_Output);
+         Assert
+           (Bytes.To_String (Output) = Bytes.To_String (Explicit_Output),
+            "default renderer bytes differ from explicit truecolor output");
+         Renderer.Render (View, Output);
+         Assert (Bytes.Length (Output) = 0, "unchanged color frame redrew");
+         Renderer.Set_Color_Profile (Profiles.ANSI_16);
+         Renderer.Render (View, Output);
+         Assert
+           (Has (Bytes.To_String (Output), ESC & "[2J")
+            and then Has (Bytes.To_String (Output), ESC & "[91m")
+            and then Has (Bytes.To_String (Output), "x"),
+            "profile change did not invalidate and repaint the frame");
+         Renderer.Render (View, Output);
+         Assert
+           (Bytes.Length (Output) = 0,
+            "profile repaint did not restore frame diffing");
+      end;
+
+      declare
+         Backend : Flyology_TUI.Backends.POSIX.POSIX_Backend;
+         Raised  : Boolean := False;
+      begin
+         Assert
+           (Backend.Color_Policy = Profiles.Automatic,
+            "POSIX backend color policy is not automatic by default");
+         Backend.Set_Color_Policy (Profiles.Force_ANSI_256);
+         Assert
+           (Backend.Color_Policy = Profiles.Force_ANSI_256,
+            "POSIX backend did not retain a pre-open color override");
+         begin
+            declare
+               Unavailable : constant Profiles.Profile :=
+                 Backend.Color_Profile;
+               pragma Unreferenced (Unavailable);
+            begin
+               null;
+            end;
+         exception
+            when Flyology_TUI.Backends.Backend_Error =>
+               Raised := True;
+         end;
+         Assert
+           (Raised,
+            "POSIX backend exposed an unresolved profile before Open");
+      end;
+
+      declare
+         Backend : Flyology_TUI.Backends.Headless.Headless_Backend;
+         Raised  : Boolean := False;
+      begin
+         begin
+            Backend.Render (Flyology_TUI.Views.Plain ("x"));
+         exception
+            when Flyology_TUI.Backends.Backend_Error =>
+               Raised := True;
+         end;
+         Assert (Raised, "backend accepted rendering outside its lifecycle");
+      end;
+   end Test_Color_Profiles;
+
+   procedure Test_POSIX_Color_Lifecycle is
+      package Profiles renames Flyology_TUI.Color_Profiles;
+      Backend : Flyology_TUI.Backends.POSIX.POSIX_Backend;
+      Raised  : Boolean := False;
+   begin
+      --  This branch is run explicitly under a pseudo-terminal. The ordinary
+      --  pipe-based suite cannot open a real POSIX terminal backend.
+      if not Ada.Environment_Variables.Exists
+        ("FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE")
+      then
+         return;
+      end if;
+
+      Backend.Set_Color_Policy (Profiles.Force_Truecolor);
+      Backend.Open;
+      begin
+         Assert
+           (Backend.Color_Profile = Profiles.Truecolor,
+            "POSIX explicit profile did not override environment detection");
+         begin
+            Backend.Set_Color_Policy (Profiles.Force_ANSI_16);
+         exception
+            when Flyology_TUI.Backends.Backend_Error =>
+               Raised := True;
+         end;
+         Assert
+           (Raised,
+            "POSIX backend accepted color configuration after Open");
+      exception
+         when others =>
+            Backend.Close;
+            raise;
+      end;
+      Backend.Close;
+   end Test_POSIX_Color_Lifecycle;
 
    procedure Test_Input is
       Parser : Flyology_TUI.Input.Parser;
@@ -839,6 +1098,8 @@ begin
    Test_Program;
    Test_Glyphs_And_Surfaces;
    Test_Layout_And_Renderer;
+   Test_Color_Profiles;
+   Test_POSIX_Color_Lifecycle;
    Test_Input;
    Test_Mouse;
    Test_POSIX_Poll;

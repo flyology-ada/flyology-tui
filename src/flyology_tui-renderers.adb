@@ -11,6 +11,7 @@ with Flyology_TUI.Styles;
 
 package body Flyology_TUI.Renderers is
    use type Flyology_TUI.Styles.Style;
+   use type Flyology_TUI.Color_Profiles.Profile;
    use type Flyology_TUI.Surfaces.Cell;
    use type Flyology_TUI.Views.Mouse_Mode;
    use type Flyology_TUI.Views.Cursor_Shape;
@@ -33,18 +34,22 @@ package body Flyology_TUI.Renderers is
      (CSI & Image (Y + 1) & ";" & Image (X + 1) & "H");
 
    function Color_Code
-     (Item       : Flyology_TUI.Colors.Color;
+     (Item       : Renderer;
+      Color      : Flyology_TUI.Colors.Color;
       Background : Boolean) return String
    is
+      Effective : constant Flyology_TUI.Colors.Color :=
+        Flyology_TUI.Color_Profiles.Adapt
+          (Color, Item.Configured_Color);
       Base : constant Natural := (if Background then 40 else 30);
       Bright_Base : constant Natural := (if Background then 100 else 90);
       Offset : Natural;
    begin
-      case Item.Kind is
+      case Effective.Kind is
          when Flyology_TUI.Colors.Default_Color =>
             return CSI & (if Background then "49m" else "39m");
          when Flyology_TUI.Colors.ANSI =>
-            Offset := Flyology_TUI.Colors.ANSI_Color'Pos (Item.Name);
+            Offset := Flyology_TUI.Colors.ANSI_Color'Pos (Effective.Name);
             if Offset < 8 then
                return CSI & Image (Base + Offset) & "m";
             else
@@ -53,45 +58,60 @@ package body Flyology_TUI.Renderers is
          when Flyology_TUI.Colors.Indexed =>
             return
               CSI & (if Background then "48;5;" else "38;5;")
-              & Image (Item.Index) & "m";
+              & Image (Effective.Index) & "m";
          when Flyology_TUI.Colors.RGB =>
             return
               CSI & (if Background then "48;2;" else "38;2;")
-              & Image (Item.Red_Value) & ";"
-              & Image (Item.Green_Value) & ";"
-              & Image (Item.Blue_Value) & "m";
+              & Image (Effective.Red_Value) & ";"
+              & Image (Effective.Green_Value) & ";"
+              & Image (Effective.Blue_Value) & "m";
       end case;
    end Color_Code;
 
-   function Style_Code (Item : Flyology_TUI.Styles.Style) return String is
+   function Style_Code
+     (Item       : Renderer;
+      Appearance : Flyology_TUI.Styles.Style) return String
+   is
       Result : Bytes.Unbounded_String :=
         Bytes.To_Unbounded_String (CSI & "0m");
    begin
-      if Item.Bold then
+      if Appearance.Bold then
          Append (Result, CSI & "1m");
       end if;
-      if Item.Faint then
+      if Appearance.Faint then
          Append (Result, CSI & "2m");
       end if;
-      if Item.Italic then
+      if Appearance.Italic then
          Append (Result, CSI & "3m");
       end if;
-      if Item.Underline then
+      if Appearance.Underline then
          Append (Result, CSI & "4m");
       end if;
-      if Item.Blink then
+      if Appearance.Blink then
          Append (Result, CSI & "5m");
       end if;
-      if Item.Reverse_Video then
+      if Appearance.Reverse_Video then
          Append (Result, CSI & "7m");
       end if;
-      if Item.Strikethrough then
+      if Appearance.Strikethrough then
          Append (Result, CSI & "9m");
       end if;
-      Append (Result, Color_Code (Item.Foreground, False));
-      Append (Result, Color_Code (Item.Background, True));
+      Append (Result, Color_Code (Item, Appearance.Foreground, False));
+      Append (Result, Color_Code (Item, Appearance.Background, True));
       return Bytes.To_String (Result);
    end Style_Code;
+
+   procedure Set_Color_Profile
+     (Item    : in out Renderer;
+      Profile : Flyology_TUI.Color_Profiles.Profile)
+   is
+   begin
+      Item.Configured_Color := Profile;
+   end Set_Color_Profile;
+
+   function Color_Profile
+     (Item : Renderer) return Flyology_TUI.Color_Profiles.Profile
+   is (Item.Configured_Color);
 
    function UTF_8 (Item : Wide_Wide_String) return String is
       Encoded : constant Ada.Strings.UTF_Encoding.UTF_8_String :=
@@ -187,6 +207,7 @@ package body Flyology_TUI.Renderers is
    is
       Full : constant Boolean :=
         not Item.Initialized
+        or else Item.Configured_Color /= Item.Rendered_Color
         or else Desired.Alternate_Screen
           /= Item.Previous.Alternate_Screen
         or else Flyology_TUI.Surfaces.Width (Desired.Frame)
@@ -223,7 +244,7 @@ package body Flyology_TUI.Renderers is
                      Append (Output, Position (X, Y));
                   end if;
                   if not Active_Set or else Active /= Cell.Appearance then
-                     Append (Output, Style_Code (Cell.Appearance));
+                     Append (Output, Style_Code (Item, Cell.Appearance));
                      Active := Cell.Appearance;
                      Active_Set := True;
                   end if;
@@ -284,6 +305,7 @@ package body Flyology_TUI.Renderers is
          Cursor_Change (Desired, Output);
       end if;
       Item.Previous := Desired;
+      Item.Rendered_Color := Item.Configured_Color;
       Item.Initialized := True;
    end Render;
 

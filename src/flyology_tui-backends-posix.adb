@@ -1,3 +1,4 @@
+with Ada.Environment_Variables;
 with Ada.Strings.Unbounded;
 
 package body Flyology_TUI.Backends.POSIX is
@@ -86,6 +87,19 @@ package body Flyology_TUI.Backends.POSIX is
       Height := Natural (C_Height);
    end Read_Size;
 
+   function Environment_Value (Name : String) return String is
+     (if Ada.Environment_Variables.Exists (Name)
+      then Ada.Environment_Variables.Value (Name)
+      else "");
+
+   function Detected_Color_Profile
+     return Flyology_TUI.Color_Profiles.Profile
+   is
+     (Flyology_TUI.Color_Profiles.Detect
+        (NO_Color_Present => Ada.Environment_Variables.Exists ("NO_COLOR"),
+         Color_Term       => Environment_Value ("COLORTERM"),
+         Term             => Environment_Value ("TERM")));
+
    overriding procedure Open (Item : in out POSIX_Backend) is
       Width, Height : Natural;
       Valid : Boolean;
@@ -110,6 +124,11 @@ package body Flyology_TUI.Backends.POSIX is
          raise Backend_Error with "could not create terminal wake channel";
       end if;
       Flyology_TUI.Input.Initialize (Item.Input_Parser);
+      Item.Effective_Color :=
+        Flyology_TUI.Color_Profiles.Resolve
+          (Item.Requested_Color, Detected_Color_Profile);
+      Flyology_TUI.Renderers.Set_Color_Profile
+        (Item.Frame_Renderer, Item.Effective_Color);
       Read_Size (Width, Height, Valid);
       if Valid then
          Item.Last_Width := Width;
@@ -249,6 +268,33 @@ package body Flyology_TUI.Backends.POSIX is
          end if;
       end if;
    end Interrupt;
+
+   procedure Set_Color_Policy
+     (Item   : in out POSIX_Backend;
+      Policy : Flyology_TUI.Color_Profiles.Policy)
+   is
+   begin
+      if Item.Is_Open then
+         raise Backend_Error with
+           "color policy must be configured before opening the backend";
+      end if;
+      Item.Requested_Color := Policy;
+   end Set_Color_Policy;
+
+   function Color_Policy
+     (Item : POSIX_Backend) return Flyology_TUI.Color_Profiles.Policy
+   is (Item.Requested_Color);
+
+   function Color_Profile
+     (Item : POSIX_Backend) return Flyology_TUI.Color_Profiles.Profile
+   is
+   begin
+      if not Item.Is_Open then
+         raise Backend_Error with
+           "color profile is unavailable while the backend is closed";
+      end if;
+      return Item.Effective_Color;
+   end Color_Profile;
 
    overriding procedure Finalize (Item : in out POSIX_Backend) is
    begin
