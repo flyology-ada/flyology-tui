@@ -144,10 +144,14 @@ package Flyology_TUI.Components.Markdown_Viewers is
    function Rendered_Line_Count (Item : Presentation) return Natural;
    function Rendering_Complete (Item : Presentation) return Boolean;
    function Has_Link (Item : Presentation; Id : Link_Id) return Boolean;
+   function Link_Region_Count
+     (Item : Presentation; Id : Link_Id) return Natural;
    function Link_Region
-     (Item : Presentation; Id : Link_Id)
+     (Item     : Presentation;
+      Id       : Link_Id;
+      Position : Positive)
       return Flyology_TUI.Geometry.Rectangle
-     with Pre => Has_Link (Item, Id);
+     with Pre => Position <= Link_Region_Count (Item, Id);
 
    function Handle
      (Item  : in out Model;
@@ -220,9 +224,9 @@ private
    end record;
    type Hit_Array is array (Positive range <>) of Hit_Entry;
 
-   type Presentation (Max_Links : Positive) is record
+   type Presentation (Hit_Capacity : Positive) is record
       Rendered       : Flyology_TUI.Surfaces.Surface;
-      Hits           : Hit_Array (1 .. Max_Links);
+      Hits           : Hit_Array (1 .. Hit_Capacity);
       Hit_Count      : Natural := 0;
       Document_Rows  : Natural := 0;
       Rendered_Lines : Natural := 0;

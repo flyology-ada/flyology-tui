@@ -122,23 +122,6 @@ package body Flyology_TUI.Components.Markdown_Viewers is
       return True;
    end Starts_With;
 
-   function Contains
-     (Value : Wide_Wide_String; Pattern : Wide_Wide_String) return Boolean
-   is
-   begin
-      if Pattern'Length = 0 then
-         return True;
-      elsif Pattern'Length > Value'Length then
-         return False;
-      end if;
-      for Offset in 0 .. Value'Length - Pattern'Length loop
-         if Starts_With (Value, Offset, Pattern) then
-            return True;
-         end if;
-      end loop;
-      return False;
-   end Contains;
-
    function Find_Char
      (Value : Wide_Wide_String;
       Char  : Wide_Wide_Character;
@@ -205,28 +188,35 @@ package body Flyology_TUI.Components.Markdown_Viewers is
    end Ordered_Prefix_End;
 
    procedure Note_Unsupported
-     (Item : in out Model;
-      Line : Wide_Wide_String)
+     (Items : in out Unsupported_Set;
+      Line  : Wide_Wide_String)
    is
       First_Nonblank : Natural := 0;
       Pipe_Count : Natural := 0;
+      Cursor : Natural := 0;
+      In_Inline_Code : Boolean := False;
    begin
-      if Contains (Line, "![") then
-         Item.Unsupported_Items (Images) := True;
-      end if;
-      for Char of Line loop
-         if Char = '|' then
-            Pipe_Count := Pipe_Count + 1;
+      while Cursor < Line'Length loop
+         if Line (Line'First + Cursor) = '`' then
+            In_Inline_Code := not In_Inline_Code;
+         elsif not In_Inline_Code then
+            if Starts_With (Line, Cursor, "![") then
+               Items (Images) := True;
+            end if;
+            if Starts_With (Line, Cursor, "[^") then
+               Items (Footnotes) := True;
+            end if;
+            if Starts_With (Line, Cursor, "::") then
+               Items (Definition_Lists) := True;
+            end if;
+            if Line (Line'First + Cursor) = '|' then
+               Pipe_Count := Pipe_Count + 1;
+            end if;
          end if;
+         Cursor := Cursor + 1;
       end loop;
       if Pipe_Count >= 2 then
-         Item.Unsupported_Items (Tables) := True;
-      end if;
-      if Contains (Line, "[^") then
-         Item.Unsupported_Items (Footnotes) := True;
-      end if;
-      if Contains (Line, "::") then
-         Item.Unsupported_Items (Definition_Lists) := True;
+         Items (Tables) := True;
       end if;
       while First_Nonblank < Line'Length
         and then Line (Line'First + First_Nonblank) = ' '
@@ -234,11 +224,11 @@ package body Flyology_TUI.Components.Markdown_Viewers is
          First_Nonblank := First_Nonblank + 1;
       end loop;
       if First_Nonblank >= 4 then
-         Item.Unsupported_Items (Nested_Block_Containers) := True;
+         Items (Nested_Block_Containers) := True;
       elsif First_Nonblank < Line'Length
         and then Line (Line'First + First_Nonblank) = '<'
       then
-         Item.Unsupported_Items (Raw_HTML) := True;
+         Items (Raw_HTML) := True;
       end if;
    end Note_Unsupported;
 
@@ -251,10 +241,17 @@ package body Flyology_TUI.Components.Markdown_Viewers is
    is
       Cursor : Natural := Line_First;
       Close_Label, Close_Target : Natural;
+      Staged : Link_Array (1 .. Item.Max_Links);
+      Staged_Count : Natural := 0;
+      In_Inline_Code : Boolean := False;
    begin
       Failed := False;
       while Cursor < Line_Last loop
-         if Value (Value'First + Cursor) = '['
+         if Value (Value'First + Cursor) = '`' then
+            In_Inline_Code := not In_Inline_Code;
+            Cursor := Cursor + 1;
+         elsif not In_Inline_Code
+           and then Value (Value'First + Cursor) = '['
            and then (Cursor = 0
                      or else Value (Value'First + Cursor - 1) /= '!')
          then
@@ -266,13 +263,13 @@ package body Flyology_TUI.Components.Markdown_Viewers is
                Close_Target :=
                  Find_Char (Value, ')', Close_Label + 2, Line_Last);
                if Close_Target /= Natural'Last then
-                  if Item.Link_Length = Item.Max_Links then
+                  if Staged_Count = Item.Max_Links - Item.Link_Length then
                      Item.State := Parsing_Capacity_Limited;
                      Failed := True;
                      return;
                   end if;
-                  Item.Link_Length := Item.Link_Length + 1;
-                  Item.Links (Item.Link_Length) :=
+                  Staged_Count := Staged_Count + 1;
+                  Staged (Staged_Count) :=
                     (Syntax_First => Cursor,
                      Label_First  => Cursor + 1,
                      Label_Last   => Close_Label,
@@ -282,7 +279,9 @@ package body Flyology_TUI.Components.Markdown_Viewers is
                            Value'First + Close_Target - 1)));
                   Cursor := Close_Target + 1;
                else
-                  Cursor := Close_Label + 1;
+                  Item.State := Parsing_Malformed;
+                  Failed := True;
+                  return;
                end if;
             else
                Cursor := Cursor + 1;
@@ -291,6 +290,12 @@ package body Flyology_TUI.Components.Markdown_Viewers is
             Cursor := Cursor + 1;
          end if;
       end loop;
+      if Staged_Count > 0 then
+         for Position in 1 .. Staged_Count loop
+            Item.Links (Item.Link_Length + Position) := Staged (Position);
+         end loop;
+         Item.Link_Length := Item.Link_Length + Staged_Count;
+      end if;
    end Scan_Links;
 
    procedure Parse_Line
@@ -311,9 +316,10 @@ package body Flyology_TUI.Components.Markdown_Viewers is
         (if Line_Last > Line_First
          then Value (Value'First + Line_First .. Value'First + Line_Last - 1)
          else "");
+      Previous_In_Fence : constant Boolean := Item.In_Fence;
+      Previous_Fence_Char : constant Wide_Wide_Character := Item.Fence_Char;
    begin
       Failed := False;
-      Note_Unsupported (Item, Relative);
 
       if Line_Last = Line_First then
          Info.Kind := Blank_Line;
@@ -391,9 +397,16 @@ package body Flyology_TUI.Components.Markdown_Viewers is
          end if;
       end if;
 
-      Scan_Links (Item, Value, Info.Content_First, Line_Last, Failed);
+      if Info.Kind not in Code_Block | Fence_Delimiter then
+         Scan_Links (Item, Value, Info.Content_First, Line_Last, Failed);
+      end if;
       if Failed then
+         Item.In_Fence := Previous_In_Fence;
+         Item.Fence_Char := Previous_Fence_Char;
          return;
+      end if;
+      if Info.Kind not in Code_Block | Fence_Delimiter then
+         Note_Unsupported (Item.Unsupported_Items, Relative);
       end if;
       Item.Line_Count := Item.Line_Count + 1;
       Item.Lines (Item.Line_Count) := Info;
@@ -566,14 +579,33 @@ package body Flyology_TUI.Components.Markdown_Viewers is
       return False;
    end Has_Link;
 
-   function Link_Region
-     (Item : Presentation; Id : Link_Id)
-      return Flyology_TUI.Geometry.Rectangle
+   function Link_Region_Count
+     (Item : Presentation; Id : Link_Id) return Natural
    is
+      Result : Natural := 0;
    begin
       for Position in 1 .. Item.Hit_Count loop
          if Item.Hits (Position).Id = Id then
-            return Item.Hits (Position).Region;
+            Result := Result + 1;
+         end if;
+      end loop;
+      return Result;
+   end Link_Region_Count;
+
+   function Link_Region
+     (Item     : Presentation;
+      Id       : Link_Id;
+      Position : Positive)
+      return Flyology_TUI.Geometry.Rectangle
+   is
+      Seen : Natural := 0;
+   begin
+      for Candidate in 1 .. Item.Hit_Count loop
+         if Item.Hits (Candidate).Id = Id then
+            Seen := Seen + 1;
+            if Seen = Position then
+               return Item.Hits (Candidate).Region;
+            end if;
          end if;
       end loop;
       raise Program_Error;
@@ -584,8 +616,8 @@ package body Flyology_TUI.Components.Markdown_Viewers is
       Look        : Appearance;
       Line_Budget : Natural := Natural'Last) return Presentation
    is
-      Result : Presentation (Item.Max_Links) :=
-        (Max_Links => Item.Max_Links,
+      Result : Presentation (Item.Columns * Item.Rows) :=
+        (Hit_Capacity => Item.Columns * Item.Rows,
          Rendered => Flyology_TUI.Surfaces.Create
            (Item.Columns, Item.Rows, Look.Text),
          Revision => Item.Revision,
@@ -614,40 +646,37 @@ package body Flyology_TUI.Components.Markdown_Viewers is
       procedure Note_Hit
         (Id : Link_Id; Cell_X, Cell_Y, Cell_Width : Natural)
       is
-         Position : Natural := 0;
+         Previous_Right : Natural;
       begin
          if Id = No_Link or else not Visible_Row then
             return;
          end if;
          if Result.Hit_Count > 0 then
-            for Candidate in 1 .. Result.Hit_Count loop
-               if Result.Hits (Candidate).Id = Id then
-                  Position := Candidate;
-                  exit;
-               end if;
-            end loop;
-         end if;
-         if Position = 0 then
-            Result.Hit_Count := Result.Hit_Count + 1;
-            Position := Result.Hit_Count;
-            Result.Hits (Position) :=
-              (Id => Id,
-               Region =>
-                 (X => Integer (Cell_X), Y => Integer (Cell_Y),
-                  Width => Cell_Width, Height => 1));
-         else
             declare
-               Region : Flyology_TUI.Geometry.Rectangle renames
-                 Result.Hits (Position).Region;
-               Right : constant Natural := Cell_X + Cell_Width;
-               Bottom : constant Natural := Cell_Y + 1;
+               Previous : Hit_Entry renames
+                 Result.Hits (Result.Hit_Count);
             begin
-               Region.Width := Natural'Max
-                 (Region.Width, Right - Natural (Region.X));
-               Region.Height := Natural'Max
-                 (Region.Height, Bottom - Natural (Region.Y));
+               Previous_Right :=
+                 Natural (Previous.Region.X) + Previous.Region.Width;
+               if Previous.Id = Id
+                 and then Previous.Region.Y = Integer (Cell_Y)
+                 and then Previous_Right = Cell_X
+               then
+                  Previous.Region.Width :=
+                    Previous.Region.Width + Cell_Width;
+                  return;
+               end if;
             end;
          end if;
+         if Result.Hit_Count = Result.Hit_Capacity then
+            raise Program_Error with "visible link hit capacity exhausted";
+         end if;
+         Result.Hit_Count := Result.Hit_Count + 1;
+         Result.Hits (Result.Hit_Count) :=
+           (Id => Id,
+            Region =>
+              (X => Integer (Cell_X), Y => Integer (Cell_Y),
+               Width => Cell_Width, Height => 1));
       end Note_Hit;
 
       procedure Emit
@@ -658,10 +687,23 @@ package body Flyology_TUI.Components.Markdown_Viewers is
          Cell_Width : constant Natural :=
            Natural'Max (1, Flyology_TUI.Glyphs.Width_Of (Glyph));
          Applied : Flyology_TUI.Styles.Style := Style;
+         Fits : Boolean;
       begin
-         if X > Indent and then Cell_Width > Item.Columns - X then
+         if X >= Item.Columns
+           or else Cell_Width > Item.Columns - X
+         then
+            if X > Indent then
+               Visual_Row := Saturating_Add (Visual_Row, 1);
+               X := Indent;
+            end if;
+         end if;
+         Fits := X < Item.Columns
+           and then Cell_Width <= Item.Columns - X;
+         if not Fits and then X > Indent then
             Visual_Row := Saturating_Add (Visual_Row, 1);
             X := Indent;
+            Fits := X < Item.Columns
+              and then Cell_Width <= Item.Columns - X;
          end if;
          if Id /= No_Link
            and then Id = Item.Focus_Link
@@ -671,11 +713,11 @@ package body Flyology_TUI.Components.Markdown_Viewers is
          elsif Item.Has_Selection then
             Applied := Look.Selection;
          end if;
-         if Visible_Row and then X < Item.Columns then
+         if Visible_Row and then Fits then
             Result.Rendered.Put
               (X, Visual_Row - Item.Top_Row, Glyph, Applied);
             Note_Hit (Id, X, Visual_Row - Item.Top_Row,
-                      Natural'Min (Cell_Width, Item.Columns - X));
+                      Cell_Width);
          end if;
          X := Saturating_Add (X, Cell_Width);
       end Emit;
@@ -699,6 +741,20 @@ package body Flyology_TUI.Components.Markdown_Viewers is
             Cursor := Natural'Min (Cluster_Last + 1, Last);
          end loop;
       end Emit_Range;
+
+      procedure Emit_Literal
+        (Content : Wide_Wide_String;
+         Style   : Flyology_TUI.Styles.Style)
+      is
+         Cursor : Natural := Content'First;
+         Last   : Natural;
+      begin
+         while Cursor <= Content'Last loop
+            Last := Flyology_TUI.Glyphs.Cluster_Last (Content, Cursor);
+            Emit (Content (Cursor .. Last), Style);
+            Cursor := Last + 1;
+         end loop;
+      end Emit_Literal;
 
       function Find_Delimiter
         (From, Before : Natural; Delimiter : Wide_Wide_String) return Natural
@@ -839,9 +895,9 @@ package body Flyology_TUI.Components.Markdown_Viewers is
                      Emit_Inline (Info.Content_First, Info.Last, Base);
                   when Task_Item =>
                      if Info.Checked then
-                        Emit ("[x] ", Look.Task_Checked);
+                        Emit_Literal ("[x] ", Look.Task_Checked);
                      else
-                        Emit ("[ ] ", Look.Task_Unchecked);
+                        Emit_Literal ("[ ] ", Look.Task_Unchecked);
                      end if;
                      Indent := Natural'Min (4, Item.Columns - 1);
                      Emit_Inline (Info.Content_First, Info.Last, Base);
