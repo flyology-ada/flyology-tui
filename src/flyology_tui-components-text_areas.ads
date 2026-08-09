@@ -37,6 +37,9 @@ package Flyology_TUI.Components.Text_Areas is
       Max_Undo_Entries       : Positive;
       Max_History_Codepoints : Positive) is tagged private;
 
+   --  Placeholder is presentation metadata. It is not editable text and is
+   --  therefore outside Max_Code_Points, Max_Lines, and history accounting;
+   --  rendering clips it to the validated component geometry.
    function Create
      (Max_Code_Points        : Positive;
       Max_Lines              : Positive;

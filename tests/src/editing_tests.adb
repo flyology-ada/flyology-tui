@@ -162,11 +162,37 @@ procedure Editing_Tests is
          and then Item.Value = "a" & Wide_Wide_Character'Val (10)
            & "b" & Wide_Wide_Character'Val (10) & "c",
          "line-capacity failure was not atomic");
+      Item.Try_Set_Text
+        ("a" & Wide_Wide_Character'Val (13)
+         & Wide_Wide_Character'Val (10) & "b"
+         & Wide_Wide_Character'Val (13)
+         & Wide_Wide_Character'Val (10) & "c"
+         & Wide_Wide_Character'Val (13)
+         & Wide_Wide_Character'Val (10) & "d", Success);
+      Assert (not Success,
+              "oversized normalized set was not rejected");
       Item.Focus;
       Result := Item.Handle (Paste ("012345678901"));
       Assert (Result.Handled and then Result.Rejected
               and then not Result.Changed,
               "over-capacity paste was not rejected atomically");
+      Item.Try_Set_Text ("abcdef", Success);
+      Item.Set_Cursor_Offset (3);
+      Result := Item.Handle
+        (Key (Flyology_TUI.Events.Arrow_Left_Key, Shift => True));
+      Result := Item.Handle
+        (Paste
+           ("12" & Wide_Wide_Character'Val (13)
+            & Wide_Wide_Character'Val (10) & "345678"));
+      Assert
+        (Result.Rejected and then Item.Value = "abcdef",
+         "oversized normalized selection replacement was not atomic");
+      Item.Select_All;
+      Result := Item.Handle
+        (Paste ("0123456789012"));
+      Assert
+        (Result.Rejected and then Item.Value = "abcdef",
+         "oversized full replacement was not rejected atomically");
       Item.Set_Read_Only (True);
       Result := Item.Handle (Character_Key ("x"));
       Assert (not Result.Changed, "read-only area accepted text");
@@ -360,6 +386,40 @@ procedure Editing_Tests is
             Message);
       end Check_Read_Only;
    begin
+      declare
+         Raised : Boolean := False;
+      begin
+         begin
+            declare
+               Oversized : Areas.Model :=
+                 Areas.Create
+                   (40, 3, 3, 80, Positive'Last, 2);
+               pragma Unreferenced (Oversized);
+            begin
+               null;
+            end;
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+         Assert (Raised,
+                 "constructor did not preflight surface cell capacity");
+         Raised := False;
+         begin
+            Item.Set_Size (Positive'Last, 2);
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+         Assert
+           (Raised and then Item.Width = 6 and then Item.Height = 2,
+            "size-capacity failure mutated component geometry");
+         declare
+            Frame : constant Flyology_TUI.Surfaces.Surface :=
+              Item.Render (Look);
+         begin
+            Assert (Frame.Width = 6 and then Frame.Height = 2,
+                    "render lost pre-failure geometry");
+         end;
+      end;
       Item.Try_Set_Text ("abcdefghijkl", Success);
       Item.Set_Wrap (Areas.Soft_Wrap);
       Item.Set_Cursor_Offset (0);
@@ -387,6 +447,18 @@ procedure Editing_Tests is
       Item.Set_Tab_Width (Positive'Last);
       Item.Try_Set_Text
         ((1 => Wide_Wide_Character'Val (9), 2 => 'x'), Success);
+      Item.Set_Wrap (Areas.Soft_Wrap);
+      Item.Set_Cursor_Offset (0);
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Down_Key));
+      Assert (Item.Cursor_Offset = 1,
+              "saturated tab endpoint collapsed wrapped Down navigation");
+      Item.Set_Cursor_Offset (0);
+      Result := Item.Handle
+        (Mouse (2, 1, Flyology_TUI.Events.Mouse_Click));
+      Assert (Item.Cursor_Offset = 1,
+              "saturated tab endpoint collapsed wrapped mouse origin");
+      Result := Item.Handle
+        (Mouse (2, 1, Flyology_TUI.Events.Mouse_Release));
       Item.Set_Cursor_Offset (1);
       Assert (Item.Cursor_Position.Cell_Column = Natural'Last,
               "extreme tab width did not saturate cell position");

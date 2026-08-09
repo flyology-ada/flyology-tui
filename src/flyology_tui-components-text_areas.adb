@@ -9,6 +9,13 @@ package body Flyology_TUI.Components.Text_Areas is
    function Saturating_Add (Left, Right : Natural) return Natural is
      (if Right > Natural'Last - Left then Natural'Last else Left + Right);
 
+   procedure Validate_Size (Width, Height : Positive) is
+   begin
+      if Height > Natural'Last / Width then
+         raise Flyology_TUI.Components.Capacity_Error;
+      end if;
+   end Validate_Size;
+
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance is
      (Text         => Theme.Input,
@@ -35,31 +42,57 @@ package body Flyology_TUI.Components.Text_Areas is
          Max_Undo_Entries,
          Max_History_Codepoints);
    begin
+      Validate_Size (Width, Height);
       Result.Columns := Width;
       Result.Rows := Height;
       Result.Placeholder := Text.To_Unbounded_Wide_Wide_String (Placeholder);
       return Result;
    end Create;
 
-   function Normalize (Value : Wide_Wide_String) return Wide_Wide_String is
-      Result : Text.Unbounded_Wide_Wide_String;
-      Index  : Natural := Value'First;
+   procedure Normalize_Bounded
+     (Value           : Wide_Wide_String;
+      Max_Code_Points : Natural;
+      Max_Lines       : Positive;
+      Result          : out Text.Unbounded_Wide_Wide_String;
+      Success         : out Boolean)
+   is
+      Index : Natural := Value'First;
+      Count : Natural := 0;
+      Lines : Positive := 1;
    begin
+      Result := Text.Null_Unbounded_Wide_Wide_String;
+      Success := True;
       while Index <= Value'Last loop
+         if Count >= Max_Code_Points then
+            Success := False;
+            return;
+         end if;
          if Value (Index) = Wide_Wide_Character'Val (13) then
+            if Lines >= Max_Lines then
+               Success := False;
+               return;
+            end if;
             Text.Append (Result, Wide_Wide_Character'Val (10));
+            Lines := Lines + 1;
             if Index < Value'Last
               and then Value (Index + 1) = Wide_Wide_Character'Val (10)
             then
                Index := Index + 1;
             end if;
          else
+            if Value (Index) = Wide_Wide_Character'Val (10) then
+               if Lines >= Max_Lines then
+                  Success := False;
+                  return;
+               end if;
+               Lines := Lines + 1;
+            end if;
             Text.Append (Result, Value (Index));
          end if;
+         Count := Count + 1;
          Index := Index + 1;
       end loop;
-      return Text.To_Wide_Wide_String (Result);
-   end Normalize;
+   end Normalize_Bounded;
 
    function Count_Lines (Value : Wide_Wide_String) return Positive is
       Result : Positive := 1;
@@ -97,14 +130,17 @@ package body Flyology_TUI.Components.Text_Areas is
       Value   : Wide_Wide_String;
       Success : out Boolean)
    is
-      Clean : constant Wide_Wide_String := Normalize (Value);
+      Clean : Text.Unbounded_Wide_Wide_String;
    begin
-      Success :=
-        Clean'Length <= Item.Max_Code_Points
-        and then Count_Lines (Clean) <= Item.Max_Lines;
+      Normalize_Bounded
+        (Value,
+         Item.Max_Code_Points,
+         Item.Max_Lines,
+         Clean,
+         Success);
       if Success then
-         Item.Content := Text.To_Unbounded_Wide_Wide_String (Clean);
-         Item.Cursor := Clean'Length;
+         Item.Content := Clean;
+         Item.Cursor := Text.Length (Clean);
          Item.Anchor := Item.Cursor;
          Item.First_Line := 1;
          Item.First_Segment := 0;
@@ -127,6 +163,7 @@ package body Flyology_TUI.Components.Text_Areas is
 
    procedure Set_Size (Item : in out Model; Width, Height : Positive) is
    begin
+      Validate_Size (Width, Height);
       Item.Columns := Width;
       Item.Rows := Height;
       Item.Drag_Active := False;
@@ -511,35 +548,67 @@ package body Flyology_TUI.Components.Text_Areas is
       Inserted : Wide_Wide_String) return Boolean
    is
       Current : constant Wide_Wide_String := Value (Item);
-      Clean   : constant Wide_Wide_String := Normalize (Inserted);
-      Result  : Text.Unbounded_Wide_Wide_String;
-      New_Length : constant Natural := Current'Length - (Last - First)
-        + Clean'Length;
+      function Newline_Count (Value : Wide_Wide_String) return Natural is
+         Result : Natural := 0;
+      begin
+         for Char of Value loop
+            if Char = Wide_Wide_Character'Val (10) then
+               Result := Result + 1;
+            end if;
+         end loop;
+         return Result;
+      end Newline_Count;
    begin
-      if First > Last or else Last > Current'Length
-        or else New_Length > Item.Max_Code_Points
-      then
+      if First > Last or else Last > Current'Length then
          return False;
       end if;
-      if First > 0 then
-         Text.Append
-           (Result, Current (Current'First .. Current'First + First - 1));
-      end if;
-      Text.Append (Result, Clean);
-      if Last < Current'Length then
-         Text.Append
-           (Result, Current (Current'First + Last .. Current'Last));
-      end if;
-      if Count_Lines (Text.To_Wide_Wide_String (Result)) > Item.Max_Lines then
-         return False;
-      end if;
-      Push_Undo (Item);
-      Item.Content := Result;
-      Item.Cursor := First + Clean'Length;
-      Item.Anchor := Item.Cursor;
-      Item.Has_Preferred := False;
-      Item.Drag_Active := False;
-      return True;
+      declare
+         Retained : constant Natural :=
+           Current'Length - (Last - First);
+         Allowed : constant Natural := Item.Max_Code_Points - Retained;
+         Clean : Text.Unbounded_Wide_Wide_String;
+         Clean_OK : Boolean;
+      begin
+         Normalize_Bounded
+           (Inserted, Allowed, Item.Max_Lines, Clean, Clean_OK);
+         if not Clean_OK then
+            return False;
+         end if;
+         declare
+            Clean_Value : constant Wide_Wide_String :=
+              Text.To_Wide_Wide_String (Clean);
+            Removed_Newlines : constant Natural :=
+              (if First = Last then 0
+               else Newline_Count
+                 (Current
+                    (Current'First + First .. Current'First + Last - 1)));
+            Base_Lines : constant Positive :=
+              Line_Count (Item) - Removed_Newlines;
+            Added_Newlines : constant Natural := Newline_Count (Clean_Value);
+            Result : Text.Unbounded_Wide_Wide_String;
+         begin
+            if Added_Newlines > Item.Max_Lines - Base_Lines then
+               return False;
+            end if;
+            if First > 0 then
+               Text.Append
+                 (Result,
+                  Current (Current'First .. Current'First + First - 1));
+            end if;
+            Text.Append (Result, Clean_Value);
+            if Last < Current'Length then
+               Text.Append
+                 (Result, Current (Current'First + Last .. Current'Last));
+            end if;
+            Push_Undo (Item);
+            Item.Content := Result;
+            Item.Cursor := First + Clean_Value'Length;
+            Item.Anchor := Item.Cursor;
+            Item.Has_Preferred := False;
+            Item.Drag_Active := False;
+            return True;
+         end;
+      end;
    end Try_Replace;
 
    function Insert_Text
@@ -563,25 +632,27 @@ package body Flyology_TUI.Components.Text_Areas is
    function Offset_For_Cell
      (Item : Model;
       Value : Wide_Wide_String;
-      Start, Stop, Cell : Natural;
+      Start, Stop, Relative_Cell : Natural;
       Initial_Cell : Natural := 0)
       return Natural
    is
       Pos : Natural := Start;
-      Cell_At : Natural := Initial_Cell;
+      Logical_Cell : Natural := Initial_Cell;
+      Used : Natural := 0;
    begin
       while Pos < Stop loop
          declare
             Last : constant Natural := Next_Boundary (Value, Pos) - 1;
             Span : constant Natural :=
-              Cluster_Width (Item, Value, Pos, Last, Cell_At);
+              Cluster_Width (Item, Value, Pos, Last, Logical_Cell);
          begin
-            if Cell < Saturating_Add (Cell_At, Span) then
+            if Relative_Cell < Saturating_Add (Used, Span) then
                return
-                 (if Cell - Cell_At < Span / 2 + Span mod 2
+                 (if Relative_Cell - Used < Span / 2 + Span mod 2
                   then Pos else Last + 1);
             end if;
-            Cell_At := Saturating_Add (Cell_At, Span);
+            Logical_Cell := Saturating_Add (Logical_Cell, Span);
+            Used := Saturating_Add (Used, Span);
             Pos := Last + 1;
          end;
       end loop;
@@ -1047,7 +1118,7 @@ package body Flyology_TUI.Components.Text_Areas is
                Current,
                First,
                Last,
-               Saturating_Add (Initial_Cell, Item.Preferred_Cell),
+               Item.Preferred_Cell,
                Initial_Cell),
             Selecting);
       end;
@@ -1125,7 +1196,7 @@ package body Flyology_TUI.Components.Text_Areas is
       Exists : Boolean;
       Gutter : constant Positive := Gutter_Width (Item);
       Segment_Cell : Natural;
-      Cell : Natural;
+      Relative_Cell : Natural;
    begin
       Visible_Segment (Item, Y, Line, Start, Stop, Exists);
       if not Exists then
@@ -1134,13 +1205,13 @@ package body Flyology_TUI.Components.Text_Areas is
       Segment_Cell :=
         Cell_Between
           (Item, Current, Line_Start (Current, Line), Start);
-      Cell :=
-        (if X < Gutter then Segment_Cell
+      Relative_Cell :=
+        (if X < Gutter then 0
          elsif Item.Wrap = Soft_Wrap
-         then Saturating_Add (Segment_Cell, X - Gutter)
+         then X - Gutter
          else Saturating_Add (X - Gutter, Item.First_Cell));
       return Offset_For_Cell
-        (Item, Current, Start, Stop, Cell, Segment_Cell);
+        (Item, Current, Start, Stop, Relative_Cell, Segment_Cell);
    end Offset_At_Mouse;
 
    procedure Scroll_Viewport
