@@ -271,10 +271,25 @@ procedure Kitchen_Sink is
       case Item.Focus is
          when Text_Field => Item.Input.Focus;
          when Window_Field =>
-            if Item.Focused_Window = Window_A then
+            if Item.Focused_Window = Window_A
+              and then Item.Window_A_Visible
+            then
                Item.Window_A_Model.Focus;
-            else
+            elsif Item.Focused_Window = Window_B
+              and then Item.Window_B_Visible
+            then
                Item.Window_B_Model.Focus;
+            elsif Item.Window_A_Visible then
+               Item.Focused_Window := Window_A;
+               Item.Top_Window := Window_A;
+               Item.Window_A_Model.Focus;
+            elsif Item.Window_B_Visible then
+               Item.Focused_Window := Window_B;
+               Item.Top_Window := Window_B;
+               Item.Window_B_Model.Focus;
+            else
+               Item.Focus := Split_Field;
+               Item.Split.Focus;
             end if;
          when Split_Field => Item.Split.Focus;
          when Vertical_Scroll_Field => Item.Vertical_Scroll.Focus;
@@ -516,6 +531,17 @@ procedure Kitchen_Sink is
             Item.Window_A_Visible := False;
          else
             Item.Window_B_Visible := False;
+         end if;
+         if Item.Window_A_Visible then
+            Item.Focused_Window := Window_A;
+            Item.Top_Window := Window_A;
+            Activate (Item, Window_Field);
+         elsif Item.Window_B_Visible then
+            Item.Focused_Window := Window_B;
+            Item.Top_Window := Window_B;
+            Activate (Item, Window_Field);
+         else
+            Activate (Item, Split_Field);
          end if;
       end if;
    end Apply_Window_Result;
@@ -881,11 +907,13 @@ procedure Kitchen_Sink is
                Apply_Window_Result (Item, Window_B, Result);
             elsif Item.Window_A_Visible then
                Item.Focused_Window := Window_A;
+               Activate (Item, Window_Field);
                Result := Item.Window_A_Model.Handle
                  (Event, Window_Workspace);
                Apply_Window_Result (Item, Window_A, Result);
             elsif Item.Window_B_Visible then
                Item.Focused_Window := Window_B;
+               Activate (Item, Window_Field);
                Result := Item.Window_B_Model.Handle
                  (Event, Window_Workspace);
                Apply_Window_Result (Item, Window_B, Result);
@@ -1125,6 +1153,10 @@ procedure Kitchen_Sink is
         Item.Vertical_Scroll.Render (Visual);
       Horizontal_Bar : constant Flyology_TUI.Surfaces.Surface :=
         Item.Horizontal_Scroll.Render (Visual);
+      Window_A_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        Item.Window_A_Model.Bounds;
+      Window_B_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        Item.Window_B_Model.Bounds;
       Window_A_Surface : constant Flyology_TUI.Surfaces.Surface :=
         (if Item.Window_A_Visible
          then Item.Window_A_Model.Render
@@ -1133,7 +1165,7 @@ procedure Kitchen_Sink is
               ("Move: drag header" & Wide_Wide_Character'Val (10)
                & "Resize: borders" & Wide_Wide_Character'Val (10)
                & "Keyboard: alt/ctrl arrows"),
-            Window_Workspace,
+            Window_A_Bounds,
             Visual)
          else Flyology_TUI.Surfaces.Create (0, 0));
       Window_B_Surface : constant Flyology_TUI.Surfaces.Surface :=
@@ -1144,7 +1176,7 @@ procedure Kitchen_Sink is
               ("Application owns z-order." & Wide_Wide_Character'Val (10)
                & "Close requests are values." & Wide_Wide_Character'Val (10)
                & "Children remain external."),
-            Window_Workspace,
+            Window_B_Bounds,
             Visual)
          else Flyology_TUI.Surfaces.Create (0, 0));
       Lower_Window : constant Flyology_TUI.Surfaces.Surface :=
@@ -1155,6 +1187,14 @@ procedure Kitchen_Sink is
         (if Item.Top_Window = Window_A
          then Window_A_Surface
          else Window_B_Surface);
+      Lower_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        (if Item.Top_Window = Window_A
+         then Window_B_Bounds
+         else Window_A_Bounds);
+      Upper_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        (if Item.Top_Window = Window_A
+         then Window_A_Bounds
+         else Window_B_Bounds);
    begin
       return Flyology_TUI.Layouts.Layers.Compose
         (68,
@@ -1165,10 +1205,10 @@ procedure Kitchen_Sink is
            Transparent_Spaces => True),
           (Content => Horizontal_Bar, X => 0, Y => 19,
            Transparent_Spaces => True),
-          (Content => Lower_Window, X => 0, Y => 0,
-           Transparent_Spaces => True),
-          (Content => Upper_Window, X => 0, Y => 0,
-           Transparent_Spaces => True)]);
+          (Content => Lower_Window, X => Lower_Bounds.X, Y => Lower_Bounds.Y,
+           Transparent_Spaces => False),
+          (Content => Upper_Window, X => Upper_Bounds.X, Y => Upper_Bounds.Y,
+           Transparent_Spaces => False)]);
    end Windows_View;
 
    function Present (Item : Model) return Flyology_TUI.Views.View is
