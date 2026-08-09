@@ -181,6 +181,7 @@ procedure Controls_Tests is
       Result := Item.Handle (Mouse (1, 0, Flyology_TUI.Events.Mouse_Release));
       Assert
         (not Result.Activated
+         and then not Result.Changed
          and then Item.State = Flyology_TUI.Components.Check_Boxes.Checked
          and then Result.Capture =
            Flyology_TUI.Components.Interactions.Release_Capture,
@@ -195,6 +196,7 @@ procedure Controls_Tests is
 
    procedure Test_Radios is
       Item : Radios.Model := Radios.Create ((Alpha, Beta, Gamma));
+      Converging : Radios.Model := Radios.Create ((Alpha, Beta, Gamma));
       Result : Flyology_TUI.Components.Interactions.Update_Result;
       Raised : Boolean := False;
    begin
@@ -216,6 +218,17 @@ procedure Controls_Tests is
       Assert
         (Result.Activated and then not Result.Changed,
          "radio activation key did not activate an unchanged choice");
+      Result := Converging.Handle
+        (Mouse (0, 1, Flyology_TUI.Events.Mouse_Click));
+      Result := Converging.Handle
+        (Mouse (-1, 1, Flyology_TUI.Events.Mouse_Release));
+      Result := Converging.Handle
+        (Key (Flyology_TUI.Events.Arrow_Up_Key));
+      Assert
+        (Result.Handled and then Result.Changed
+         and then not Result.Activated
+         and then Converging.Selected_Id = Alpha,
+         "radio focus convergence reported identity activation");
       Result := Item.Handle (Mouse (0, 0, Flyology_TUI.Events.Mouse_Click));
       Result := Item.Handle (Mouse (-1, 0, Flyology_TUI.Events.Mouse_Release));
       Assert
@@ -510,6 +523,8 @@ procedure Controls_Tests is
 
    procedure Test_Tabs is
       Item : Tab_Bars.Model := Tab_Bars.Create ((Alpha, Beta, Gamma));
+      Converging : Tab_Bars.Model :=
+        Tab_Bars.Create ((Alpha, Beta, Gamma));
       Empty : constant Tab_Bars.Model :=
         Tab_Bars.Create (Tab_Bars.Item_Array'(1 .. 0 => Alpha));
       Result : Flyology_TUI.Components.Interactions.Update_Result;
@@ -531,6 +546,17 @@ procedure Controls_Tests is
       Assert
         (Result.Activated and then not Result.Changed,
          "tab activation key did not activate an unchanged tab");
+      Result := Converging.Handle
+        (Mouse (8, 0, Flyology_TUI.Events.Mouse_Click));
+      Result := Converging.Handle
+        (Mouse (-1, 0, Flyology_TUI.Events.Mouse_Release));
+      Result := Converging.Handle
+        (Key (Flyology_TUI.Events.Arrow_Left_Key));
+      Assert
+        (Result.Handled and then Result.Changed
+         and then not Result.Activated
+         and then Converging.Active_Id = Alpha,
+         "tab focus convergence reported identity activation");
       Result := Item.Handle (Mouse (1, 0, Flyology_TUI.Events.Mouse_Click));
       Result := Item.Handle (Mouse (1, 0, Flyology_TUI.Events.Mouse_Release));
       Assert

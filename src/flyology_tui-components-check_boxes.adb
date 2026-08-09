@@ -115,13 +115,14 @@ package body Flyology_TUI.Components.Check_Boxes is
         and then Item.Capturing
       then
          declare
+            Was_Armed : constant Boolean := Item.Armed;
             Activate : constant Boolean :=
               Item.Enabled and then Item.Armed and then Inside (Item, Event);
          begin
             Item.Armed := False;
             Item.Capturing := False;
             Result.Handled := True;
-            Result.Changed := True;
+            Result.Changed := Was_Armed;
             Result.Capture :=
               Flyology_TUI.Components.Interactions.Release_Capture;
             if Activate then

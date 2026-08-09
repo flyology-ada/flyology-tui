@@ -148,6 +148,23 @@ package body Flyology_TUI.Components.Tabs is
         (Handled => True, Activated => True, Changed => Changed, others => <>);
    end Choose_Focused;
 
+   function Commit_Navigation
+     (Item         : in out Model;
+      Prior_Focus  : Natural;
+      Prior_Active : Natural)
+      return Flyology_TUI.Components.Interactions.Update_Result
+   is
+      Focus_Changed : constant Boolean := Item.Focused /= Prior_Focus;
+      Identity_Changed : constant Boolean := Item.Focused /= Prior_Active;
+   begin
+      Item.Active := Item.Focused;
+      return
+        (Handled   => True,
+         Activated => Identity_Changed,
+         Changed   => Focus_Changed or else Identity_Changed,
+         others    => <>);
+   end Commit_Navigation;
+
    function Is_Activation_Key
      (Event : Flyology_TUI.Events.Terminal_Event) return Boolean is
    begin
@@ -162,7 +179,8 @@ package body Flyology_TUI.Components.Tabs is
       Event : Flyology_TUI.Events.Terminal_Event)
       return Flyology_TUI.Components.Interactions.Update_Result
    is
-      Before : Natural;
+      Prior_Focus  : Natural;
+      Prior_Active : Natural;
    begin
       if not Item.Enabled or else Item.Values.Is_Empty
         or else Event.Kind /= Flyology_TUI.Events.Key_Press
@@ -171,33 +189,25 @@ package body Flyology_TUI.Components.Tabs is
       end if;
       case Event.Key.Kind is
          when Flyology_TUI.Events.Arrow_Left_Key =>
-            Before := Item.Focused;
+            Prior_Focus := Item.Focused;
+            Prior_Active := Item.Active;
             Move_Focus (Item, -1);
-            if Item.Focused = Before then
-               return (Handled => True, others => <>);
-            end if;
-            return Choose_Focused (Item);
+            return Commit_Navigation (Item, Prior_Focus, Prior_Active);
          when Flyology_TUI.Events.Arrow_Right_Key =>
-            Before := Item.Focused;
+            Prior_Focus := Item.Focused;
+            Prior_Active := Item.Active;
             Move_Focus (Item, 1);
-            if Item.Focused = Before then
-               return (Handled => True, others => <>);
-            end if;
-            return Choose_Focused (Item);
+            return Commit_Navigation (Item, Prior_Focus, Prior_Active);
          when Flyology_TUI.Events.Home_Key =>
-            Before := Item.Focused;
+            Prior_Focus := Item.Focused;
+            Prior_Active := Item.Active;
             Item.Focused := 1;
-            if Item.Focused = Before then
-               return (Handled => True, others => <>);
-            end if;
-            return Choose_Focused (Item);
+            return Commit_Navigation (Item, Prior_Focus, Prior_Active);
          when Flyology_TUI.Events.End_Key =>
-            Before := Item.Focused;
+            Prior_Focus := Item.Focused;
+            Prior_Active := Item.Active;
             Item.Focused := Natural (Item.Values.Length);
-            if Item.Focused = Before then
-               return (Handled => True, others => <>);
-            end if;
-            return Choose_Focused (Item);
+            return Commit_Navigation (Item, Prior_Focus, Prior_Active);
          when others =>
             if Is_Activation_Key (Event) then
                return Choose_Focused (Item);
