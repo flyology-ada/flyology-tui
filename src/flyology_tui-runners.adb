@@ -126,6 +126,11 @@ package body Flyology_TUI.Runners is
       Failure : Failure_State;
       Next    : Transitions.Transition;
       Opened  : Boolean := False;
+      Initial_Width, Initial_Height : Natural := 0;
+      Initial_Size_Available : Boolean := False;
+      Initial_Command_Pending : Boolean := False;
+      Initial_Quit_Pending : Boolean := False;
+      Initial_Command : Transitions.Command;
 
       procedure Queue_Command is
          Accepted : Boolean;
@@ -162,10 +167,30 @@ package body Flyology_TUI.Runners is
       end;
       Opened := True;
       begin
+         Flyology_TUI.Backends.Current_Size
+           (Backend,
+            Initial_Width,
+            Initial_Height,
+            Initial_Size_Available);
          Program.Start (Model, Next);
+         if Initial_Size_Available then
+            Initial_Quit_Pending := Transitions.Should_Quit (Next);
+            if Transitions.Has_Command (Next) then
+               Initial_Command := Transitions.Pending_Command (Next);
+               Initial_Command_Pending := True;
+            end if;
+            Program.Dispatch
+              (Model,
+               Events.From_Terminal
+                 (Flyology_TUI.Events.Resized
+                    (Initial_Width, Initial_Height)),
+               Next);
+            if Initial_Quit_Pending then
+               Transitions.Quit (Next);
+            end if;
+         end if;
          Flyology_TUI.Backends.Render
            (Backend, Program.Current_View (Model));
-         Queue_Command;
 
          declare
             task Input_Worker;
@@ -214,6 +239,17 @@ package body Flyology_TUI.Runners is
             Event : Events.Event;
             Available : Boolean;
          begin
+            --  The workers are active before either preserved transition is
+            --  enqueued, so capacity-one command queues cannot deadlock when
+            --  Initialize and the synthetic Resize both request effects.
+            if Initial_Command_Pending then
+               declare
+                  Accepted : Boolean;
+               begin
+                  Commands.Put (Initial_Command, Accepted);
+               end;
+            end if;
+            Queue_Command;
             loop
                exit when Transitions.Should_Quit (Next);
                Inbox.Get (Event, Available);

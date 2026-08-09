@@ -50,6 +50,17 @@ package body Flyology_TUI.Backends.Headless is
       Item.Opened := True;
    end Open;
 
+   overriding procedure Current_Size
+     (Item      : Headless_Backend;
+      Width     : in out Natural;
+      Height    : in out Natural;
+      Available : in out Boolean) is
+   begin
+      Width := Item.Width;
+      Height := Item.Height;
+      Available := Item.Opened and then Item.Size_Set;
+   end Current_Size;
+
    overriding procedure Close (Item : in out Headless_Backend) is
    begin
       Item.Opened := False;
@@ -94,6 +105,18 @@ package body Flyology_TUI.Backends.Headless is
    begin
       Item.Events.Finish;
    end Finish_Input;
+
+   procedure Set_Initial_Size
+     (Item : in out Headless_Backend; Width, Height : Natural) is
+   begin
+      if Item.Opened then
+         raise Backend_Error with
+           "headless opening size cannot be changed while open";
+      end if;
+      Item.Width := Width;
+      Item.Height := Height;
+      Item.Size_Set := True;
+   end Set_Initial_Size;
 
    function Render_Count (Item : Headless_Backend) return Natural is
      (Item.Frames);

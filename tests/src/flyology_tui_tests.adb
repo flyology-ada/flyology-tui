@@ -640,13 +640,25 @@ procedure Flyology_TUI_Tests is
 
    type Runner_Model is limited record
       Count : Integer := 0;
+      First_Result : Integer := 0;
+      Second_Result : Integer := 0;
+      Result_Count : Natural := 0;
+      Width : Natural := 0;
+      Height : Natural := 0;
    end record;
+
+   Runner_First_Present_Sized : Boolean := True;
 
    procedure Runner_Initialize
      (Item : in out Runner_Model;
       Next : in out App_Transitions.Transition) is
    begin
       Item.Count := 0;
+      Item.First_Result := 0;
+      Item.Second_Result := 0;
+      Item.Result_Count := 0;
+      Item.Width := 0;
+      Item.Height := 0;
       App_Transitions.Run (Next, (Saved_Value => 7));
    end Runner_Initialize;
 
@@ -657,16 +669,29 @@ procedure Flyology_TUI_Tests is
    begin
       if Event.Kind = App_Events.Application_Message then
          Item.Count := Event.Application.Amount;
-         App_Transitions.Quit (Next);
+         Item.Result_Count := Item.Result_Count + 1;
+         if Item.Result_Count = 1 then
+            Item.First_Result := Event.Application.Amount;
+         else
+            Item.Second_Result := Event.Application.Amount;
+            App_Transitions.Quit (Next);
+         end if;
+      elsif Event.Terminal.Kind = Flyology_TUI.Events.Resize then
+         Item.Width := Event.Terminal.Width;
+         Item.Height := Event.Terminal.Height;
+         App_Transitions.Run (Next, (Saved_Value => 8));
       end if;
    end Runner_Update;
 
    function Runner_Present
      (Item : Runner_Model) return Flyology_TUI.Views.View
    is
-      pragma Unreferenced (Item);
    begin
-      return Flyology_TUI.Views.Plain ("runner");
+      if Item.Width /= 93 or else Item.Height /= 31 then
+         Runner_First_Present_Sized := False;
+      end if;
+      return Flyology_TUI.Views.From_Surface
+        (Flyology_TUI.Surfaces.Create (Item.Width, Item.Height));
    end Runner_Present;
 
    procedure Execute
@@ -685,7 +710,8 @@ procedure Flyology_TUI_Tests is
       Initialize  => Runner_Initialize,
       Update      => Runner_Update,
       Present     => Runner_Present,
-      Execute     => Execute);
+      Execute     => Execute,
+      Command_Capacity => 1);
 
    type Partial_Backend is limited new Flyology_TUI.Backends.Backend with
       record
@@ -747,15 +773,55 @@ procedure Flyology_TUI_Tests is
       State : Runner_Model;
       Backend : Flyology_TUI.Backends.Headless.Headless_Backend;
    begin
+      Backend.Set_Initial_Size (93, 31);
+      Runner_First_Present_Sized := True;
       Runtime.Run (State, Backend);
-      Assert (State.Count = 7, "command result did not reach model");
+      Assert
+        (State.Result_Count = 2
+         and then State.First_Result = 7
+         and then State.Second_Result = 8,
+         "initial and resize commands did not re-enter in order");
+      Assert
+        (State.Width = 93
+         and then State.Height = 31
+         and then Runner_First_Present_Sized,
+         "runner rendered before delivering the initial terminal size");
       Assert (Backend.Render_Count >= 2, "runner did not render updates");
       Assert (not Backend.Is_Open, "runner did not close backend");
 
       declare
+         Sized : Flyology_TUI.Backends.Headless.Headless_Backend;
+         Width, Height : Natural := 1;
+         Available : Boolean := False;
+         Raised : Boolean := False;
+      begin
+         Sized.Set_Initial_Size (0, 0);
+         Sized.Open;
+         Sized.Current_Size (Width, Height, Available);
+         Assert
+           (Available and then Width = 0 and then Height = 0,
+            "headless backend confused a zero size with unknown geometry");
+         begin
+            Sized.Set_Initial_Size (1, 1);
+         exception
+            when Flyology_TUI.Backends.Backend_Error => Raised := True;
+         end;
+         Sized.Close;
+         Assert
+           (Raised,
+            "headless opening size changed while the backend was open");
+      end;
+
+      declare
          Partial : Partial_Backend;
          Raised  : Boolean := False;
+         Width, Height : Natural := 0;
+         Available : Boolean := False;
       begin
+         Partial.Current_Size (Width, Height, Available);
+         Assert
+           (not Available and then Width = 0 and then Height = 0,
+            "default backend size contract did not report unknown geometry");
          begin
             Runtime.Run (State, Partial);
          exception

@@ -20,6 +20,8 @@ executables = [
   "editing_tests",
   "streaming_text_tests",
   "chat_tests",
+  "panel_group_tests",
+  "posix_initial_size_tests",
 ]
 
 [[depends-on]]

@@ -15,6 +15,7 @@ with Flyology_TUI.Components.Help;
 with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Components.Indicators;
 with Flyology_TUI.Components.Lists;
+with Flyology_TUI.Components.Panel_Groups;
 with Flyology_TUI.Components.Progress;
 with Flyology_TUI.Components.Progress_Groups;
 with Flyology_TUI.Components.Radio_Groups;
@@ -149,6 +150,7 @@ procedure Kitchen_Sink is
       Editors_Page,
       Telemetry_Page,
       Chat_Page,
+      Panels_Page,
       Windows_Page);
 
    function Page_Identity (Item : Page_Id) return Page_Id is (Item);
@@ -161,6 +163,7 @@ procedure Kitchen_Sink is
          when Editors_Page => "Editors",
          when Telemetry_Page => "Telemetry",
          when Chat_Page      => "Chat",
+         when Panels_Page    => "Panels",
          when Windows_Page   => "Windows");
 
    package Pages is new Flyology_TUI.Components.Tabs
@@ -380,10 +383,16 @@ procedure Kitchen_Sink is
       Author_Label => Chat_Author_Label,
       Capacity     => 8);
 
+   Chat_Max_Viewport_Cells : constant Positive := 1_024;
+   Fallback_Terminal_Width : constant Positive := 80;
+   Fallback_Terminal_Height : constant Positive := 24;
+   Fallback_Content_Height : constant Positive :=
+     Fallback_Terminal_Height - 3;
+
    package Chat_Streams is new Flyology_TUI.Components.Streaming_Texts
      (Max_Code_Points    => 512,
       Max_Lines          => 32,
-      Max_Viewport_Cells => 1_024);
+      Max_Viewport_Cells => Chat_Max_Viewport_Cells);
 
    function Make_Chat_Message
      (Id       : Chat_Message_Id;
@@ -426,6 +435,8 @@ procedure Kitchen_Sink is
       Telemetry_Field,
       Chat_Field,
       Chat_Stream_Field,
+      Horizontal_Group_Field,
+      Vertical_Group_Field,
       Window_Field,
       Split_Field,
       Vertical_Scroll_Field,
@@ -442,60 +453,37 @@ procedure Kitchen_Sink is
       Accordion_Capture,
       Text_Area_Capture,
       Syntax_Capture,
+      Horizontal_Group_Capture,
+      Vertical_Group_Capture,
       First_Window_Capture,
       Second_Window_Capture,
       Split_Capture,
       Vertical_Scroll_Capture,
       Horizontal_Scroll_Capture);
 
-   Page_Tabs_Origin : constant Flyology_TUI.Geometry.Point := (X => 0, Y => 2);
-   Text_Panel : constant Flyology_TUI.Mouse.Region :=
-     (X => 0, Y => 4, Width => 28, Height => 7);
-   List_Panel : constant Flyology_TUI.Mouse.Region :=
-     (X => 0, Y => 12, Width => 29, Height => 10);
-   Viewport_Panel : constant Flyology_TUI.Mouse.Region :=
-     (X => 31, Y => 4, Width => 35, Height => 11);
-   Form_Panel : constant Flyology_TUI.Mouse.Region :=
-     (X => 31, Y => 16, Width => 33, Height => 8);
-
-   Text_Content : constant Flyology_TUI.Mouse.Region :=
-     (X => 2, Y => 8, Width => 24, Height => 1);
-   List_Content : constant Flyology_TUI.Mouse.Region :=
-     (X => 2, Y => 16, Width => 25, Height => 4);
-   Viewport_Content : constant Flyology_TUI.Mouse.Region :=
-     (X => 33, Y => 8, Width => 31, Height => 5);
-   Form_Content : constant Flyology_TUI.Mouse.Region :=
-     (X => 33, Y => 20, Width => 29, Height => 2);
-
-   Button_Origin : constant Flyology_TUI.Geometry.Point := (X => 2, Y => 8);
-   Check_Origin : constant Flyology_TUI.Geometry.Point := (X => 2, Y => 10);
-   Radio_Origin : constant Flyology_TUI.Geometry.Point := (X => 30, Y => 8);
-   Selector_Origin : constant Flyology_TUI.Geometry.Point := (X => 2, Y => 17);
-   Dropdown_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 38, Y => 17);
-   Telemetry_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 2, Y => 8);
-   Breadcrumb_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 2, Y => 8);
-   Table_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 2, Y => 15);
-   Tree_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 38, Y => 8);
-   Accordion_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 38, Y => 18);
-   Text_Area_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 2, Y => 8);
-   Syntax_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 36, Y => 8);
-   Chat_Origin : constant Flyology_TUI.Geometry.Point := (X => 0, Y => 4);
-   Windows_Page_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 0, Y => 4);
-   Window_Workspace : constant Flyology_TUI.Geometry.Rectangle :=
-     (X => 0, Y => 0, Width => 68, Height => 20);
-   Vertical_Scroll_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 67, Y => 0);
-   Horizontal_Scroll_Origin : constant Flyology_TUI.Geometry.Point :=
-     (X => 0, Y => 19);
+   type Layout_Snapshot is record
+      Width, Height : Natural := 0;
+      Header, Tabs, Content, Help : Flyology_TUI.Geometry.Rectangle;
+      First, Second, Third, Fourth : Flyology_TUI.Geometry.Rectangle;
+      Left_Full, Right_Full, Top_Full, Bottom_Full :
+        Flyology_TUI.Geometry.Rectangle;
+      Text_Content, List_Content : Flyology_TUI.Geometry.Rectangle;
+      Viewport_Content, Form_Content : Flyology_TUI.Geometry.Rectangle;
+      Button_Origin, Check_Origin, Radio_Origin : Flyology_TUI.Geometry.Point;
+      Selector_Origin, Dropdown_Origin : Flyology_TUI.Geometry.Point;
+      Telemetry_Origin, Breadcrumb_Origin : Flyology_TUI.Geometry.Point;
+      Table_Origin, Tree_Origin : Flyology_TUI.Geometry.Point;
+      Accordion_Origin : Flyology_TUI.Geometry.Point;
+      Text_Area_Origin, Syntax_Origin : Flyology_TUI.Geometry.Point;
+      Chat_Origin, Windows_Origin : Flyology_TUI.Geometry.Point;
+      Window_Workspace : Flyology_TUI.Geometry.Rectangle;
+      Vertical_Scroll_Origin : Flyology_TUI.Geometry.Point;
+      Horizontal_Scroll_Origin : Flyology_TUI.Geometry.Point;
+      Horizontal_Group_Origin : Flyology_TUI.Geometry.Point;
+      Vertical_Group_Origin : Flyology_TUI.Geometry.Point;
+      Horizontal_Group_Region : Flyology_TUI.Geometry.Rectangle;
+      Vertical_Group_Region : Flyology_TUI.Geometry.Rectangle;
+   end record;
 
    type Model is limited record
       Focus    : Focus_Target := Text_Field;
@@ -512,6 +500,7 @@ procedure Kitchen_Sink is
             Editors_Page,
             Telemetry_Page,
             Chat_Page,
+            Panels_Page,
             Windows_Page]);
       Input    : Flyology_TUI.Components.Text_Inputs.Model :=
         Flyology_TUI.Components.Text_Inputs.Create
@@ -572,20 +561,37 @@ procedure Kitchen_Sink is
         (Initial_Chat_Messages, Viewport_Rows => 18);
       Chat_Stream : Kitchen_Sink.Chat_Streams.Model :=
         Kitchen_Sink.Chat_Streams.Create
-          (68, 2, Overflow => Kitchen_Sink.Chat_Streams.Trim_Oldest);
+          (Fallback_Terminal_Width, 2,
+           Overflow => Kitchen_Sink.Chat_Streams.Trim_Oldest);
       Chat_Stream_Step : Natural range 0 .. 40 := 0;
       Chat_Has_Notice : Boolean := False;
+      Horizontal_Group : Flyology_TUI.Components.Panel_Groups.Model :=
+        Flyology_TUI.Components.Panel_Groups.Create
+          (Flyology_TUI.Layouts.Boxes.Horizontal,
+           Fallback_Terminal_Width, 8,
+           [1 => (Minimum_Span => 8, Initial_Span => 18, Weight => 1),
+            2 => (Minimum_Span => 8, Initial_Span => 24, Weight => 2),
+            3 => (Minimum_Span => 8, Initial_Span => 18, Weight => 1)]);
+      Vertical_Group : Flyology_TUI.Components.Panel_Groups.Model :=
+        Flyology_TUI.Components.Panel_Groups.Create
+          (Flyology_TUI.Layouts.Boxes.Vertical,
+           Fallback_Terminal_Width, 10,
+           [1 => (Minimum_Span => 2, Initial_Span => 3, Weight => 1),
+            2 => (Minimum_Span => 2, Initial_Span => 3, Weight => 2),
+            3 => (Minimum_Span => 2, Initial_Span => 2, Weight => 1)]);
       Split : Flyology_TUI.Components.Split_Panes.Model :=
         Flyology_TUI.Components.Split_Panes.Create
           (Flyology_TUI.Layouts.Boxes.Horizontal,
-           68, 20, First_Span => 25,
+           Fallback_Terminal_Width, Fallback_Content_Height,
+           First_Span => 25,
            First_Minimum => 10, Second_Minimum => 10);
       Vertical_Scroll : Flyology_TUI.Components.Scrollbars.Model :=
         Flyology_TUI.Components.Scrollbars.Create
-          (Flyology_TUI.Layouts.Boxes.Vertical, 20);
+          (Flyology_TUI.Layouts.Boxes.Vertical, Fallback_Content_Height);
       Horizontal_Scroll : Flyology_TUI.Components.Scrollbars.Model :=
         Flyology_TUI.Components.Scrollbars.Create
-          (Flyology_TUI.Layouts.Boxes.Horizontal, 68);
+          (Flyology_TUI.Layouts.Boxes.Horizontal,
+           Fallback_Terminal_Width);
       Window_A_Model : Flyology_TUI.Components.Windows.Model :=
         Flyology_TUI.Components.Windows.Create
           (2, 1, 32, 10, Minimum_Width => 16, Minimum_Height => 6);
@@ -596,6 +602,8 @@ procedure Kitchen_Sink is
       Focused_Window : Demo_Window := Window_B;
       Window_A_Visible : Boolean := True;
       Window_B_Visible : Boolean := True;
+      Terminal_Width : Natural := Fallback_Terminal_Width;
+      Terminal_Height : Natural := Fallback_Terminal_Height;
    end record;
 
    package Events is new Flyology_TUI.Application_Events (Message);
@@ -613,8 +621,272 @@ procedure Kitchen_Sink is
    function Current_Page (Item : Model) return Page_Id is
      (Item.Pages.Active_Id);
 
+   function Chat_Stream_Height (Item : Model) return Natural;
+   procedure Reconcile_Chat (Item : in out Model);
+
+   function Inset_Panel
+     (Region : Flyology_TUI.Geometry.Rectangle)
+      return Flyology_TUI.Geometry.Rectangle
+   is
+     ((X      => Region.X + Integer (Natural'Min (2, Region.Width)),
+       Y      => Region.Y + Integer (Natural'Min (4, Region.Height)),
+       Width  => (if Region.Width > 4 then Region.Width - 4 else 0),
+       Height => (if Region.Height > 5 then Region.Height - 5 else 0)));
+
+   function Origin
+     (Region : Flyology_TUI.Geometry.Rectangle)
+      return Flyology_TUI.Geometry.Point is
+     ((X => Region.X, Y => Region.Y));
+
+   function Mouse_Region
+     (Region : Flyology_TUI.Geometry.Rectangle)
+      return Flyology_TUI.Mouse.Region is
+     ((X      => Natural (Integer'Max (0, Region.X)),
+       Y      => Natural (Integer'Max (0, Region.Y)),
+       Width  => Region.Width,
+       Height => Region.Height));
+
+   function Layout (Item : Model) return Layout_Snapshot is
+      Result : Layout_Snapshot;
+      Content_Height : Natural;
+      Gap : Natural;
+      Left_Width, Right_Width : Natural;
+      Top_Height, Bottom_Height : Natural;
+
+      function Fits
+        (Region : Flyology_TUI.Geometry.Rectangle) return Boolean is
+        (Region.X >= 0
+         and then Region.Y >= 0
+         and then Natural (Region.X) <= Result.Width
+         and then Natural (Region.Y) <= Result.Height
+         and then Region.Width <= Result.Width - Natural (Region.X)
+         and then Region.Height <= Result.Height - Natural (Region.Y));
+
+   begin
+      Result.Width := Item.Terminal_Width;
+      Result.Height := Item.Terminal_Height;
+      Result.Header :=
+        (X => 0, Y => 0, Width => Result.Width,
+         Height => (if Result.Height > 0 then 1 else 0));
+      Result.Tabs :=
+        (X => 0, Y => Integer (Natural'Min (1, Result.Height)),
+         Width => Result.Width,
+         Height => (if Result.Height > 1 then 1 else 0));
+      Result.Help :=
+        (X => 0,
+         Y => (if Result.Height > 2 then Integer (Result.Height - 1)
+               else Integer (Result.Height)),
+         Width => Result.Width,
+         Height => (if Result.Height > 2 then 1 else 0));
+      Content_Height := (if Result.Height > 3 then Result.Height - 3 else 0);
+      Result.Content :=
+        (X => 0, Y => Integer (Natural'Min (2, Result.Height)),
+         Width => Result.Width, Height => Content_Height);
+
+      Gap := (if Result.Width > 1 then 1 else 0);
+      if Result.Width >= 56 then
+         Left_Width := (Result.Width - Gap) / 2;
+         Right_Width := Result.Width - Gap - Left_Width;
+      else
+         Left_Width := Result.Width;
+         Right_Width := 0;
+      end if;
+      Top_Height := Content_Height / 2;
+      Bottom_Height := Content_Height - Top_Height;
+      Result.Left_Full :=
+        (X => 0, Y => Result.Content.Y,
+         Width => Left_Width, Height => Content_Height);
+      Result.Right_Full :=
+        (X => Integer
+           ((if Right_Width > 0 then Left_Width + Gap else Result.Width)),
+         Y => Result.Content.Y,
+         Width => Right_Width, Height => Content_Height);
+      Result.Top_Full :=
+        (X => 0, Y => Result.Content.Y,
+         Width => Result.Width, Height => Top_Height);
+      Result.Bottom_Full :=
+        (X => 0, Y => Result.Content.Y + Integer (Top_Height),
+         Width => Result.Width, Height => Bottom_Height);
+
+      if Right_Width > 0 then
+         Result.First :=
+           (X => 0, Y => Result.Content.Y,
+            Width => Left_Width, Height => Top_Height);
+         Result.Second :=
+           (X => Integer (Left_Width + Gap), Y => Result.Content.Y,
+            Width => Right_Width, Height => Top_Height);
+         Result.Third :=
+           (X => 0, Y => Result.Content.Y + Integer (Top_Height),
+            Width => Left_Width, Height => Bottom_Height);
+         Result.Fourth :=
+           (X => Integer (Left_Width + Gap),
+            Y => Result.Content.Y + Integer (Top_Height),
+            Width => Right_Width, Height => Bottom_Height);
+      else
+         declare
+            First_Height : constant Natural := Content_Height / 4;
+            Second_Height : constant Natural := Content_Height / 4;
+            Third_Height : constant Natural := Content_Height / 4;
+            Fourth_Height : constant Natural :=
+              Content_Height - First_Height - Second_Height - Third_Height;
+         begin
+            Result.First :=
+              (X => 0, Y => Result.Content.Y, Width => Result.Width,
+               Height => First_Height);
+            Result.Second :=
+              (X => 0,
+               Y => Result.Content.Y + Integer (First_Height),
+               Width => Result.Width, Height => Second_Height);
+            Result.Third :=
+              (X => 0,
+               Y => Result.Content.Y
+                 + Integer (First_Height + Second_Height),
+               Width => Result.Width, Height => Third_Height);
+            Result.Fourth :=
+              (X => 0,
+               Y => Integer
+                 (Natural (Result.Content.Y)
+                  + First_Height + Second_Height + Third_Height),
+               Width => Result.Width, Height => Fourth_Height);
+         end;
+      end if;
+
+      Result.Text_Content := Inset_Panel (Result.First);
+      Result.Text_Content.Height :=
+        Natural'Min (1, Result.Text_Content.Height);
+      Result.List_Content := Inset_Panel (Result.Third);
+      Result.Viewport_Content := Inset_Panel (Result.Second);
+      Result.Form_Content := Inset_Panel (Result.Fourth);
+      Result.Button_Origin := Origin (Inset_Panel (Result.First));
+      Result.Check_Origin :=
+        (X => Result.Button_Origin.X, Y => Result.Button_Origin.Y + 2);
+      Result.Radio_Origin := Origin (Inset_Panel (Result.Second));
+      Result.Selector_Origin := Origin (Inset_Panel (Result.Third));
+      Result.Dropdown_Origin := Origin (Inset_Panel (Result.Fourth));
+      Result.Telemetry_Origin := Origin (Inset_Panel (Result.First));
+      Result.Breadcrumb_Origin := Origin (Inset_Panel (Result.First));
+      Result.Table_Origin := Origin (Inset_Panel (Result.Third));
+      Result.Tree_Origin := Origin (Inset_Panel (Result.Second));
+      Result.Accordion_Origin := Origin (Inset_Panel (Result.Fourth));
+      if Result.Right_Full.Width > 0 then
+         Result.Text_Area_Origin := Origin (Inset_Panel (Result.Left_Full));
+         Result.Syntax_Origin := Origin (Inset_Panel (Result.Right_Full));
+      else
+         Result.Text_Area_Origin := Origin (Inset_Panel (Result.Top_Full));
+         Result.Syntax_Origin := Origin (Inset_Panel (Result.Bottom_Full));
+      end if;
+      Result.Chat_Origin := Origin (Result.Content);
+      Result.Windows_Origin := Origin (Result.Content);
+      Result.Window_Workspace :=
+        (X => 0, Y => 0,
+         Width => Result.Content.Width, Height => Result.Content.Height);
+      Result.Vertical_Scroll_Origin :=
+        (X => Integer'Max (0, Integer (Result.Content.Width) - 1), Y => 0);
+      Result.Horizontal_Scroll_Origin :=
+        (X => 0,
+         Y => Integer'Max (0, Integer (Result.Content.Height) - 1));
+      Result.Horizontal_Group_Region := Result.Top_Full;
+      Result.Vertical_Group_Region := Result.Bottom_Full;
+      Result.Horizontal_Group_Origin := Origin (Result.Top_Full);
+      Result.Vertical_Group_Origin := Origin (Result.Bottom_Full);
+      if not Fits (Result.Header)
+        or else not Fits (Result.Tabs)
+        or else not Fits (Result.Help)
+        or else not Fits (Result.Content)
+        or else not Fits (Result.First)
+        or else not Fits (Result.Second)
+        or else not Fits (Result.Third)
+        or else not Fits (Result.Fourth)
+        or else not Fits (Result.Left_Full)
+        or else not Fits (Result.Right_Full)
+        or else not Fits (Result.Top_Full)
+        or else not Fits (Result.Bottom_Full)
+      then
+         raise Program_Error with "responsive layout escaped terminal bounds";
+      end if;
+      return Result;
+   end Layout;
+
+   procedure Resize_Components
+     (Item : in out Model; Geometry : Layout_Snapshot)
+   is
+      use type Chat_Streams.Operation_Result;
+      Editor_Region, Syntax_Region : Flyology_TUI.Geometry.Rectangle;
+      Stream_Height : constant Natural := Chat_Stream_Height (Item);
+      Stream_Width : constant Natural :=
+        Natural'Min
+          (Geometry.Content.Width,
+           Chat_Max_Viewport_Cells /
+             Natural'Max (1, Stream_Height));
+      Result : Chat_Streams.Operation_Result;
+   begin
+      if Geometry.Right_Full.Width > 0 then
+         Editor_Region := Inset_Panel (Geometry.Left_Full);
+         Syntax_Region := Inset_Panel (Geometry.Right_Full);
+      else
+         Editor_Region := Inset_Panel (Geometry.Top_Full);
+         Syntax_Region := Inset_Panel (Geometry.Bottom_Full);
+      end if;
+      if Editor_Region.Width > 0 and then Editor_Region.Height > 0 then
+         Item.Text_Area.Set_Size
+           (Positive (Editor_Region.Width), Positive (Editor_Region.Height));
+      end if;
+      if Syntax_Region.Width > 0 and then Syntax_Region.Height > 0 then
+         Item.Syntax.Set_Size
+           (Positive (Syntax_Region.Width), Positive (Syntax_Region.Height));
+      end if;
+      if Geometry.Viewport_Content.Width > 0
+        and then Geometry.Viewport_Content.Height > 0
+      then
+         Item.Viewport.Resize
+           (Positive (Geometry.Viewport_Content.Width),
+            Positive (Geometry.Viewport_Content.Height));
+      end if;
+      Item.Breadcrumb.Set_Maximum_Width (Geometry.First.Width);
+      Item.Table.Set_Viewport_Rows
+        ((if Geometry.Third.Height > 5 then Geometry.Third.Height - 5 else 0));
+      Item.Tree.Set_Maximum_Width
+        ((if Geometry.Second.Width > 4 then Geometry.Second.Width - 4 else 0));
+      Item.Tree.Set_Viewport_Rows
+        ((if Geometry.Second.Height > 5
+          then Geometry.Second.Height - 5 else 0));
+      Item.Chat.Set_Viewport_Rows (Geometry.Content.Height);
+      Result := Item.Chat_Stream.Resize
+        (Stream_Width, Stream_Height);
+      if Result = Chat_Streams.Rejected_Geometry then
+         raise Program_Error with "responsive chat geometry was rejected";
+      end if;
+      Item.Split.Resize
+        (Geometry.Window_Workspace.Width, Geometry.Window_Workspace.Height);
+      Item.Vertical_Scroll.Resize (Geometry.Window_Workspace.Height);
+      Item.Horizontal_Scroll.Resize (Geometry.Window_Workspace.Width);
+      Item.Vertical_Scroll.Configure
+        (Total => 100,
+         Page_Size => Geometry.Window_Workspace.Height,
+         First => Item.Vertical_Scroll.First);
+      Item.Horizontal_Scroll.Configure
+        (Total => 180,
+         Page_Size => Geometry.Window_Workspace.Width,
+         First => Item.Horizontal_Scroll.First);
+      Item.Horizontal_Group.Resize
+        (Geometry.Horizontal_Group_Region.Width,
+         Geometry.Horizontal_Group_Region.Height);
+      Item.Vertical_Group.Resize
+        (Geometry.Vertical_Group_Region.Width,
+         Geometry.Vertical_Group_Region.Height);
+   end Resize_Components;
+
+   procedure Set_Terminal_Size
+     (Item : in out Model; Width, Height : Natural) is
+   begin
+      Item.Terminal_Width := Width;
+      Item.Terminal_Height := Height;
+      Resize_Components (Item, Layout (Item));
+      Reconcile_Chat (Item);
+   end Set_Terminal_Size;
+
    function Accordion_Presentation
-     (Item : Model) return Accordions.Presentation
+     (Item : Model; Width : Natural) return Accordions.Presentation
    is
       package Indicators renames Flyology_TUI.Components.Indicators;
       Overview_Body : constant Flyology_TUI.Surfaces.Surface :=
@@ -623,27 +895,27 @@ procedure Kitchen_Sink is
            Flyology_TUI.Surfaces.From_Text ("render-time surface"),
            Gap => 1);
       Identity_Body : constant Flyology_TUI.Surfaces.Surface :=
-        Indicators.Key_Value ("selection", "stable IDs", 28, Visual);
+        Indicators.Key_Value ("selection", "stable IDs", Width, Visual);
       Composition_Body : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Vertically
-          (Indicators.Divider (28, "external body", Visual),
+          (Indicators.Divider (Width, "external body", Visual),
            Flyology_TUI.Surfaces.From_Text ("events stay with the app"));
    begin
       if Item.Accordion.Is_Expanded (Overview_Section) then
          return Item.Accordion.Present
            ([1 => (Id => Overview_Section, Content => Overview_Body)],
-            28, Visual, Item.Focus = Accordion_Field);
+            Width, Visual, Item.Focus = Accordion_Field);
       elsif Item.Accordion.Is_Expanded (Identity_Section) then
          return Item.Accordion.Present
            ([1 => (Id => Identity_Section, Content => Identity_Body)],
-            28, Visual, Item.Focus = Accordion_Field);
+            Width, Visual, Item.Focus = Accordion_Field);
       elsif Item.Accordion.Is_Expanded (Composition_Section) then
          return Item.Accordion.Present
            ([1 => (Id => Composition_Section, Content => Composition_Body)],
-            28, Visual, Item.Focus = Accordion_Field);
+            Width, Visual, Item.Focus = Accordion_Field);
       else
          return Item.Accordion.Present
-           (No_Accordion_Bodies, 28, Visual,
+           (No_Accordion_Bodies, Width, Visual,
             Item.Focus = Accordion_Field);
       end if;
    end Accordion_Presentation;
@@ -705,7 +977,8 @@ procedure Kitchen_Sink is
 
    function Chat_Body
      (Item : Model;
-      Id   : Chat_Message_Id) return Chats.Body_Entry
+      Id   : Chat_Message_Id;
+      Width : Natural) return Chats.Body_Entry
    is
       package Indicators renames Flyology_TUI.Components.Indicators;
       Empty : constant Flyology_TUI.Surfaces.Surface :=
@@ -749,13 +1022,14 @@ procedure Kitchen_Sink is
                Aggregate : constant Work_Progress.Fraction :=
                  Item.Work.Weighted_Total;
                First : constant Flyology_TUI.Surfaces.Surface :=
-                 Indicators.Divider (64, "component body", Visual);
+                 Indicators.Divider (Width, "component body", Visual);
                Second : constant Flyology_TUI.Surfaces.Surface :=
                  Indicators.Gauge
-                   (Indicators.Ratio (Aggregate), 30, Visual);
+                   (Indicators.Ratio (Aggregate),
+                    Natural'Min (30, Width), Visual);
                Third : constant Flyology_TUI.Surfaces.Surface :=
                  Sparklines.Render
-                   (Item.Samples, 40, Sparklines.Automatic, Visual);
+                   (Item.Samples, Width, Sparklines.Automatic, Visual);
                Fourth : constant Flyology_TUI.Surfaces.Surface :=
                  Indicators.Status_Line
                    ([Indicators.Make_Segment
@@ -764,7 +1038,7 @@ procedure Kitchen_Sink is
                      Indicators.Make_Segment
                        ("serial update", Indicators.Normal,
                         Indicators.Neutral)],
-                    64, Visual);
+                    Width, Visual);
             begin
                return
                  (Id      => Id,
@@ -787,7 +1061,8 @@ procedure Kitchen_Sink is
 
    function Chat_Bodies
      (Item   : Model;
-      Layout : Chats.Layout_Plan) return Chats.Body_Array
+      Layout : Chats.Layout_Plan;
+      Width  : Natural) return Chats.Body_Array
    is
       Count : constant Natural := Chats.Required_Body_Count (Layout);
       Result : Chats.Body_Array (1 .. Count) :=
@@ -798,13 +1073,13 @@ procedure Kitchen_Sink is
    begin
       for Position in Result'Range loop
          Result (Position) := Chat_Body
-           (Item, Chats.Required_Body_Id (Layout, Position));
+           (Item, Chats.Required_Body_Id (Layout, Position), Width);
       end loop;
       return Result;
    end Chat_Bodies;
 
    function Chat_Footer
-     (Item : Model) return Flyology_TUI.Surfaces.Surface
+     (Item : Model; Width : Natural) return Flyology_TUI.Surfaces.Surface
    is
       package Indicators renames Flyology_TUI.Components.Indicators;
    begin
@@ -816,12 +1091,13 @@ procedure Kitchen_Sink is
            & " · stream unseen"
            & Natural'Wide_Wide_Image
                (Item.Chat_Stream.Unseen_Chunk_Count),
-         68, Visual);
+         Width, Visual);
    end Chat_Footer;
 
-   function Chat_Composer return Flyology_TUI.Surfaces.Surface is
+   function Chat_Composer
+     (Width : Natural) return Flyology_TUI.Surfaces.Surface is
       Result : Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Surfaces.Create (68, 1, Visual.Input);
+        Flyology_TUI.Surfaces.Create (Width, 1, Visual.Input);
    begin
       Result.Write
         (0, 0, "> visual composer · input model intentionally external",
@@ -830,16 +1106,19 @@ procedure Kitchen_Sink is
    end Chat_Composer;
 
    function Chat_Presentation
-     (Item : Model) return Chats.Presentation
+     (Item : Model; Geometry : Layout_Snapshot) return Chats.Presentation
    is
-      Footer : constant Flyology_TUI.Surfaces.Surface := Chat_Footer (Item);
-      Composer : constant Flyology_TUI.Surfaces.Surface := Chat_Composer;
+      Width : constant Natural := Geometry.Content.Width;
+      Footer : constant Flyology_TUI.Surfaces.Surface :=
+        Chat_Footer (Item, Width);
+      Composer : constant Flyology_TUI.Surfaces.Surface :=
+        Chat_Composer (Width);
       Layout : constant Chats.Layout_Plan := Item.Chat.Plan
-        (68, Footer.Height, Composer.Height);
-      Bodies : constant Chats.Body_Array := Chat_Bodies (Item, Layout);
+        (Width, Footer.Height, Composer.Height);
+      Bodies : constant Chats.Body_Array := Chat_Bodies (Item, Layout, Width);
    begin
       return Item.Chat.Present
-        (Bodies, 68, Footer, Composer, Visual,
+        (Bodies, Width, Footer, Composer, Visual,
          Has_Focus => Item.Focus in Chat_Field | Chat_Stream_Field);
    end Chat_Presentation;
 
@@ -899,7 +1178,11 @@ procedure Kitchen_Sink is
          raise Program_Error with "kitchen-sink stream transition rejected";
       end if;
       New_Height := Chat_Stream_Height (Item);
-      Result := Item.Chat_Stream.Resize (68, New_Height);
+      Result := Item.Chat_Stream.Resize
+        (Natural'Min
+           (Item.Terminal_Width,
+            Chat_Max_Viewport_Cells / Natural'Max (1, New_Height)),
+         New_Height);
       if Result = Chat_Streams.Rejected_Geometry then
          raise Program_Error with "kitchen-sink stream resize rejected";
       end if;
@@ -916,6 +1199,8 @@ procedure Kitchen_Sink is
       Item.Horizontal_Scroll.Blur;
       Item.Text_Area.Blur;
       Item.Syntax.Blur;
+      Item.Horizontal_Group.Blur;
+      Item.Vertical_Group.Blur;
       Item.Focus := Target;
       case Item.Focus is
          when Text_Field => Item.Input.Focus;
@@ -945,6 +1230,8 @@ procedure Kitchen_Sink is
          when Horizontal_Scroll_Field => Item.Horizontal_Scroll.Focus;
          when Text_Area_Field => Item.Text_Area.Focus;
          when Syntax_Field => Item.Syntax.Focus;
+         when Horizontal_Group_Field => Item.Horizontal_Group.Focus;
+         when Vertical_Group_Field => Item.Vertical_Group.Focus;
          when others => null;
       end case;
    end Activate;
@@ -1000,7 +1287,9 @@ procedure Kitchen_Sink is
       Item.Vertical_Scroll.Configure
         (Total => 100, Page_Size => 20, First => 18);
       Item.Horizontal_Scroll.Configure
-        (Total => 180, Page_Size => 68, First => 42);
+        (Total => 180,
+         Page_Size => Fallback_Terminal_Width,
+         First => 42);
       declare
          Accepted : Boolean;
       begin
@@ -1192,6 +1481,30 @@ procedure Kitchen_Sink is
                    when Chat_Stream_Field => Page_Navigation,
                    when others          => Chat_Field));
          end if;
+      when Panels_Page =>
+         if Item.Focus not in
+           Page_Navigation | Horizontal_Group_Field | Vertical_Group_Field
+         then
+            Activate (Item, Horizontal_Group_Field);
+            return;
+         end if;
+         if Backwards then
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Vertical_Group_Field,
+                   when Horizontal_Group_Field => Page_Navigation,
+                   when Vertical_Group_Field => Horizontal_Group_Field,
+                   when others => Horizontal_Group_Field));
+         else
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Horizontal_Group_Field,
+                   when Horizontal_Group_Field => Vertical_Group_Field,
+                   when Vertical_Group_Field => Page_Navigation,
+                   when others => Horizontal_Group_Field));
+         end if;
       when Windows_Page =>
          if Item.Focus not in
            Page_Navigation | Window_Field .. Horizontal_Scroll_Field
@@ -1263,6 +1576,12 @@ procedure Kitchen_Sink is
               Page_Navigation | Chat_Field | Chat_Stream_Field
             then
                Activate (Item, Chat_Field);
+            end if;
+         when Panels_Page =>
+            if Item.Focus not in
+              Page_Navigation | Horizontal_Group_Field | Vertical_Group_Field
+            then
+               Activate (Item, Horizontal_Group_Field);
             end if;
          when Windows_Page =>
             if Item.Focus not in
@@ -1342,7 +1661,8 @@ procedure Kitchen_Sink is
 
    procedure Route_Captured_Mouse
      (Item  : in out Model;
-      Event : Flyology_TUI.Events.Mouse_Event) is
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot) is
       use Flyology_TUI.Components.Interactions;
       Result : Update_Result;
       Page_Event : Flyology_TUI.Mouse.Local_Event;
@@ -1351,86 +1671,101 @@ procedure Kitchen_Sink is
          when No_Capture => return;
          when Page_Capture =>
             Result := Item.Pages.Handle
-              (Flyology_TUI.Mouse.Relative (Event, Page_Tabs_Origin));
+              (Flyology_TUI.Mouse.Relative (Event, Origin (Geometry.Tabs)));
             Apply_Result (Item, Page_Navigation, Page_Capture, Result);
             Normalize_Focus (Item);
          when Button_Capture =>
             Result := Item.Button.Handle
-              (Flyology_TUI.Mouse.Relative (Event, Button_Origin));
+              (Flyology_TUI.Mouse.Relative (Event, Geometry.Button_Origin));
             Apply_Result (Item, Button_Field, Button_Capture, Result);
          when Check_Capture =>
             Result := Item.Check.Handle
-              (Flyology_TUI.Mouse.Relative (Event, Check_Origin));
+              (Flyology_TUI.Mouse.Relative (Event, Geometry.Check_Origin));
             Apply_Result (Item, Check_Field, Check_Capture, Result);
          when Radio_Capture =>
             Result := Item.Radios.Handle
-              (Flyology_TUI.Mouse.Relative (Event, Radio_Origin));
+              (Flyology_TUI.Mouse.Relative (Event, Geometry.Radio_Origin));
             Apply_Result (Item, Radio_Field, Radio_Capture, Result);
          when Selector_Capture =>
             Result := Item.Selector.Handle
-              (Flyology_TUI.Mouse.Relative (Event, Selector_Origin));
+              (Flyology_TUI.Mouse.Relative (Event, Geometry.Selector_Origin));
             Apply_Result (Item, Selector_Field, Selector_Capture, Result);
          when Dropdown_Capture =>
             Result := Item.Dropdown.Handle
-              (Flyology_TUI.Mouse.Relative (Event, Dropdown_Origin));
+              (Flyology_TUI.Mouse.Relative (Event, Geometry.Dropdown_Origin));
             Apply_Result (Item, Dropdown_Field, Dropdown_Capture, Result);
          when Accordion_Capture =>
             declare
-               Layout : constant Accordions.Presentation :=
-                 Accordion_Presentation (Item);
+               Presentation : constant Accordions.Presentation :=
+                 Accordion_Presentation
+                   (Item, Inset_Panel (Geometry.Fourth).Width);
             begin
                Result := Item.Accordion.Handle
-                 (Flyology_TUI.Mouse.Relative (Event, Accordion_Origin),
-                  Layout);
+                 (Flyology_TUI.Mouse.Relative
+                    (Event, Geometry.Accordion_Origin), Presentation);
                Apply_Result
                  (Item, Accordion_Field, Accordion_Capture, Result);
             end;
          when Text_Area_Capture =>
             Result := Item.Text_Area.Handle
-              (Flyology_TUI.Mouse.Relative (Event, Text_Area_Origin));
+              (Flyology_TUI.Mouse.Relative
+                 (Event, Geometry.Text_Area_Origin));
             Apply_Result
               (Item, Text_Area_Field, Text_Area_Capture, Result);
             Normalize_Focus (Item);
          when Syntax_Capture =>
             Result := Item.Syntax.Handle
-              (Flyology_TUI.Mouse.Relative (Event, Syntax_Origin));
+              (Flyology_TUI.Mouse.Relative (Event, Geometry.Syntax_Origin));
             Apply_Result (Item, Syntax_Field, Syntax_Capture, Result);
             if Result.Changed then
                Item.Syntax.Advance_Highlighting (4);
             end if;
             Normalize_Focus (Item);
+         when Horizontal_Group_Capture =>
+            Result := Item.Horizontal_Group.Handle
+              (Flyology_TUI.Mouse.Relative
+                 (Event, Geometry.Horizontal_Group_Origin));
+            Apply_Result
+              (Item, Horizontal_Group_Field,
+               Horizontal_Group_Capture, Result);
+         when Vertical_Group_Capture =>
+            Result := Item.Vertical_Group.Handle
+              (Flyology_TUI.Mouse.Relative
+                 (Event, Geometry.Vertical_Group_Origin));
+            Apply_Result
+              (Item, Vertical_Group_Field, Vertical_Group_Capture, Result);
          when First_Window_Capture =>
             Page_Event :=
-              Flyology_TUI.Mouse.Relative (Event, Windows_Page_Origin);
+              Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
             Result := Item.Window_A_Model.Handle
-              (Page_Event, Window_Workspace);
+              (Page_Event, Geometry.Window_Workspace);
             Apply_Window_Result (Item, Window_A, Result);
          when Second_Window_Capture =>
             Page_Event :=
-              Flyology_TUI.Mouse.Relative (Event, Windows_Page_Origin);
+              Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
             Result := Item.Window_B_Model.Handle
-              (Page_Event, Window_Workspace);
+              (Page_Event, Geometry.Window_Workspace);
             Apply_Window_Result (Item, Window_B, Result);
          when Split_Capture =>
             Page_Event :=
-              Flyology_TUI.Mouse.Relative (Event, Windows_Page_Origin);
+              Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
             Result := Item.Split.Handle (Page_Event);
             Apply_Result (Item, Split_Field, Split_Capture, Result);
          when Vertical_Scroll_Capture =>
             Page_Event :=
-              Flyology_TUI.Mouse.Relative (Event, Windows_Page_Origin);
+              Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
             Result := Item.Vertical_Scroll.Handle
               (Flyology_TUI.Mouse.Relative
-                 (Page_Event, Vertical_Scroll_Origin));
+                 (Page_Event, Geometry.Vertical_Scroll_Origin));
             Apply_Result
               (Item, Vertical_Scroll_Field,
                Vertical_Scroll_Capture, Result);
          when Horizontal_Scroll_Capture =>
             Page_Event :=
-              Flyology_TUI.Mouse.Relative (Event, Windows_Page_Origin);
+              Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
             Result := Item.Horizontal_Scroll.Handle
               (Flyology_TUI.Mouse.Relative
-                 (Page_Event, Horizontal_Scroll_Origin));
+                 (Page_Event, Geometry.Horizontal_Scroll_Origin));
             Apply_Result
               (Item, Horizontal_Scroll_Field,
                Horizontal_Scroll_Capture, Result);
@@ -1439,35 +1774,36 @@ procedure Kitchen_Sink is
 
    procedure Handle_Controls_Mouse
      (Item  : in out Model;
-      Event : Flyology_TUI.Events.Mouse_Event) is
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot) is
       use Flyology_TUI.Components.Interactions;
       Button_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X => Button_Origin.X,
-         Y => Button_Origin.Y,
+        (X => Geometry.Button_Origin.X,
+         Y => Geometry.Button_Origin.Y,
          Width => Item.Button.Width,
          Height => 1);
       Check_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X => Check_Origin.X,
-         Y => Check_Origin.Y,
+        (X => Geometry.Check_Origin.X,
+         Y => Geometry.Check_Origin.Y,
          Width => Item.Check.Width,
          Height => 1);
       Radio_View : constant Flyology_TUI.Surfaces.Surface :=
         Item.Radios.Render (Visual, Item.Focus = Radio_Field);
       Radio_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X => Radio_Origin.X,
-         Y => Radio_Origin.Y,
+        (X => Geometry.Radio_Origin.X,
+         Y => Geometry.Radio_Origin.Y,
          Width => Flyology_TUI.Surfaces.Width (Radio_View),
          Height => Flyology_TUI.Surfaces.Height (Radio_View));
       Selector_View : constant Flyology_TUI.Surfaces.Surface :=
         Item.Selector.Render (Visual, Item.Focus = Selector_Field);
       Selector_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X => Selector_Origin.X,
-         Y => Selector_Origin.Y,
+        (X => Geometry.Selector_Origin.X,
+         Y => Geometry.Selector_Origin.Y,
          Width => Flyology_TUI.Surfaces.Width (Selector_View),
          Height => Flyology_TUI.Surfaces.Height (Selector_View));
       Dropdown_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X => Dropdown_Origin.X,
-         Y => Dropdown_Origin.Y,
+        (X => Geometry.Dropdown_Origin.X,
+         Y => Geometry.Dropdown_Origin.Y,
          Width => Item.Dropdown.Width,
          Height => Item.Dropdown.Height);
       Point : constant Flyology_TUI.Geometry.Point :=
@@ -1476,36 +1812,37 @@ procedure Kitchen_Sink is
    begin
       if Flyology_TUI.Geometry.Contains (Button_Bounds, Point) then
          Result := Item.Button.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Button_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Button_Origin));
          Apply_Result (Item, Button_Field, Button_Capture, Result);
       elsif Flyology_TUI.Geometry.Contains (Check_Bounds, Point) then
          Result := Item.Check.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Check_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Check_Origin));
          Apply_Result (Item, Check_Field, Check_Capture, Result);
       elsif Flyology_TUI.Geometry.Contains (Radio_Bounds, Point) then
          Result := Item.Radios.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Radio_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Radio_Origin));
          Apply_Result (Item, Radio_Field, Radio_Capture, Result);
       elsif Flyology_TUI.Geometry.Contains (Selector_Bounds, Point) then
          Result := Item.Selector.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Selector_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Selector_Origin));
          Apply_Result (Item, Selector_Field, Selector_Capture, Result);
       elsif Flyology_TUI.Geometry.Contains (Dropdown_Bounds, Point) then
          Result := Item.Dropdown.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Dropdown_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Dropdown_Origin));
          Apply_Result (Item, Dropdown_Field, Dropdown_Capture, Result);
       end if;
    end Handle_Controls_Mouse;
 
    procedure Handle_Telemetry_Mouse
      (Item  : in out Model;
-      Event : Flyology_TUI.Events.Mouse_Event) is
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot) is
       use Flyology_TUI.Components.Interactions;
       Work_View : constant Flyology_TUI.Surfaces.Surface :=
         Item.Work.Render (Visual);
       Work_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X => Telemetry_Origin.X,
-         Y => Telemetry_Origin.Y,
+        (X => Geometry.Telemetry_Origin.X,
+         Y => Geometry.Telemetry_Origin.Y,
          Width => Flyology_TUI.Surfaces.Width (Work_View),
          Height => Flyology_TUI.Surfaces.Height (Work_View));
       Point : constant Flyology_TUI.Geometry.Point :=
@@ -1514,61 +1851,63 @@ procedure Kitchen_Sink is
    begin
       if Flyology_TUI.Geometry.Contains (Work_Bounds, Point) then
          Result := Item.Work.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Telemetry_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Telemetry_Origin));
          Apply_Result (Item, Telemetry_Field, No_Capture, Result);
       end if;
    end Handle_Telemetry_Mouse;
 
    procedure Handle_Navigation_Mouse
      (Item  : in out Model;
-      Event : Flyology_TUI.Events.Mouse_Event) is
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot) is
       use Flyology_TUI.Components.Interactions;
       Point : constant Flyology_TUI.Geometry.Point :=
         (X => Integer (Event.X), Y => Integer (Event.Y));
       Breadcrumb_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X      => Breadcrumb_Origin.X,
-         Y      => Breadcrumb_Origin.Y,
+        (X      => Geometry.Breadcrumb_Origin.X,
+         Y      => Geometry.Breadcrumb_Origin.Y,
          Width  => Item.Breadcrumb.Width,
          Height => (if Item.Breadcrumb.Is_Empty then 0 else 1));
       Table_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X      => Table_Origin.X,
-         Y      => Table_Origin.Y,
+        (X      => Geometry.Table_Origin.X,
+         Y      => Geometry.Table_Origin.Y,
          Width  => Item.Table.Width,
          Height => Item.Table.Height);
       Tree_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X      => Tree_Origin.X,
-         Y      => Tree_Origin.Y,
+        (X      => Geometry.Tree_Origin.X,
+         Y      => Geometry.Tree_Origin.Y,
          Width  => Item.Tree.Width,
          Height => Item.Tree.Height);
-      Layout : constant Accordions.Presentation :=
-        Accordion_Presentation (Item);
+      Presentation : constant Accordions.Presentation :=
+        Accordion_Presentation (Item, Inset_Panel (Geometry.Fourth).Width);
       Accordion_Frame : constant Flyology_TUI.Surfaces.Surface :=
-        Accordions.Frame (Layout);
+        Accordions.Frame (Presentation);
       Accordion_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X      => Accordion_Origin.X,
-         Y      => Accordion_Origin.Y,
+        (X      => Geometry.Accordion_Origin.X,
+         Y      => Geometry.Accordion_Origin.Y,
          Width  => Accordion_Frame.Width,
          Height => Accordion_Frame.Height);
       Result : Update_Result;
    begin
       if Flyology_TUI.Geometry.Contains (Breadcrumb_Bounds, Point) then
          Result := Item.Breadcrumb.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Breadcrumb_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Breadcrumb_Origin));
          Apply_Result
            (Item, Breadcrumb_Field, No_Capture, Result);
       elsif Flyology_TUI.Geometry.Contains (Table_Bounds, Point) then
          Result := Item.Table.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Table_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Table_Origin));
          Apply_Result (Item, Table_Field, No_Capture, Result);
       elsif Flyology_TUI.Geometry.Contains (Tree_Bounds, Point) then
          Result := Item.Tree.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Tree_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Tree_Origin));
          Apply_Result (Item, Tree_Field, No_Capture, Result);
       elsif Flyology_TUI.Geometry.Contains (Accordion_Bounds, Point) then
          --  Accordion consumes only its header regions. Events in the
          --  externally owned body surfaces remain unhandled by the model.
          Result := Item.Accordion.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Accordion_Origin), Layout);
+           (Flyology_TUI.Mouse.Relative
+              (Event, Geometry.Accordion_Origin), Presentation);
          Apply_Result
            (Item, Accordion_Field, Accordion_Capture, Result);
       end if;
@@ -1576,30 +1915,32 @@ procedure Kitchen_Sink is
 
    procedure Handle_Editors_Mouse
      (Item  : in out Model;
-      Event : Flyology_TUI.Events.Mouse_Event) is
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot) is
       use Flyology_TUI.Components.Interactions;
       Point : constant Flyology_TUI.Geometry.Point :=
         (X => Integer (Event.X), Y => Integer (Event.Y));
       Text_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X      => Text_Area_Origin.X,
-         Y      => Text_Area_Origin.Y,
+        (X      => Geometry.Text_Area_Origin.X,
+         Y      => Geometry.Text_Area_Origin.Y,
          Width  => Item.Text_Area.Width,
          Height => Item.Text_Area.Height);
       Syntax_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X      => Syntax_Origin.X,
-         Y      => Syntax_Origin.Y,
+        (X      => Geometry.Syntax_Origin.X,
+         Y      => Geometry.Syntax_Origin.Y,
          Width  => Item.Syntax.Width,
          Height => Item.Syntax.Height);
       Result : Update_Result;
    begin
       if Flyology_TUI.Geometry.Contains (Text_Bounds, Point) then
          Result := Item.Text_Area.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Text_Area_Origin));
+           (Flyology_TUI.Mouse.Relative
+              (Event, Geometry.Text_Area_Origin));
          Apply_Result
            (Item, Text_Area_Field, Text_Area_Capture, Result);
       elsif Flyology_TUI.Geometry.Contains (Syntax_Bounds, Point) then
          Result := Item.Syntax.Handle
-           (Flyology_TUI.Mouse.Relative (Event, Syntax_Origin));
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Syntax_Origin));
          Apply_Result (Item, Syntax_Field, Syntax_Capture, Result);
          if Result.Changed then
             Item.Syntax.Advance_Highlighting (4);
@@ -1609,13 +1950,15 @@ procedure Kitchen_Sink is
 
    procedure Handle_Chat_Mouse
      (Item  : in out Model;
-      Event : Flyology_TUI.Events.Mouse_Event)
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot)
    is
       use Flyology_TUI.Components.Interactions;
-      Layout : constant Chats.Presentation := Chat_Presentation (Item);
-      Plan : constant Chats.Layout_Plan := Chats.Layout (Layout);
+      Presentation : constant Chats.Presentation :=
+        Chat_Presentation (Item, Geometry);
+      Plan : constant Chats.Layout_Plan := Chats.Layout (Presentation);
       Local : constant Flyology_TUI.Mouse.Local_Event :=
-        Flyology_TUI.Mouse.Relative (Event, Chat_Origin);
+        Flyology_TUI.Mouse.Relative (Event, Geometry.Chat_Origin);
       Point : constant Flyology_TUI.Geometry.Point :=
         (X => Local.X, Y => Local.Y);
       Result : Update_Result;
@@ -1627,7 +1970,7 @@ procedure Kitchen_Sink is
             Id : constant Chat_Message_Id :=
               Chats.Required_Body_Id (Plan, Position);
             Body_Area : constant Flyology_TUI.Geometry.Rectangle :=
-              Chats.Body_Region (Layout, Id);
+              Chats.Body_Region (Presentation, Id);
          begin
             if Flyology_TUI.Geometry.Contains (Body_Area, Point) then
                if Id = Assistant_Message then
@@ -1643,11 +1986,11 @@ procedure Kitchen_Sink is
                   Activate (Item, Chat_Field);
                end if;
                return;
-            elsif Chats.Has_Action_Region (Layout, Id) then
+            elsif Chats.Has_Action_Region (Presentation, Id) then
                declare
                   Action_Area : constant
                     Flyology_TUI.Geometry.Rectangle :=
-                      Chats.Action_Region (Layout, Id);
+                      Chats.Action_Region (Presentation, Id);
                begin
                   if Flyology_TUI.Geometry.Contains (Action_Area, Point) then
                      if Event.Action = Flyology_TUI.Events.Mouse_Click
@@ -1664,16 +2007,17 @@ procedure Kitchen_Sink is
          end;
       end loop;
 
-      Result := Item.Chat.Handle (Local, Layout);
+      Result := Item.Chat.Handle (Local, Presentation);
       Apply_Result (Item, Chat_Field, No_Capture, Result);
    end Handle_Chat_Mouse;
 
    procedure Handle_Windows_Mouse
      (Item  : in out Model;
-      Event : Flyology_TUI.Events.Mouse_Event) is
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot) is
       use Flyology_TUI.Components.Interactions;
       Page_Event : constant Flyology_TUI.Mouse.Local_Event :=
-        Flyology_TUI.Mouse.Relative (Event, Windows_Page_Origin);
+        Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
       Point : constant Flyology_TUI.Geometry.Point :=
         (X => Page_Event.X, Y => Page_Event.Y);
       Result : Update_Result;
@@ -1693,10 +2037,10 @@ procedure Kitchen_Sink is
       begin
          if Which = Window_A then
             Result := Item.Window_A_Model.Handle
-              (Page_Event, Window_Workspace);
+              (Page_Event, Geometry.Window_Workspace);
          else
             Result := Item.Window_B_Model.Handle
-              (Page_Event, Window_Workspace);
+              (Page_Event, Geometry.Window_Workspace);
          end if;
          Apply_Window_Result (Item, Which, Result);
       end Route_Window;
@@ -1713,51 +2057,83 @@ procedure Kitchen_Sink is
       end if;
 
       if Flyology_TUI.Geometry.Contains
-        ((X => Vertical_Scroll_Origin.X,
-          Y => Vertical_Scroll_Origin.Y,
+        ((X => Geometry.Vertical_Scroll_Origin.X,
+          Y => Geometry.Vertical_Scroll_Origin.Y,
           Width => 1,
-          Height => 20),
+          Height => Geometry.Window_Workspace.Height),
          Point)
       then
          Result := Item.Vertical_Scroll.Handle
            (Flyology_TUI.Mouse.Relative
-              (Page_Event, Vertical_Scroll_Origin));
+              (Page_Event, Geometry.Vertical_Scroll_Origin));
          Apply_Result
            (Item, Vertical_Scroll_Field, Vertical_Scroll_Capture, Result);
       elsif Flyology_TUI.Geometry.Contains
-        ((X => Horizontal_Scroll_Origin.X,
-          Y => Horizontal_Scroll_Origin.Y,
-          Width => 68,
+        ((X => Geometry.Horizontal_Scroll_Origin.X,
+          Y => Geometry.Horizontal_Scroll_Origin.Y,
+          Width => Geometry.Window_Workspace.Width,
           Height => 1),
          Point)
       then
          Result := Item.Horizontal_Scroll.Handle
            (Flyology_TUI.Mouse.Relative
-              (Page_Event, Horizontal_Scroll_Origin));
+              (Page_Event, Geometry.Horizontal_Scroll_Origin));
          Apply_Result
            (Item, Horizontal_Scroll_Field,
             Horizontal_Scroll_Capture, Result);
-      elsif Flyology_TUI.Geometry.Contains (Window_Workspace, Point) then
+      elsif Flyology_TUI.Geometry.Contains
+        (Geometry.Window_Workspace, Point)
+      then
          Result := Item.Split.Handle (Page_Event);
          Apply_Result (Item, Split_Field, Split_Capture, Result);
       end if;
    end Handle_Windows_Mouse;
 
+   procedure Handle_Panels_Mouse
+     (Item : in out Model;
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot)
+   is
+      use Flyology_TUI.Components.Interactions;
+      Point : constant Flyology_TUI.Geometry.Point :=
+        (X => Integer (Event.X), Y => Integer (Event.Y));
+      Result : Update_Result;
+   begin
+      if Flyology_TUI.Geometry.Contains
+        (Geometry.Horizontal_Group_Region, Point)
+      then
+         Result := Item.Horizontal_Group.Handle
+           (Flyology_TUI.Mouse.Relative
+              (Event, Geometry.Horizontal_Group_Origin));
+         Apply_Result
+           (Item, Horizontal_Group_Field, Horizontal_Group_Capture, Result);
+      elsif Flyology_TUI.Geometry.Contains
+        (Geometry.Vertical_Group_Region, Point)
+      then
+         Result := Item.Vertical_Group.Handle
+           (Flyology_TUI.Mouse.Relative
+              (Event, Geometry.Vertical_Group_Origin));
+         Apply_Result
+           (Item, Vertical_Group_Field, Vertical_Group_Capture, Result);
+      end if;
+   end Handle_Panels_Mouse;
+
    procedure Handle_Mouse
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event) is
       use Flyology_TUI.Components.Interactions;
+      Geometry : constant Layout_Snapshot := Layout (Item);
       Tabs_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X => Page_Tabs_Origin.X,
-         Y => Page_Tabs_Origin.Y,
-         Width => Item.Pages.Width,
-         Height => 1);
+        (X => Geometry.Tabs.X,
+         Y => Geometry.Tabs.Y,
+         Width => Natural'Min (Item.Pages.Width, Geometry.Tabs.Width),
+         Height => Geometry.Tabs.Height);
       Point : constant Flyology_TUI.Geometry.Point :=
         (X => Integer (Event.Mouse.X), Y => Integer (Event.Mouse.Y));
       Result : Update_Result;
    begin
       if Item.Capture /= No_Capture then
-         Route_Captured_Mouse (Item, Event.Mouse);
+         Route_Captured_Mouse (Item, Event.Mouse, Geometry);
          return;
       end if;
 
@@ -1768,8 +2144,8 @@ procedure Kitchen_Sink is
       then
          declare
             Dropdown_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-              (X => Dropdown_Origin.X,
-               Y => Dropdown_Origin.Y,
+              (X => Geometry.Dropdown_Origin.X,
+               Y => Geometry.Dropdown_Origin.Y,
                Width => Item.Dropdown.Width,
                Height => Item.Dropdown.Height);
          begin
@@ -1783,7 +2159,7 @@ procedure Kitchen_Sink is
 
       if Flyology_TUI.Geometry.Contains (Tabs_Bounds, Point) then
          Result := Item.Pages.Handle
-           (Flyology_TUI.Mouse.Relative (Event.Mouse, Page_Tabs_Origin));
+           (Flyology_TUI.Mouse.Relative (Event.Mouse, Origin (Geometry.Tabs)));
          Apply_Result (Item, Page_Navigation, Page_Capture, Result);
          Normalize_Focus (Item);
          return;
@@ -1794,50 +2170,62 @@ procedure Kitchen_Sink is
          if Event.Mouse.Action = Flyology_TUI.Events.Mouse_Click
            and then Event.Mouse.Button = Flyology_TUI.Events.Left_Button
          then
-            if Flyology_TUI.Mouse.Contains (Text_Panel, Event.Mouse) then
+            if Flyology_TUI.Geometry.Contains (Geometry.First, Point) then
                Activate (Item, Text_Field);
-            elsif Flyology_TUI.Mouse.Contains (List_Panel, Event.Mouse) then
+            elsif Flyology_TUI.Geometry.Contains (Geometry.Third, Point) then
                Activate (Item, List_Field);
-            elsif Flyology_TUI.Mouse.Contains
-              (Viewport_Panel, Event.Mouse)
+            elsif Flyology_TUI.Geometry.Contains (Geometry.Second, Point)
             then
                Activate (Item, Viewport_Field);
-            elsif Flyology_TUI.Mouse.Contains (Form_Panel, Event.Mouse) then
+            elsif Flyology_TUI.Geometry.Contains (Geometry.Fourth, Point) then
                Activate (Item, Form_Field);
             end if;
          end if;
 
-         if Flyology_TUI.Mouse.Contains (Text_Content, Event.Mouse) then
+         if Flyology_TUI.Geometry.Contains (Geometry.Text_Content, Point) then
             Item.Input.Update
-              (Flyology_TUI.Mouse.Localize (Event, Text_Content));
-         elsif Flyology_TUI.Mouse.Contains (List_Content, Event.Mouse) then
+              (Flyology_TUI.Mouse.Localize
+                 (Event, Mouse_Region (Geometry.Text_Content)));
+         elsif Flyology_TUI.Geometry.Contains
+           (Geometry.List_Content, Point)
+         then
             Item.Choices.Update
-              (Flyology_TUI.Mouse.Localize (Event, List_Content));
-         elsif Flyology_TUI.Mouse.Contains (Viewport_Content, Event.Mouse) then
+              (Flyology_TUI.Mouse.Localize
+                 (Event, Mouse_Region (Geometry.List_Content)));
+         elsif Flyology_TUI.Geometry.Contains
+           (Geometry.Viewport_Content, Point)
+         then
             Item.Viewport.Update
-              (Flyology_TUI.Mouse.Localize (Event, Viewport_Content));
-         elsif Flyology_TUI.Mouse.Contains (Form_Content, Event.Mouse) then
+              (Flyology_TUI.Mouse.Localize
+                 (Event, Mouse_Region (Geometry.Viewport_Content)));
+         elsif Flyology_TUI.Geometry.Contains
+           (Geometry.Form_Content, Point)
+         then
             Item.Form.Update
-              (Flyology_TUI.Mouse.Localize (Event, Form_Content));
+              (Flyology_TUI.Mouse.Localize
+                 (Event, Mouse_Region (Geometry.Form_Content)));
          end if;
       when Controls_Page =>
-         Handle_Controls_Mouse (Item, Event.Mouse);
+         Handle_Controls_Mouse (Item, Event.Mouse, Geometry);
       when Telemetry_Page =>
-         Handle_Telemetry_Mouse (Item, Event.Mouse);
+         Handle_Telemetry_Mouse (Item, Event.Mouse, Geometry);
       when Navigation_Page =>
-         Handle_Navigation_Mouse (Item, Event.Mouse);
+         Handle_Navigation_Mouse (Item, Event.Mouse, Geometry);
       when Editors_Page =>
-         Handle_Editors_Mouse (Item, Event.Mouse);
+         Handle_Editors_Mouse (Item, Event.Mouse, Geometry);
       when Chat_Page =>
-         Handle_Chat_Mouse (Item, Event.Mouse);
+         Handle_Chat_Mouse (Item, Event.Mouse, Geometry);
+      when Panels_Page =>
+         Handle_Panels_Mouse (Item, Event.Mouse, Geometry);
       when Windows_Page =>
-         Handle_Windows_Mouse (Item, Event.Mouse);
+         Handle_Windows_Mouse (Item, Event.Mouse, Geometry);
       end case;
    end Handle_Mouse;
 
    procedure Handle_Focused_Key
      (Item  : in out Model;
-      Event : Flyology_TUI.Events.Terminal_Event) is
+      Event : Flyology_TUI.Events.Terminal_Event;
+      Geometry : Layout_Snapshot) is
       use Flyology_TUI.Components.Interactions;
       Result : Update_Result;
    begin
@@ -1896,30 +2284,39 @@ procedure Kitchen_Sink is
          when Chat_Stream_Field =>
             Result := Item.Chat_Stream.Handle (Event);
             Apply_Result (Item, Chat_Stream_Field, No_Capture, Result);
+         when Horizontal_Group_Field =>
+            Result := Item.Horizontal_Group.Handle (Event);
+            Apply_Result
+              (Item, Horizontal_Group_Field,
+               Horizontal_Group_Capture, Result);
+         when Vertical_Group_Field =>
+            Result := Item.Vertical_Group.Handle (Event);
+            Apply_Result
+              (Item, Vertical_Group_Field, Vertical_Group_Capture, Result);
          when Window_Field =>
             if Item.Focused_Window = Window_A
               and then Item.Window_A_Visible
             then
                Result := Item.Window_A_Model.Handle
-                 (Event, Window_Workspace);
+                 (Event, Geometry.Window_Workspace);
                Apply_Window_Result (Item, Window_A, Result);
             elsif Item.Focused_Window = Window_B
               and then Item.Window_B_Visible
             then
                Result := Item.Window_B_Model.Handle
-                 (Event, Window_Workspace);
+                 (Event, Geometry.Window_Workspace);
                Apply_Window_Result (Item, Window_B, Result);
             elsif Item.Window_A_Visible then
                Item.Focused_Window := Window_A;
                Activate (Item, Window_Field);
                Result := Item.Window_A_Model.Handle
-                 (Event, Window_Workspace);
+                 (Event, Geometry.Window_Workspace);
                Apply_Window_Result (Item, Window_A, Result);
             elsif Item.Window_B_Visible then
                Item.Focused_Window := Window_B;
                Activate (Item, Window_Field);
                Result := Item.Window_B_Model.Handle
-                 (Event, Window_Workspace);
+                 (Event, Geometry.Window_Workspace);
                Apply_Window_Result (Item, Window_B, Result);
             end if;
          when Split_Field =>
@@ -1977,6 +2374,10 @@ procedure Kitchen_Sink is
         or else Is_Control_C (Event.Terminal)
       then
          Transitions.Quit (Next);
+      elsif Event.Terminal.Kind = Flyology_TUI.Events.Resize then
+         Set_Terminal_Size
+           (Item, Event.Terminal.Width, Event.Terminal.Height);
+         Normalize_Focus (Item);
       elsif Event.Terminal.Kind = Flyology_TUI.Events.Key_Press
         and then Event.Terminal.Key.Kind = Flyology_TUI.Events.Tab_Key
         and then not Item.Dropdown.Is_Open
@@ -1985,7 +2386,7 @@ procedure Kitchen_Sink is
       elsif Event.Terminal.Kind = Flyology_TUI.Events.Mouse_Input then
          Handle_Mouse (Item, Event.Terminal);
       else
-         Handle_Focused_Key (Item, Event.Terminal);
+         Handle_Focused_Key (Item, Event.Terminal, Layout (Item));
       end if;
    end Update;
 
@@ -2015,9 +2416,27 @@ procedure Kitchen_Sink is
       return Flyology_TUI.Layouts.Render (Box, Body_Surface);
    end Panel;
 
-   function Basics_View (Item : Model) return Flyology_TUI.Surfaces.Surface is
+   procedure Overlay_Region
+     (Canvas   : in out Flyology_TUI.Surfaces.Surface;
+      Content  : Flyology_TUI.Surfaces.Surface;
+      Region   : Flyology_TUI.Geometry.Rectangle;
+      Geometry : Layout_Snapshot)
+   is
+      Slot : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (Region.Width, Region.Height);
+   begin
+      Slot.Overlay_Clipped (Content, 0, 0);
+      Canvas.Overlay_Clipped
+        (Slot, Region.X - Geometry.Content.X,
+         Region.Y - Geometry.Content.Y);
+   end Overlay_Region;
+
+   function Basics_View
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface is
       Canvas : Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Surfaces.Create (68, 20);
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
       Input_Panel : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Text input", Item.Input.Render (Visual),
@@ -2036,18 +2455,20 @@ procedure Kitchen_Sink is
            Item.Form.Render (Visual), Item.Focus = Form_Field,
            Visual.Border, Visual.Muted);
    begin
-      Canvas.Overlay_Clipped (Input_Panel, 0, 0);
-      Canvas.Overlay_Clipped (List_View, 0, 8);
-      Canvas.Overlay_Clipped (Viewport_View, 31, 0);
-      Canvas.Overlay_Clipped (Form_View, 31, 12);
+      Overlay_Region (Canvas, Input_Panel, Geometry.First, Geometry);
+      Overlay_Region (Canvas, List_View, Geometry.Third, Geometry);
+      Overlay_Region (Canvas, Viewport_View, Geometry.Second, Geometry);
+      Overlay_Region (Canvas, Form_View, Geometry.Fourth, Geometry);
       return Canvas;
    end Basics_View;
 
    function Controls_View
-     (Item : Model) return Flyology_TUI.Surfaces.Surface
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
    is
       Canvas : Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Surfaces.Create (68, 20);
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
       Action_Content : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Vertically
           (Item.Button.Render (Visual, Item.Focus = Button_Field),
@@ -2074,19 +2495,21 @@ procedure Kitchen_Sink is
            Item.Dropdown.Render (Visual, Item.Focus = Dropdown_Field),
            Item.Focus = Dropdown_Field, Visual.Border, Visual.Muted);
    begin
-      Canvas.Overlay_Clipped (Action_View, 0, 0);
-      Canvas.Overlay_Clipped (Radio_View, 28, 0);
-      Canvas.Overlay_Clipped (Selector_View, 0, 9);
-      Canvas.Overlay_Clipped (Dropdown_View, 36, 9);
+      Overlay_Region (Canvas, Action_View, Geometry.First, Geometry);
+      Overlay_Region (Canvas, Radio_View, Geometry.Second, Geometry);
+      Overlay_Region (Canvas, Selector_View, Geometry.Third, Geometry);
+      Overlay_Region (Canvas, Dropdown_View, Geometry.Fourth, Geometry);
       return Canvas;
    end Controls_View;
 
    function Telemetry_View
-     (Item : Model) return Flyology_TUI.Surfaces.Surface
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
    is
       package Indicators renames Flyology_TUI.Components.Indicators;
       Canvas : Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Surfaces.Create (68, 20);
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
       Work_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Work progress", Item.Work.Render (Visual),
@@ -2095,7 +2518,9 @@ procedure Kitchen_Sink is
         Panel
           ("Bounded series",
            Sparklines.Render
-             (Item.Samples, 28, Sparklines.Automatic, Visual),
+             (Item.Samples,
+              Inset_Panel (Geometry.Second).Width,
+              Sparklines.Automatic, Visual),
            False, Visual.Border, Visual.Muted);
       Aggregate : constant Work_Progress.Fraction :=
         Item.Work.Weighted_Total;
@@ -2122,32 +2547,42 @@ procedure Kitchen_Sink is
               ("paused tests", Indicators.Normal, Indicators.Warning_Tone),
             Indicators.Make_Segment
               ("ring:32", Indicators.Low, Indicators.Neutral)],
-           64,
+           Geometry.Content.Width,
            Visual);
       Indicator_Content : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Vertically
-          (Indicators.Divider (64, "telemetry", Visual),
+          (Indicators.Divider
+             (Geometry.Content.Width, "telemetry", Visual),
            Flyology_TUI.Layouts.Join_Vertically
              (Summary,
               Flyology_TUI.Layouts.Join_Vertically
-                (Item.Work.Render_Segments (64, Visual), Status),
+                (Item.Work.Render_Segments
+                   (Geometry.Content.Width, Visual), Status),
               Gap => 1));
       Indicator_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Immediate indicators", Indicator_Content,
            False, Visual.Border, Visual.Muted);
    begin
-      Canvas.Overlay_Clipped (Work_View, 0, 0);
-      Canvas.Overlay_Clipped (Spark_View, 36, 0);
-      Canvas.Overlay_Clipped (Indicator_View, 0, 9);
+      Overlay_Region (Canvas, Work_View, Geometry.First, Geometry);
+      Overlay_Region (Canvas, Spark_View, Geometry.Second, Geometry);
+      Overlay_Region
+        (Canvas, Indicator_View,
+         (X => Geometry.Third.X,
+          Y => Geometry.Third.Y,
+          Width => Geometry.Content.Width,
+          Height => Geometry.Third.Height),
+         Geometry);
       return Canvas;
    end Telemetry_View;
 
    function Navigation_View
-     (Item : Model) return Flyology_TUI.Surfaces.Surface
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
    is
       Canvas : Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Surfaces.Create (68, 20);
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
       Breadcrumb_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Breadcrumbs",
@@ -2165,17 +2600,17 @@ procedure Kitchen_Sink is
            Item.Tree.Render (Visual, Item.Focus = Tree_Field),
            Item.Focus = Tree_Field, Visual.Border, Visual.Muted);
       Accordion_Layout : constant Accordions.Presentation :=
-        Accordion_Presentation (Item);
+        Accordion_Presentation (Item, Inset_Panel (Geometry.Fourth).Width);
       Accordion_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("External accordion bodies",
            Accordions.Frame (Accordion_Layout),
            Item.Focus = Accordion_Field, Visual.Border, Visual.Muted);
    begin
-      Canvas.Overlay_Clipped (Breadcrumb_View, 0, 0);
-      Canvas.Overlay_Clipped (Table_View, 0, 7);
-      Canvas.Overlay_Clipped (Tree_View, 36, 0);
-      Canvas.Overlay_Clipped (Accordion_View, 36, 10);
+      Overlay_Region (Canvas, Breadcrumb_View, Geometry.First, Geometry);
+      Overlay_Region (Canvas, Table_View, Geometry.Third, Geometry);
+      Overlay_Region (Canvas, Tree_View, Geometry.Second, Geometry);
+      Overlay_Region (Canvas, Accordion_View, Geometry.Fourth, Geometry);
       return Canvas;
    end Navigation_View;
 
@@ -2203,10 +2638,12 @@ procedure Kitchen_Sink is
    end Syntax_Look;
 
    function Editors_View
-     (Item : Model) return Flyology_TUI.Surfaces.Surface
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
    is
       Canvas : Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Surfaces.Create (68, 20);
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
       Text_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Text area · no wrap",
@@ -2218,21 +2655,67 @@ procedure Kitchen_Sink is
            Item.Syntax.Render (Syntax_Look),
            Item.Focus = Syntax_Field, Visual.Border, Visual.Muted);
    begin
-      Canvas.Overlay_Clipped (Text_View, 0, 0);
-      Canvas.Overlay_Clipped (Code_View, 34, 0);
+      if Geometry.Right_Full.Width > 0 then
+         Overlay_Region (Canvas, Text_View, Geometry.Left_Full, Geometry);
+         Overlay_Region (Canvas, Code_View, Geometry.Right_Full, Geometry);
+      else
+         Overlay_Region (Canvas, Text_View, Geometry.Top_Full, Geometry);
+         Overlay_Region (Canvas, Code_View, Geometry.Bottom_Full, Geometry);
+      end if;
       return Canvas;
    end Editors_View;
 
    function Chat_View
-     (Item : Model) return Flyology_TUI.Surfaces.Surface
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
    is
-      Layout : constant Chats.Presentation := Chat_Presentation (Item);
+      Presentation : constant Chats.Presentation :=
+        Chat_Presentation (Item, Geometry);
    begin
-      return Chats.Frame (Layout);
+      return Chats.Frame (Presentation);
    end Chat_View;
 
+   function Panels_View
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
+      Horizontal_View : constant Flyology_TUI.Surfaces.Surface :=
+        Item.Horizontal_Group.Render
+          ([Flyology_TUI.Surfaces.From_Text
+              ("NAVIGATION" & Wide_Wide_Character'Val (10)
+               & "shared vertical boundaries"),
+            Flyology_TUI.Surfaces.From_Text
+              ("WORKSPACE" & Wide_Wide_Character'Val (10)
+               & "drag a divider with the mouse"),
+            Flyology_TUI.Surfaces.From_Text
+              ("INSPECTOR" & Wide_Wide_Character'Val (10)
+               & "tab selects a boundary")],
+           Visual);
+      Vertical_View : constant Flyology_TUI.Surfaces.Surface :=
+        Item.Vertical_Group.Render
+          ([Flyology_TUI.Surfaces.From_Text
+              ("TIMELINE · weighted growth"),
+            Flyology_TUI.Surfaces.From_Text
+              ("DETAILS · arrows resize the focused boundary"),
+            Flyology_TUI.Surfaces.From_Text
+              ("STATUS · pane minimums remain bounded")],
+           Visual);
+   begin
+      Overlay_Region
+        (Canvas, Horizontal_View,
+         Geometry.Horizontal_Group_Region, Geometry);
+      Overlay_Region
+        (Canvas, Vertical_View,
+         Geometry.Vertical_Group_Region, Geometry);
+      return Canvas;
+   end Panels_View;
+
    function Windows_View
-     (Item : Model) return Flyology_TUI.Surfaces.Surface
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
    is
       Base : constant Flyology_TUI.Surfaces.Surface :=
         Item.Split.Render
@@ -2291,13 +2774,15 @@ procedure Kitchen_Sink is
          else Window_B_Bounds);
    begin
       return Flyology_TUI.Layouts.Layers.Compose
-        (68,
-         20,
+        (Geometry.Content.Width,
+         Geometry.Content.Height,
          [(Content => Base, X => 0, Y => 0,
            Transparent_Spaces => False),
-          (Content => Vertical_Bar, X => 67, Y => 0,
+          (Content => Vertical_Bar,
+           X => Geometry.Vertical_Scroll_Origin.X, Y => 0,
            Transparent_Spaces => True),
-          (Content => Horizontal_Bar, X => 0, Y => 19,
+          (Content => Horizontal_Bar, X => 0,
+           Y => Geometry.Horizontal_Scroll_Origin.Y,
            Transparent_Spaces => True),
           (Content => Lower_Window, X => Lower_Bounds.X, Y => Lower_Bounds.Y,
            Transparent_Spaces => False),
@@ -2306,6 +2791,7 @@ procedure Kitchen_Sink is
    end Windows_View;
 
    function Present (Item : Model) return Flyology_TUI.Views.View is
+      Geometry : constant Layout_Snapshot := Layout (Item);
       procedure Place_Text_Cursor
         (Target : in out Flyology_TUI.Views.View)
       is
@@ -2344,8 +2830,9 @@ procedure Kitchen_Sink is
                      if Gutter + Relative < Item.Text_Area.Width then
                         Target.Cursor :=
                           (Visible => True,
-                           X       => Text_Area_Origin.X + Gutter + Relative,
-                           Y       => Text_Area_Origin.Y + Row,
+                           X       => Geometry.Text_Area_Origin.X
+                             + Gutter + Relative,
+                           Y       => Geometry.Text_Area_Origin.Y + Row,
                            Shape   => Flyology_TUI.Views.Cursor_Bar,
                            Blink   => False);
                      end if;
@@ -2399,8 +2886,9 @@ procedure Kitchen_Sink is
                               Target.Cursor :=
                                 (Visible => True,
                                  X       =>
-                                   Syntax_Origin.X + Gutter + Relative,
-                                 Y       => Syntax_Origin.Y + Row,
+                                   Geometry.Syntax_Origin.X
+                                     + Gutter + Relative,
+                                 Y       => Geometry.Syntax_Origin.Y + Row,
                                  Shape   => Flyology_TUI.Views.Cursor_Bar,
                                  Blink   => False);
                            end if;
@@ -2425,13 +2913,14 @@ procedure Kitchen_Sink is
         Item.Pages.Render (Visual, Item.Focus = Page_Navigation);
       Page : constant Flyology_TUI.Surfaces.Surface :=
         (case Current_Page (Item) is
-            when Basics_Page   => Basics_View (Item),
-            when Controls_Page => Controls_View (Item),
-            when Navigation_Page => Navigation_View (Item),
-            when Editors_Page => Editors_View (Item),
-            when Telemetry_Page => Telemetry_View (Item),
-            when Chat_Page       => Chat_View (Item),
-            when Windows_Page   => Windows_View (Item));
+            when Basics_Page   => Basics_View (Item, Geometry),
+            when Controls_Page => Controls_View (Item, Geometry),
+            when Navigation_Page => Navigation_View (Item, Geometry),
+            when Editors_Page => Editors_View (Item, Geometry),
+            when Telemetry_Page => Telemetry_View (Item, Geometry),
+            when Chat_Page       => Chat_View (Item, Geometry),
+            when Panels_Page     => Panels_View (Item, Geometry),
+            when Windows_Page   => Windows_View (Item, Geometry));
       Help : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Components.Help.Render
           ([(Key => U ("tab"),
@@ -2441,18 +2930,29 @@ procedure Kitchen_Sink is
             (Key => U ("mouse"),
              Description => U ("activate"), Enabled => True),
             (Key => U ("ctrl-c"), Description => U ("quit"), Enabled => True)],
-           Width => 68, Vertical => False, Theme => Visual);
-      Dashboard : constant Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Layouts.Join_Vertically
-          (Flyology_TUI.Layouts.Join_Horizontally (Header, Meter, Gap => 3),
-           Flyology_TUI.Layouts.Join_Vertically
-             (Page_Bar,
-              Flyology_TUI.Layouts.Join_Vertically (Page, Help, Gap => 1),
-              Gap => 1),
-           Gap => 1);
-      Result : Flyology_TUI.Views.View :=
-        Flyology_TUI.Views.From_Surface (Dashboard);
+           Width => Geometry.Width, Vertical => False, Theme => Visual);
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (Geometry.Width, Geometry.Height);
+      Result : Flyology_TUI.Views.View;
    begin
+      if Geometry.Header.Height > 0 then
+         Canvas.Overlay_Clipped (Header, Geometry.Header.X, Geometry.Header.Y);
+         Canvas.Overlay_Clipped
+           (Meter,
+            Integer'Max
+              (Geometry.Header.X,
+               Integer (Geometry.Width) - Integer (Meter.Width)),
+            Geometry.Header.Y);
+      end if;
+      if Geometry.Tabs.Height > 0 then
+         Canvas.Overlay_Clipped (Page_Bar, Geometry.Tabs.X, Geometry.Tabs.Y);
+      end if;
+      Canvas.Overlay_Clipped
+        (Page, Geometry.Content.X, Geometry.Content.Y);
+      if Geometry.Help.Height > 0 then
+         Canvas.Overlay_Clipped (Help, Geometry.Help.X, Geometry.Help.Y);
+      end if;
+      Result := Flyology_TUI.Views.From_Surface (Canvas);
       Result.Alternate_Screen := True;
       Result.Mouse := Flyology_TUI.Views.Button_Events;
       Result.Report_Focus := True;
@@ -2461,11 +2961,17 @@ procedure Kitchen_Sink is
       if Current_Page (Item) = Basics_Page
         and then Item.Focus = Text_Field
       then
-         Result.Cursor.Visible := True;
-         Result.Cursor.X := Text_Content.X + Item.Input.Cursor_Column;
-         Result.Cursor.Y := Text_Content.Y;
-         Result.Cursor.Shape := Flyology_TUI.Views.Cursor_Bar;
-         Result.Cursor.Blink := False;
+         if Geometry.Text_Content.Y < Integer (Geometry.Height)
+           and then Geometry.Text_Content.X + Item.Input.Cursor_Column
+             < Integer (Geometry.Width)
+         then
+            Result.Cursor.Visible := True;
+            Result.Cursor.X :=
+              Geometry.Text_Content.X + Item.Input.Cursor_Column;
+            Result.Cursor.Y := Geometry.Text_Content.Y;
+            Result.Cursor.Shape := Flyology_TUI.Views.Cursor_Bar;
+            Result.Cursor.Blink := False;
+         end if;
       elsif Current_Page (Item) = Basics_Page
         and then Item.Focus = Form_Field
         and then not Item.Form.Submitted
@@ -2475,11 +2981,15 @@ procedure Kitchen_Sink is
             X, Y : Natural;
          begin
             Item.Form.Cursor_Position (X, Y);
-            Result.Cursor.Visible := True;
-            Result.Cursor.X := Form_Content.X + X;
-            Result.Cursor.Y := Form_Content.Y + Y;
-            Result.Cursor.Shape := Flyology_TUI.Views.Cursor_Bar;
-            Result.Cursor.Blink := False;
+            if Geometry.Form_Content.X + X < Integer (Geometry.Width)
+              and then Geometry.Form_Content.Y + Y < Integer (Geometry.Height)
+            then
+               Result.Cursor.Visible := True;
+               Result.Cursor.X := Geometry.Form_Content.X + X;
+               Result.Cursor.Y := Geometry.Form_Content.Y + Y;
+               Result.Cursor.Shape := Flyology_TUI.Views.Cursor_Bar;
+               Result.Cursor.Blink := False;
+            end if;
          end;
       elsif Current_Page (Item) = Editors_Page
         and then Item.Focus = Text_Area_Field
@@ -2489,6 +2999,13 @@ procedure Kitchen_Sink is
         and then Item.Focus = Syntax_Field
       then
          Place_Syntax_Cursor (Result);
+      end if;
+      if Result.Cursor.Visible
+        and then
+          (Result.Cursor.X >= Geometry.Width
+           or else Result.Cursor.Y >= Geometry.Height)
+      then
+         Result.Cursor.Visible := False;
       end if;
       return Result;
    end Present;

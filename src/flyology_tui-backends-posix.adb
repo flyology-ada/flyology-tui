@@ -93,6 +93,7 @@ package body Flyology_TUI.Backends.POSIX is
       if Item.Is_Open then
          return;
       end if;
+      Item.Size_Available := False;
       Item.Raw_State := Raw_Enable (Input_FD);
       if Item.Raw_State = System.Null_Address then
          raise Backend_Error with
@@ -114,8 +115,20 @@ package body Flyology_TUI.Backends.POSIX is
          Item.Last_Width := Width;
          Item.Last_Height := Height;
       end if;
+      Item.Size_Available := Valid;
       Item.Is_Open := True;
    end Open;
+
+   overriding procedure Current_Size
+     (Item      : POSIX_Backend;
+      Width     : in out Natural;
+      Height    : in out Natural;
+      Available : in out Boolean) is
+   begin
+      Width := Item.Last_Width;
+      Height := Item.Last_Height;
+      Available := Item.Is_Open and then Item.Size_Available;
+   end Current_Size;
 
    overriding procedure Close (Item : in out POSIX_Backend) is
       Output : Ada.Strings.Unbounded.Unbounded_String;
@@ -144,6 +157,7 @@ package body Flyology_TUI.Backends.POSIX is
       Item.Wake_Read := -1;
       Item.Wake_Write := -1;
       Item.Is_Open := False;
+      Item.Size_Available := False;
    end Close;
 
    overriding procedure Next_Event
@@ -172,10 +186,13 @@ package body Flyology_TUI.Backends.POSIX is
          Read_Size (Width, Height, Valid);
          if Valid
            and then
-             (Width /= Item.Last_Width or else Height /= Item.Last_Height)
+             (not Item.Size_Available
+              or else Width /= Item.Last_Width
+              or else Height /= Item.Last_Height)
          then
             Item.Last_Width := Width;
             Item.Last_Height := Height;
+            Item.Size_Available := True;
             Event := Flyology_TUI.Events.Resized (Width, Height);
             Status := Event_Available;
             return;

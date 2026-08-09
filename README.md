@@ -24,8 +24,13 @@ Flyology-aware adapter can be added separately.
 - stateful cell diffing and declarative ANSI/DEC terminal modes;
 - raw-mode POSIX lifecycle, resize observation, and interruptible waits;
 - deterministic headless backend;
-- spinner, progress, viewport, text input, list, help, and form components;
-- an interactive counter example and nested behavioral test crate.
+- buttons, checks, radios, selectors, dropdowns, tabs, and accordions;
+- tables, trees, breadcrumbs, lists, forms, viewports, and help;
+- spinners, progress groups, indicators, sparklines, and scrollbars;
+- split panes, jointly resizable panel groups, and movable/resizable windows;
+- bounded text areas, syntax editors, streaming text, and chat transcripts;
+- interactive counter and responsive kitchen-sink examples plus a nested
+  behavioral test crate.
 
 Unicode handling covers the combining marks, variation selectors, emoji
 modifiers, ZWJ sequences, and wide ranges commonly used by terminals. It is a
@@ -86,6 +91,8 @@ live model reference.
   form the presentation model.
 - `Input` and `Renderers` translate terminal bytes without owning a terminal.
 - `Backends.POSIX` owns real terminal state; `Backends.Headless` is for tests.
+  Both can report the size sampled during `Open`, allowing the runner to
+  deliver an initial resize before the first frame.
 - `Runners` supplies bounded input/effect orchestration.
 - `Components.*` supplies reusable models and surface renderers.
 
@@ -122,16 +129,33 @@ alr build
 alr test
 ```
 
-The test action builds the library, runs the nested headless behavioral suite,
-and compiles the POSIX counter example. To run the example in a terminal:
+The root test action builds the library, runs the nested behavioral suite, and
+builds the nested examples crate. The nested crates can also be built directly:
+
+```sh
+cd tests && alr build
+cd ../examples && alr build
+```
+
+To run an example in a terminal from the repository root:
 
 ```sh
 alr exec -- ./examples/bin/counter
 alr exec -- ./examples/bin/kitchen_sink
 ```
 
-The test suite is a nested Alire crate pinned to the parent library, keeping
-test-only build state outside the published dependency set.
+The examples and test suite are nested Alire crates pinned to the parent
+library, keeping their build state outside the published dependency set. The
+kitchen sink occupies the complete terminal, recomputes one layout snapshot on
+every resize, and uses that snapshot for rendering, mouse routing, and cursor
+projection. Narrow terminals stack component regions instead of retaining the
+wide two-column arrangement.
+
+## Explicit backlog
+
+- bounded Markdown editor and viewer components;
+- terminal color-capability negotiation and graceful palette fallback;
+- application-composed menubars and menu routing.
 
 ## Platform boundary
 

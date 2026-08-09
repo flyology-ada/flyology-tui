@@ -18,6 +18,10 @@ alr build
 ./bin/editing_tests
 ./bin/streaming_text_tests
 ./bin/chat_tests
+./bin/panel_group_tests
+
+cd "$root_dir"
+./scripts/test-posix-initial-size.sh
 
 cd "$root_dir"
 alr exec -- gprbuild -P tests/editor_lifecycle_tests.gpr -p
@@ -25,3 +29,6 @@ alr exec -- gprbuild -P tests/editor_lifecycle_tests.gpr -p
 
 cd "$root_dir/examples"
 alr build
+
+cd "$root_dir"
+./scripts/test-kitchen-resize.sh

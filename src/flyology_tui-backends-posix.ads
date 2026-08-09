@@ -10,6 +10,11 @@ package Flyology_TUI.Backends.POSIX is
      new Ada.Finalization.Limited_Controlled and Backend with private;
 
    overriding procedure Open (Item : in out POSIX_Backend);
+   overriding procedure Current_Size
+     (Item      : POSIX_Backend;
+      Width     : in out Natural;
+      Height    : in out Natural;
+      Available : in out Boolean);
    overriding procedure Close (Item : in out POSIX_Backend);
    overriding procedure Next_Event
      (Item   : in out POSIX_Backend;
@@ -29,6 +34,7 @@ private
       Wake_Write    : aliased Interfaces.C.int := -1;
       Last_Width    : Natural := 0;
       Last_Height   : Natural := 0;
+      Size_Available : Boolean := False;
       Input_Parser  : Flyology_TUI.Input.Parser;
       Frame_Renderer : Flyology_TUI.Renderers.Renderer;
    end record;

@@ -13,6 +13,16 @@ package Flyology_TUI.Backends is
 
    procedure Open (Item : in out Backend) is abstract;
 
+   --  Report the terminal size observed by Open. Callers initialize the
+   --  in-out values to unknown geometry; the default null primitive preserves
+   --  those values for backends without a meaningful terminal size. Runners
+   --  use this query to deliver Resize before the first rendered frame.
+   procedure Current_Size
+     (Item      : Backend;
+      Width     : in out Natural;
+      Height    : in out Natural;
+      Available : in out Boolean) is null;
+
    --  Close is idempotent and restores every terminal mode changed by Open or
    --  Render. It may be called after partial initialization.
    procedure Close (Item : in out Backend) is abstract;

@@ -99,10 +99,20 @@ uses SGR coordinates and is disabled during backend restoration.
 
 ## Backend contract
 
-`Backends.Backend` defines `Open`, `Next_Event`, `Render`, `Interrupt`, and
-`Close`. It contains no file descriptor, `termios`, signal, or Windows console
-type. `Close` is idempotent and must restore every terminal mode enabled by the
-backend, including after partial initialization.
+`Backends.Backend` defines `Open`, `Current_Size`, `Next_Event`, `Render`,
+`Interrupt`, and `Close`. It contains no file descriptor, `termios`, signal, or
+Windows console type. `Current_Size` is a concrete, defaulted primitive: a
+backend without an opening-size sample leaves the caller's unknown values
+unchanged, preserving compatibility with minimal backends. When a sample is
+available, the runner synchronously dispatches its resize before the first
+render. `Close` is idempotent and must restore every terminal mode enabled by
+the backend, including after partial initialization.
+
+`Initialize` and the synthetic opening resize remain two ordered transitions.
+The runner snapshots an initialize command, dispatches resize serially,
+renders the resulting model, starts its workers, and then enqueues initialize
+and resize commands in that order. Starting the command worker before those
+puts preserves bounded backpressure even when command capacity is one.
 
 `Backends.POSIX` currently supplies macOS and Linux operation:
 
@@ -119,7 +129,8 @@ timeouts, rendering, ownership order, and error policy stay in Ada. See
 [posix-bridge.md](posix-bridge.md).
 
 `Backends.Headless` provides a bounded event source and records the most recent
-view and render count. It exercises the same runner without changing a process
+view and render count. Tests may configure its opening size without consuming
+an event-buffer entry. It exercises the same runner without changing a process
 terminal.
 
 ## Components
@@ -127,16 +138,37 @@ terminal.
 Components own only local interaction state and return surfaces. They do not
 start tasks, execute commands, or retain a backend. The current set includes:
 
-- spinner and progress indicators;
-- scrollable viewports;
-- grapheme-aware text editing and horizontal cursor scrolling;
-- generic selectable lists;
-- key-binding help;
-- multi-field forms composed from text inputs.
+- controls: buttons, check boxes, radio groups, selectors, dropdowns, tabs,
+  accordions, and forms;
+- navigation and data: breadcrumbs, lists, tables, trees, and viewports;
+- telemetry: spinners, progress and progress groups, immediate indicators,
+  sparklines, scrollbars, and streaming text;
+- composition: boxes, split panes, panel groups with shared boundaries, and
+  movable/resizable windows;
+- editing and conversation: grapheme-aware text inputs and text areas,
+  caller-budgeted syntax editors, and chat transcripts.
 
 Applications decide how component state fits into their model and route events
 explicitly. This keeps focus, validation, and command policy visible in the
 application update function.
+
+## Responsive application layout
+
+Component geometry belongs to the application, not to a backend or theme. A
+responsive application derives an immutable layout snapshot from its current
+terminal dimensions. The same snapshot must drive the corresponding `Present`
+call, hit testing and coordinate localization, and cursor projection. This
+prevents a resize from producing a frame with one geometry while input or the
+cursor still uses another.
+
+The kitchen sink demonstrates the contract. Its wide layout uses paired
+columns at 56 cells or wider; below 56 cells it stacks regions vertically.
+The header and page tabs occupy the first two rows, help occupies the final row
+when at least three rows exist, and page content receives the bounded remainder.
+On each resize it updates the size-bearing component models before presenting.
+Components whose content has an intrinsic width, such as a button or text input, remain
+application-owned children and are clipped by their assigned responsive
+region.
 
 ## Runtime independence and future platforms
 
