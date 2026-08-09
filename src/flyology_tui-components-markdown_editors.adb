@@ -219,10 +219,11 @@ package body Flyology_TUI.Components.Markdown_Editors is
       Event : Flyology_TUI.Events.Terminal_Event)
       return Flyology_TUI.Components.Interactions.Update_Result
    is
-      Result : constant Flyology_TUI.Components.Interactions.Update_Result :=
-        Item.Source_Core.Handle (Event);
+      Before : constant Wide_Wide_String := Item.Source_Core.Value;
+      Result : Flyology_TUI.Components.Interactions.Update_Result;
    begin
-      if Result.Changed then
+      Result := Item.Source_Core.Handle (Event);
+      if Item.Source_Core.Value /= Before then
          Synchronize_Preview (Item);
       end if;
       return Result;
@@ -233,10 +234,11 @@ package body Flyology_TUI.Components.Markdown_Editors is
       Event : Flyology_TUI.Mouse.Local_Event)
       return Flyology_TUI.Components.Interactions.Update_Result
    is
-      Result : constant Flyology_TUI.Components.Interactions.Update_Result :=
-        Item.Source_Core.Handle (Event);
+      Before : constant Wide_Wide_String := Item.Source_Core.Value;
+      Result : Flyology_TUI.Components.Interactions.Update_Result;
    begin
-      if Result.Changed then
+      Result := Item.Source_Core.Handle (Event);
+      if Item.Source_Core.Value /= Before then
          Synchronize_Preview (Item);
       end if;
       return Result;
@@ -270,6 +272,13 @@ package body Flyology_TUI.Components.Markdown_Editors is
      (Item : Model)
       return Flyology_TUI.Components.Markdown_Viewers.Unsupported_Set is
      (Item.Preview_Core.Unsupported);
+
+   function Preview_First_Visible_Row (Item : Model) return Natural is
+     (Item.Preview_Core.First_Visible_Row);
+
+   function Preview_Focused_Link
+     (Item : Model) return Flyology_TUI.Components.Markdown_Viewers.Link_Id is
+     (Item.Preview_Core.Focused_Link);
 
    function Render_Source
      (Item : Model; Look : Appearance)

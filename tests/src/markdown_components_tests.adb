@@ -120,7 +120,7 @@ procedure Markdown_Components_Tests is
          Assert
            (Viewers.Has_Link (Layout, 1),
             "visible link has no hit region");
-         Region := Viewers.Link_Region (Layout, 1);
+         Region := Viewers.Link_Region (Layout, 1, 1);
          Result := Item.Handle
            (Mouse (Region.X, Region.Y, Flyology_TUI.Events.Mouse_Click),
             Layout);
@@ -168,15 +168,112 @@ procedure Markdown_Components_Tests is
 
       declare
          Bounded : Viewers.Model := Viewers.Create (100, 8, 1, 20, 4);
+         Result : Viewers.Action_Result;
       begin
          Bounded.Try_Set_Source
            ("[one](1) and [two](2)", Success);
          Bounded.Advance_Parsing (8);
          Assert
-           (Bounded.Parsing = Viewers.Parsing_Capacity_Limited,
-            "link capacity exhaustion was not reported");
+           (Bounded.Parsing = Viewers.Parsing_Capacity_Limited
+            and then Bounded.Link_Count = 0
+            and then Bounded.Parsed_Line_Count = 0,
+            "capacity failure published a partial line or link");
+         Bounded.Focus;
+         Result := Bounded.Handle (Key (Flyology_TUI.Events.Tab_Key));
+         Result := Bounded.Handle (Key (Flyology_TUI.Events.Enter_Key));
+         Assert
+           (Result.Action = Viewers.No_Action,
+            "capacity-rejected link remained keyboard activatable");
+      end;
+
+      declare
+         Atomic : Viewers.Model := Viewers.Create (120, 8, 3, 20, 4);
+      begin
+         Atomic.Try_Set_Source
+           ("[kept](one)" & LF & "[partial](two) [broken](missing",
+            Success);
+         Atomic.Advance_Parsing (8);
+         Assert
+           (Atomic.Parsing = Viewers.Parsing_Malformed
+            and then Atomic.Link_Count = 1
+            and then Atomic.Parsed_Line_Count = 1
+            and then Atomic.Link_Target (1) = "one",
+            "malformed line published staged link or line state");
       end;
    end Test_Unsupported_And_Malformed;
+
+   procedure Test_Exact_Link_Hits_And_Code_Literals is
+      Item : Viewers.Model := Viewers.Create (240, 12, 4, 6, 6);
+      Success : Boolean;
+      Result : Viewers.Action_Result;
+   begin
+      Item.Try_Set_Source ("[abcdefgh](target)", Success);
+      Item.Advance_Parsing (4);
+      declare
+         Layout : constant Viewers.Presentation :=
+           Item.Present (Flyology_TUI.Themes.Charm);
+         First : constant Flyology_TUI.Geometry.Rectangle :=
+           Viewers.Link_Region (Layout, 1, 1);
+         Second : constant Flyology_TUI.Geometry.Rectangle :=
+           Viewers.Link_Region (Layout, 1, 2);
+      begin
+         Assert
+           (Viewers.Link_Region_Count (Layout, 1) = 2
+            and then First.Height = 1
+            and then Second.Height = 1
+            and then First.Y /= Second.Y,
+            "wrapped link did not expose exact per-row segments");
+         Result := Item.Handle
+           (Mouse (Second.X + 1, Second.Y,
+                   Flyology_TUI.Events.Mouse_Click),
+            Layout);
+         Assert
+           (Result.Action = Viewers.Link_Activated,
+            "wrapped link segment was not clickable");
+         Result := Item.Handle
+           (Mouse (4, Second.Y, Flyology_TUI.Events.Mouse_Click), Layout);
+         Assert
+           (Result.Action = Viewers.No_Action,
+            "empty cell inside the former bounding box activated a link");
+      end;
+
+      Item.Try_Set_Source
+        ("```" & LF &
+         "![image](x) | a | <tag> [^note] :: [link](target)" & LF &
+         "```" & LF &
+         "`![image](x) | a | <tag> [^note] :: [link](target)`",
+         Success);
+      Item.Advance_Parsing (12);
+      Assert
+        (not Item.Has_Unsupported and then Item.Link_Count = 0,
+         "literal fenced or inline code was classified as Markdown syntax");
+   end Test_Exact_Link_Hits_And_Code_Literals;
+
+   procedure Test_Task_Marker_Clipping is
+      Item : Viewers.Model := Viewers.Create (80, 4, 2, 1, 6);
+      Success : Boolean;
+      Wide : constant Wide_Wide_String :=
+        (1 => Wide_Wide_Character'Val (16#754C#));
+   begin
+      Item.Try_Set_Source ("- [x] " & Wide, Success);
+      Item.Advance_Parsing (4);
+      declare
+         Layout : constant Viewers.Presentation :=
+           Item.Present (Flyology_TUI.Themes.Charm);
+         Surface : constant Flyology_TUI.Surfaces.Surface :=
+           Viewers.Frame (Layout);
+      begin
+         Assert
+           (Surface.Element (0, 0).Glyph =
+              Text.To_Unbounded_Wide_Wide_String ("[")
+            and then Surface.Element (0, 1).Glyph =
+              Text.To_Unbounded_Wide_Wide_String ("x")
+            and then Surface.Element (0, 2).Glyph =
+              Text.To_Unbounded_Wide_Wide_String ("]")
+            and then not Surface.Element (0, 3).Continuation,
+            "task marker was not emitted cluster-by-cluster in tiny geometry");
+      end;
+   end Test_Task_Marker_Clipping;
 
    procedure Test_Bounds_Read_Only_And_Unicode is
       Item : Viewers.Model := Viewers.Create (16, 3, 2, 8, 3);
@@ -251,7 +348,7 @@ procedure Markdown_Components_Tests is
          Old_Layout : constant Viewers.Presentation :=
            Item.Present (Flyology_TUI.Themes.Charm);
          Old_Region : constant Flyology_TUI.Geometry.Rectangle :=
-           Viewers.Link_Region (Old_Layout, 1);
+           Viewers.Link_Region (Old_Layout, 1, 1);
       begin
          Result := Item.Handle (Key (Flyology_TUI.Events.Page_Down_Key));
          Assert
@@ -298,12 +395,13 @@ procedure Markdown_Components_Tests is
         (Flyology_TUI.Themes.Charm);
       Custom : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
    begin
-      Item.Try_Set_Source ("# Draft" & LF & "[link](target)", Success);
+      Item.Try_Set_Source
+        ("# Draft" & LF & "[a very long link label](target)", Success);
       Item.Focus_Source;
       Update := Item.Handle_Source (Character_Key ("!"));
       Assert
         (Update.Changed and then Item.Source = "# Draft" & LF &
-           "[link](target)!",
+           "[a very long link label](target)!",
          "Markdown editor did not delegate source edits to Text_Areas");
       Assert
         (Item.Preview_Parsing = Viewers.Parsing_Dirty,
@@ -313,6 +411,30 @@ procedure Markdown_Components_Tests is
         (Item.Preview_Parsing = Viewers.Parsing_Current,
          "editor preview did not advance within caller budget");
 
+      Item.Set_Mode (Editors.Split_Horizontally);
+      Item.Set_Size (20, 2);
+      Item.Focus_Preview;
+      Action := Item.Handle_Preview
+        (Key (Flyology_TUI.Events.Page_Down_Key));
+      Action := Item.Handle_Preview (Key (Flyology_TUI.Events.Tab_Key));
+      declare
+         Top_Before : constant Natural := Item.Preview_First_Visible_Row;
+         Link_Before : constant Viewers.Link_Id :=
+           Item.Preview_Focused_Link;
+      begin
+         Item.Focus_Source;
+         Update := Item.Handle_Source
+           (Mouse (0, 0, Flyology_TUI.Events.Mouse_Click));
+         Update := Item.Handle_Source
+           (Mouse (1, 1, Flyology_TUI.Events.Mouse_Drag));
+         Assert
+           (Item.Preview_Parsing = Viewers.Parsing_Current
+            and then Item.Preview_First_Visible_Row = Top_Before
+            and then Item.Preview_Focused_Link = Link_Before,
+            "source selection reset unchanged preview state");
+      end;
+
+      Item.Set_Size (80, 20);
       Plan := Item.Layout;
       Assert
         (Editors.Has_Source (Plan) and then Editors.Has_Preview (Plan)
@@ -342,9 +464,11 @@ procedure Markdown_Components_Tests is
       Item.Focus_Preview;
       Action := Item.Handle_Preview (Character_Key ("x"));
       Assert
-        (not Action.Update.Changed
-         and then Item.Source = "# Draft" & LF & "[link](target)!",
+         (not Action.Update.Changed
+         and then Item.Source = "# Draft" & LF &
+           "[a very long link label](target)!",
          "preview-only mode mutated source text");
+      Action := Item.Handle_Preview (Key (Flyology_TUI.Events.Home_Key));
 
       Custom.Bold := True;
       Custom.Underline := True;
@@ -362,6 +486,8 @@ procedure Markdown_Components_Tests is
 begin
    Test_Parsing_And_Rendering;
    Test_Unsupported_And_Malformed;
+   Test_Exact_Link_Hits_And_Code_Literals;
+   Test_Task_Marker_Clipping;
    Test_Bounds_Read_Only_And_Unicode;
    Test_Resize_Scroll_And_Stale_Layout;
    Test_Editor_Composition;

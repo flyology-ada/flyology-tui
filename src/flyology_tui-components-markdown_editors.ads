@@ -103,6 +103,9 @@ package Flyology_TUI.Components.Markdown_Editors is
    function Preview_Unsupported
      (Item : Model)
       return Flyology_TUI.Components.Markdown_Viewers.Unsupported_Set;
+   function Preview_First_Visible_Row (Item : Model) return Natural;
+   function Preview_Focused_Link
+     (Item : Model) return Flyology_TUI.Components.Markdown_Viewers.Link_Id;
 
    function Render_Source
      (Item : Model; Look : Appearance)
