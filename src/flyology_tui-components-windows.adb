@@ -154,6 +154,15 @@ package body Flyology_TUI.Components.Windows is
       Area.Y := Integer'Max (Workspace.Y, Integer'Min (Area.Y, Max_Y));
    end Clamp;
 
+   procedure Constrain_To
+     (Item      : in out Model;
+      Workspace : Flyology_TUI.Geometry.Rectangle) is
+   begin
+      Clamp
+        (Item.Area, Item.Minimum_Width, Item.Minimum_Height, Workspace);
+      Item.Active := Idle;
+   end Constrain_To;
+
    function Close_Hit
      (Area : Flyology_TUI.Geometry.Rectangle;
       Point : Flyology_TUI.Geometry.Point) return Boolean

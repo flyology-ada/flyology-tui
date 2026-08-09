@@ -868,6 +868,8 @@ procedure Kitchen_Sink is
         (Total => 180,
          Page_Size => Geometry.Window_Workspace.Width,
          First => Item.Horizontal_Scroll.First);
+      Item.Window_A_Model.Constrain_To (Geometry.Window_Workspace);
+      Item.Window_B_Model.Constrain_To (Geometry.Window_Workspace);
       Item.Horizontal_Group.Resize
         (Geometry.Horizontal_Group_Region.Width,
          Geometry.Horizontal_Group_Region.Height);

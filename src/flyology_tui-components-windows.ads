@@ -46,6 +46,15 @@ package Flyology_TUI.Components.Windows is
    procedure Set_Enabled (Item : in out Model; Enabled : Boolean);
    function Is_Enabled (Item : Model) return Boolean;
 
+   --  Clamp the complete window to Workspace without synthesizing input.
+   --  This is the application resize hook. It cancels movement, resize, or
+   --  close activation, but preserves an already-acquired capture until the
+   --  matching left-button release can report Release_Capture. An empty
+   --  workspace uses the same origin-preserving policy as Handle.
+   procedure Constrain_To
+     (Item      : in out Model;
+      Workspace : Flyology_TUI.Geometry.Rectangle);
+
    --  Mouse coordinates are relative to Workspace, not to the moving window.
    --  Captured drag and release events may therefore remain signed and outside
    --  the old bounds. A nonempty workspace clamps the complete window into it;

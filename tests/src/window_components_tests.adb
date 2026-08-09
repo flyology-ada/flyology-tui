@@ -301,6 +301,49 @@ procedure Window_Components_Tests is
          "window creation did not honor a larger configured minimum");
    end Test_Window_Clamping_And_Keyboard;
 
+   procedure Test_Window_Workspace_Constrain is
+      Window : Flyology_TUI.Components.Windows.Model :=
+        Flyology_TUI.Components.Windows.Create
+          (X => 18, Y => 9, Width => 16, Height => 10,
+           Minimum_Width => 8, Minimum_Height => 4);
+      Result : Flyology_TUI.Components.Interactions.Update_Result;
+   begin
+      Window.Constrain_To ((X => 0, Y => 0, Width => 20, Height => 6));
+      Assert
+        (Window.Bounds = (4, 0, 16, 6),
+         "workspace constrain did not keep the complete window reachable");
+
+      Result := Window.Handle
+        (Pointer (6, 0, Flyology_TUI.Events.Mouse_Click),
+         (X => 0, Y => 0, Width => 20, Height => 6));
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Acquire_Capture,
+         "window did not acquire capture before constrain interruption");
+      Window.Constrain_To ((X => 0, Y => 0, Width => 10, Height => 5));
+      Assert
+        (Window.Bounds = (0, 0, 10, 5),
+         "constrain did not adopt a workspace below the configured minimum");
+      Result := Window.Handle
+        (Pointer (100, 100, Flyology_TUI.Events.Mouse_Drag),
+         (X => 0, Y => 0, Width => 10, Height => 5));
+      Assert
+        (not Result.Handled and then Window.Bounds = (0, 0, 10, 5),
+         "constrain did not cancel the active semantic drag");
+      Result := Window.Handle
+        (Pointer (100, 100, Flyology_TUI.Events.Mouse_Release),
+         (X => 0, Y => 0, Width => 10, Height => 5));
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture,
+         "constrain stranded existing capture ownership");
+
+      Window.Constrain_To ((X => 7, Y => 8, Width => 0, Height => 0));
+      Assert
+        (Window.Bounds = (7, 8, 10, 5),
+         "empty workspace constrain changed the retained window size");
+   end Test_Window_Workspace_Constrain;
+
    procedure Test_Window_Render is
       Window : constant Flyology_TUI.Components.Windows.Model :=
         Flyology_TUI.Components.Windows.Create
@@ -727,6 +770,7 @@ begin
    Test_Window_Resize_Directions;
    Test_Window_Interaction;
    Test_Window_Clamping_And_Keyboard;
+   Test_Window_Workspace_Constrain;
    Test_Window_Render;
    Test_Split_Panes;
    Test_Scrollbars;
