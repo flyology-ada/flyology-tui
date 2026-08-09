@@ -8,6 +8,7 @@ with Flyology_TUI.Components.Accordions;
 with Flyology_TUI.Components.Breadcrumbs;
 with Flyology_TUI.Components.Buttons;
 with Flyology_TUI.Components.Check_Boxes;
+with Flyology_TUI.Components.Chats;
 with Flyology_TUI.Components.Dropdowns;
 with Flyology_TUI.Components.Forms;
 with Flyology_TUI.Components.Help;
@@ -22,6 +23,7 @@ with Flyology_TUI.Components.Selectors;
 with Flyology_TUI.Components.Sparklines;
 with Flyology_TUI.Components.Spinners;
 with Flyology_TUI.Components.Split_Panes;
+with Flyology_TUI.Components.Streaming_Texts;
 with Flyology_TUI.Components.Syntax_Editors;
 with Flyology_TUI.Components.Tables;
 with Flyology_TUI.Components.Tabs;
@@ -146,6 +148,7 @@ procedure Kitchen_Sink is
       Navigation_Page,
       Editors_Page,
       Telemetry_Page,
+      Chat_Page,
       Windows_Page);
 
    function Page_Identity (Item : Page_Id) return Page_Id is (Item);
@@ -157,6 +160,7 @@ procedure Kitchen_Sink is
          when Navigation_Page => "Navigation",
          when Editors_Page => "Editors",
          when Telemetry_Page => "Telemetry",
+         when Chat_Page      => "Chat",
          when Windows_Page   => "Windows");
 
    package Pages is new Flyology_TUI.Components.Tabs
@@ -353,6 +357,53 @@ procedure Kitchen_Sink is
      (Item_Id       => Work_Id,
       Maximum_Items => 8);
 
+   type Chat_Message_Id is
+     (Welcome_Message,
+      User_Request_Message,
+      Assistant_Message,
+      Tool_Message,
+      Completion_Message);
+   type Chat_Author_Id is
+     (System_Author, User_Author, Assistant_Author, Tool_Author);
+
+   function Chat_Author_Label
+     (Author : Chat_Author_Id) return Wide_Wide_String is
+     (case Author is
+         when System_Author    => "system",
+         when User_Author      => "you",
+         when Assistant_Author => "assistant",
+         when Tool_Author      => "telemetry tool");
+
+   package Chats is new Flyology_TUI.Components.Chats
+     (Message_Id   => Chat_Message_Id,
+      Author_Id    => Chat_Author_Id,
+      Author_Label => Chat_Author_Label,
+      Capacity     => 8);
+
+   package Chat_Streams is new Flyology_TUI.Components.Streaming_Texts
+     (Max_Code_Points    => 512,
+      Max_Lines          => 32,
+      Max_Viewport_Cells => 1_024);
+
+   function Make_Chat_Message
+     (Id       : Chat_Message_Id;
+      Author   : Chat_Author_Id;
+      Role     : Chats.Message_Role;
+      Delivery : Chats.Delivery_State := Chats.Delivered;
+      Sequence : Natural := 0) return Chats.Message is
+     (Id, Author, Role, Delivery, Sequence);
+
+   Initial_Chat_Messages : constant Chats.Message_Array :=
+     [Make_Chat_Message
+        (Welcome_Message, System_Author, Chats.System),
+      Make_Chat_Message
+        (User_Request_Message, User_Author, Chats.User),
+      Make_Chat_Message
+        (Assistant_Message, Assistant_Author, Chats.Assistant,
+         Chats.Streaming),
+      Make_Chat_Message
+        (Tool_Message, Tool_Author, Chats.Tool)];
+
    type Message is (Animation_Tick);
    type Command is (Wait_For_Tick);
    type Focus_Target is
@@ -373,6 +424,8 @@ procedure Kitchen_Sink is
       Text_Area_Field,
       Syntax_Field,
       Telemetry_Field,
+      Chat_Field,
+      Chat_Stream_Field,
       Window_Field,
       Split_Field,
       Vertical_Scroll_Field,
@@ -434,6 +487,7 @@ procedure Kitchen_Sink is
      (X => 2, Y => 8);
    Syntax_Origin : constant Flyology_TUI.Geometry.Point :=
      (X => 36, Y => 8);
+   Chat_Origin : constant Flyology_TUI.Geometry.Point := (X => 0, Y => 4);
    Windows_Page_Origin : constant Flyology_TUI.Geometry.Point :=
      (X => 0, Y => 4);
    Window_Workspace : constant Flyology_TUI.Geometry.Rectangle :=
@@ -457,6 +511,7 @@ procedure Kitchen_Sink is
             Navigation_Page,
             Editors_Page,
             Telemetry_Page,
+            Chat_Page,
             Windows_Page]);
       Input    : Flyology_TUI.Components.Text_Inputs.Model :=
         Flyology_TUI.Components.Text_Inputs.Create
@@ -513,6 +568,13 @@ procedure Kitchen_Sink is
       Work     : Kitchen_Sink.Work_Progress.Model :=
         Kitchen_Sink.Work_Progress.Create (30);
       Telemetry_Tick : Natural range 0 .. 999 := 0;
+      Chat : Kitchen_Sink.Chats.Model := Kitchen_Sink.Chats.Create
+        (Initial_Chat_Messages, Viewport_Rows => 18);
+      Chat_Stream : Kitchen_Sink.Chat_Streams.Model :=
+        Kitchen_Sink.Chat_Streams.Create
+          (68, 2, Overflow => Kitchen_Sink.Chat_Streams.Trim_Oldest);
+      Chat_Stream_Step : Natural range 0 .. 40 := 0;
+      Chat_Has_Notice : Boolean := False;
       Split : Flyology_TUI.Components.Split_Panes.Model :=
         Flyology_TUI.Components.Split_Panes.Create
           (Flyology_TUI.Layouts.Boxes.Horizontal,
@@ -539,6 +601,7 @@ procedure Kitchen_Sink is
    package Events is new Flyology_TUI.Application_Events (Message);
    package Transitions is new Flyology_TUI.Transitions (Command);
    use type Events.Event_Kind;
+   use type Chat_Streams.Stream_State;
    use type Flyology_TUI.Components.Interactions.Capture_Action;
    use type Flyology_TUI.Events.Key_Kind;
    use type Flyology_TUI.Events.Mouse_Action;
@@ -584,6 +647,264 @@ procedure Kitchen_Sink is
             Item.Focus = Accordion_Field);
       end if;
    end Accordion_Presentation;
+
+   function Chat_Stream_Height (Item : Model) return Natural is
+     (Natural'Max
+        (2, Natural'Min (6, Item.Chat_Stream.Visual_Row_Count)));
+
+   procedure Set_Chat_Messages
+     (Item     : in out Model;
+      Delivery : Chats.Delivery_State)
+   is
+   begin
+      if Item.Chat_Has_Notice then
+         Item.Chat.Set_Messages
+           ([Make_Chat_Message
+               (Welcome_Message, System_Author, Chats.System),
+             Make_Chat_Message
+               (User_Request_Message, User_Author, Chats.User),
+             Make_Chat_Message
+               (Assistant_Message, Assistant_Author, Chats.Assistant,
+                Delivery, Item.Telemetry_Tick),
+             Make_Chat_Message
+               (Tool_Message, Tool_Author, Chats.Tool),
+             Make_Chat_Message
+               (Completion_Message, System_Author, Chats.Notice)]);
+      else
+         Item.Chat.Set_Messages
+           ([Make_Chat_Message
+               (Welcome_Message, System_Author, Chats.System),
+             Make_Chat_Message
+               (User_Request_Message, User_Author, Chats.User),
+             Make_Chat_Message
+               (Assistant_Message, Assistant_Author, Chats.Assistant,
+                Delivery, Item.Telemetry_Tick),
+             Make_Chat_Message
+               (Tool_Message, Tool_Author, Chats.Tool)]);
+      end if;
+   end Set_Chat_Messages;
+
+   procedure Reconcile_Chat (Item : in out Model) is
+      Height : constant Natural := Item.Chat_Stream.Viewport_Height;
+   begin
+      if Item.Chat_Has_Notice then
+         Item.Chat.Reconcile_Measurements
+           ([(Welcome_Message, 2, 0),
+             (User_Request_Message, 3, 1),
+             (Assistant_Message, Height, 1),
+             (Tool_Message, 4, 0),
+             (Completion_Message, 1, 0)]);
+      else
+         Item.Chat.Reconcile_Measurements
+           ([(Welcome_Message, 2, 0),
+             (User_Request_Message, 3, 1),
+             (Assistant_Message, Height, 1),
+             (Tool_Message, 4, 0)]);
+      end if;
+   end Reconcile_Chat;
+
+   function Chat_Body
+     (Item : Model;
+      Id   : Chat_Message_Id) return Chats.Body_Entry
+   is
+      package Indicators renames Flyology_TUI.Components.Indicators;
+      Empty : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (0, 0);
+   begin
+      case Id is
+         when Welcome_Message =>
+            return
+              (Id      => Id,
+               Content => Flyology_TUI.Surfaces.From_Text
+                 ("This transcript owns metadata and viewport state."
+                  & Wide_Wide_Character'Val (10)
+                  & "Every message body remains caller-owned."),
+               Actions => Empty);
+         when User_Request_Message =>
+            return
+              (Id      => Id,
+               Content => Flyology_TUI.Surfaces.From_Text
+                 ("Build a bounded chat surface."
+                  & Wide_Wide_Character'Val (10)
+                  & "Keep ordinary, streaming, and component bodies."
+                  & Wide_Wide_Character'Val (10)
+                  & "Route child input before transcript input."),
+               Actions => Indicators.Badge
+                 ("request · stable id", Indicators.Neutral, Visual));
+         when Assistant_Message =>
+            return
+              (Id      => Id,
+               Content => Item.Chat_Stream.Render
+                 (Visual, Item.Focus = Chat_Stream_Field),
+               Actions => Indicators.Badge
+                 ((if Item.Chat_Stream.State = Chat_Streams.Finished
+                   then "complete · deterministic"
+                   else "streaming · wheel this body"),
+                  (if Item.Chat_Stream.State = Chat_Streams.Finished
+                   then Indicators.Success_Tone
+                   else Indicators.Warning_Tone),
+                  Visual));
+         when Tool_Message =>
+            declare
+               Aggregate : constant Work_Progress.Fraction :=
+                 Item.Work.Weighted_Total;
+               First : constant Flyology_TUI.Surfaces.Surface :=
+                 Indicators.Divider (64, "component body", Visual);
+               Second : constant Flyology_TUI.Surfaces.Surface :=
+                 Indicators.Gauge
+                   (Indicators.Ratio (Aggregate), 30, Visual);
+               Third : constant Flyology_TUI.Surfaces.Surface :=
+                 Sparklines.Render
+                   (Item.Samples, 40, Sparklines.Automatic, Visual);
+               Fourth : constant Flyology_TUI.Surfaces.Surface :=
+                 Indicators.Status_Line
+                   ([Indicators.Make_Segment
+                       ("NO NETWORK", Indicators.High,
+                        Indicators.Success_Tone),
+                     Indicators.Make_Segment
+                       ("serial update", Indicators.Normal,
+                        Indicators.Neutral)],
+                    64, Visual);
+            begin
+               return
+                 (Id      => Id,
+                  Content => Flyology_TUI.Layouts.Join_Vertically
+                    (First,
+                     Flyology_TUI.Layouts.Join_Vertically
+                       (Second,
+                        Flyology_TUI.Layouts.Join_Vertically
+                          (Third, Fourth))),
+                  Actions => Empty);
+            end;
+         when Completion_Message =>
+            return
+              (Id      => Id,
+               Content => Flyology_TUI.Surfaces.From_Text
+                 ("The bounded stream rolled old history, then finished."),
+               Actions => Empty);
+      end case;
+   end Chat_Body;
+
+   function Chat_Bodies
+     (Item   : Model;
+      Layout : Chats.Layout_Plan) return Chats.Body_Array
+   is
+      Count : constant Natural := Chats.Required_Body_Count (Layout);
+      Result : Chats.Body_Array (1 .. Count) :=
+        [others =>
+           (Id      => Welcome_Message,
+            Content => Flyology_TUI.Surfaces.Create (0, 0),
+            Actions => Flyology_TUI.Surfaces.Create (0, 0))];
+   begin
+      for Position in Result'Range loop
+         Result (Position) := Chat_Body
+           (Item, Chats.Required_Body_Id (Layout, Position));
+      end loop;
+      return Result;
+   end Chat_Bodies;
+
+   function Chat_Footer
+     (Item : Model) return Flyology_TUI.Surfaces.Surface
+   is
+      package Indicators renames Flyology_TUI.Components.Indicators;
+   begin
+      return Indicators.Key_Value
+        ("chat viewport",
+         (if Item.Chat.Follows_Tail then "following tail" else "detached")
+           & " · unread"
+           & Natural'Wide_Wide_Image (Item.Chat.Unread_Count)
+           & " · stream unseen"
+           & Natural'Wide_Wide_Image
+               (Item.Chat_Stream.Unseen_Chunk_Count),
+         68, Visual);
+   end Chat_Footer;
+
+   function Chat_Composer return Flyology_TUI.Surfaces.Surface is
+      Result : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (68, 1, Visual.Input);
+   begin
+      Result.Write
+        (0, 0, "> visual composer · input model intentionally external",
+         Visual.Input);
+      return Result;
+   end Chat_Composer;
+
+   function Chat_Presentation
+     (Item : Model) return Chats.Presentation
+   is
+      Footer : constant Flyology_TUI.Surfaces.Surface := Chat_Footer (Item);
+      Composer : constant Flyology_TUI.Surfaces.Surface := Chat_Composer;
+      Layout : constant Chats.Layout_Plan := Item.Chat.Plan
+        (68, Footer.Height, Composer.Height);
+      Bodies : constant Chats.Body_Array := Chat_Bodies (Item, Layout);
+   begin
+      return Item.Chat.Present
+        (Bodies, 68, Footer, Composer, Visual,
+         Has_Focus => Item.Focus in Chat_Field | Chat_Stream_Field);
+   end Chat_Presentation;
+
+   procedure Advance_Chat_Stream (Item : in out Model) is
+      use type Chat_Streams.Operation_Result;
+      Result : Chat_Streams.Operation_Result := Chat_Streams.Unchanged;
+      New_Height : Natural;
+   begin
+      if Item.Chat_Stream_Step < 40 then
+         case Item.Chat_Stream_Step mod 8 is
+            when 0 =>
+               Result := Item.Chat_Stream.Append
+                 ("Planning a bounded response..."
+                  & Wide_Wide_Character'Val (10));
+            when 1 =>
+               Result := Item.Chat_Stream.Append
+                 ("Inspecting stable message ids."
+                  & Wide_Wide_Character'Val (10));
+            when 2 =>
+               Result := Item.Chat_Stream.Append
+                 ("Borrowing only visible body surfaces."
+                  & Wide_Wide_Character'Val (10));
+            when 3 =>
+               Result := Item.Chat_Stream.Append
+                 ("Measuring wrapped output synchronously."
+                  & Wide_Wide_Character'Val (10));
+            when 4 =>
+               Result := Item.Chat_Stream.Append
+                 ("Routing child geometry before the transcript."
+                  & Wide_Wide_Character'Val (10));
+            when 5 =>
+               Result := Item.Chat_Stream.Append
+                 ("No task, callback, transport, or retained view."
+                  & Wide_Wide_Character'Val (10));
+            when 6 =>
+               Result := Item.Chat_Stream.Append
+                 ("Updating follow-tail through one serial owner."
+                  & Wide_Wide_Character'Val (10));
+            when others =>
+               Result := Item.Chat_Stream.Append
+                 ("Rolling bounded history without replacing the model."
+                  & Wide_Wide_Character'Val (10));
+         end case;
+         Item.Chat_Stream_Step := Item.Chat_Stream_Step + 1;
+      elsif Item.Chat_Stream.State = Chat_Streams.Streaming then
+         Result := Item.Chat_Stream.Finish;
+         Item.Chat_Has_Notice := True;
+         Set_Chat_Messages (Item, Chats.Delivered);
+      else
+         return;
+      end if;
+
+      if Result in Chat_Streams.Rejected_Capacity
+        | Chat_Streams.Rejected_State
+        | Chat_Streams.Rejected_Geometry
+      then
+         raise Program_Error with "kitchen-sink stream transition rejected";
+      end if;
+      New_Height := Chat_Stream_Height (Item);
+      Result := Item.Chat_Stream.Resize (68, New_Height);
+      if Result = Chat_Streams.Rejected_Geometry then
+         raise Program_Error with "kitchen-sink stream resize rejected";
+      end if;
+      Reconcile_Chat (Item);
+   end Advance_Chat_Stream;
 
    procedure Activate (Item : in out Model; Target : Focus_Target) is
    begin
@@ -665,6 +986,7 @@ procedure Kitchen_Sink is
       Item.Tree.Set_Expanded (Source_Node);
       Item.Tree.Set_Expanded (Components_Node);
       Item.Accordion.Set_Expanded (Overview_Section);
+      Advance_Chat_Stream (Item);
       for Value in -8 .. 8 loop
          Item.Samples.Append (Value * Value mod 13 - 6);
       end loop;
@@ -846,6 +1168,30 @@ procedure Kitchen_Sink is
                    when Syntax_Field    => Page_Navigation,
                    when others          => Text_Area_Field));
          end if;
+      when Chat_Page =>
+         if Item.Focus not in
+           Page_Navigation | Chat_Field | Chat_Stream_Field
+         then
+            Activate (Item, Chat_Field);
+            return;
+         end if;
+         if Backwards then
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Chat_Stream_Field,
+                   when Chat_Field      => Page_Navigation,
+                   when Chat_Stream_Field => Chat_Field,
+                   when others          => Chat_Field));
+         else
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation => Chat_Field,
+                   when Chat_Field      => Chat_Stream_Field,
+                   when Chat_Stream_Field => Page_Navigation,
+                   when others          => Chat_Field));
+         end if;
       when Windows_Page =>
          if Item.Focus not in
            Page_Navigation | Window_Field .. Horizontal_Scroll_Field
@@ -911,6 +1257,12 @@ procedure Kitchen_Sink is
               Page_Navigation | Text_Area_Field | Syntax_Field
             then
                Activate (Item, Text_Area_Field);
+            end if;
+         when Chat_Page =>
+            if Item.Focus not in
+              Page_Navigation | Chat_Field | Chat_Stream_Field
+            then
+               Activate (Item, Chat_Field);
             end if;
          when Windows_Page =>
             if Item.Focus not in
@@ -1255,6 +1607,67 @@ procedure Kitchen_Sink is
       end if;
    end Handle_Editors_Mouse;
 
+   procedure Handle_Chat_Mouse
+     (Item  : in out Model;
+      Event : Flyology_TUI.Events.Mouse_Event)
+   is
+      use Flyology_TUI.Components.Interactions;
+      Layout : constant Chats.Presentation := Chat_Presentation (Item);
+      Plan : constant Chats.Layout_Plan := Chats.Layout (Layout);
+      Local : constant Flyology_TUI.Mouse.Local_Event :=
+        Flyology_TUI.Mouse.Relative (Event, Chat_Origin);
+      Point : constant Flyology_TUI.Geometry.Point :=
+        (X => Local.X, Y => Local.Y);
+      Result : Update_Result;
+   begin
+      --  Child regions are application-owned. Route them before asking Chat
+      --  to handle header or transcript-background input.
+      for Position in 1 .. Chats.Required_Body_Count (Plan) loop
+         declare
+            Id : constant Chat_Message_Id :=
+              Chats.Required_Body_Id (Plan, Position);
+            Body_Area : constant Flyology_TUI.Geometry.Rectangle :=
+              Chats.Body_Region (Layout, Id);
+         begin
+            if Flyology_TUI.Geometry.Contains (Body_Area, Point) then
+               if Id = Assistant_Message then
+                  Result := Item.Chat_Stream.Handle
+                    (Flyology_TUI.Mouse.Relative
+                       (Local, (X => Body_Area.X, Y => Body_Area.Y)));
+                  Apply_Result
+                    (Item, Chat_Stream_Field, No_Capture, Result);
+               elsif Event.Action = Flyology_TUI.Events.Mouse_Click
+                 and then Event.Button = Flyology_TUI.Events.Left_Button
+               then
+                  Item.Chat.Select_Id (Id);
+                  Activate (Item, Chat_Field);
+               end if;
+               return;
+            elsif Chats.Has_Action_Region (Layout, Id) then
+               declare
+                  Action_Area : constant
+                    Flyology_TUI.Geometry.Rectangle :=
+                      Chats.Action_Region (Layout, Id);
+               begin
+                  if Flyology_TUI.Geometry.Contains (Action_Area, Point) then
+                     if Event.Action = Flyology_TUI.Events.Mouse_Click
+                       and then
+                         Event.Button = Flyology_TUI.Events.Left_Button
+                     then
+                        Item.Chat.Select_Id (Id);
+                        Activate (Item, Chat_Field);
+                     end if;
+                     return;
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+
+      Result := Item.Chat.Handle (Local, Layout);
+      Apply_Result (Item, Chat_Field, No_Capture, Result);
+   end Handle_Chat_Mouse;
+
    procedure Handle_Windows_Mouse
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Mouse_Event) is
@@ -1415,6 +1828,8 @@ procedure Kitchen_Sink is
          Handle_Navigation_Mouse (Item, Event.Mouse);
       when Editors_Page =>
          Handle_Editors_Mouse (Item, Event.Mouse);
+      when Chat_Page =>
+         Handle_Chat_Mouse (Item, Event.Mouse);
       when Windows_Page =>
          Handle_Windows_Mouse (Item, Event.Mouse);
       end case;
@@ -1475,6 +1890,12 @@ procedure Kitchen_Sink is
          when Telemetry_Field =>
             Result := Item.Work.Handle (Event);
             Apply_Result (Item, Telemetry_Field, No_Capture, Result);
+         when Chat_Field =>
+            Result := Item.Chat.Handle (Event);
+            Apply_Result (Item, Chat_Field, No_Capture, Result);
+         when Chat_Stream_Field =>
+            Result := Item.Chat_Stream.Handle (Event);
+            Apply_Result (Item, Chat_Stream_Field, No_Capture, Result);
          when Window_Field =>
             if Item.Focused_Window = Window_A
               and then Item.Window_A_Visible
@@ -1547,6 +1968,7 @@ procedure Kitchen_Sink is
          else
             Item.Progress.Set (Item.Progress.Value + 0.03);
          end if;
+         Advance_Chat_Stream (Item);
          Transitions.Run (Next, Wait_For_Tick);
          return;
       end if;
@@ -1801,6 +2223,14 @@ procedure Kitchen_Sink is
       return Canvas;
    end Editors_View;
 
+   function Chat_View
+     (Item : Model) return Flyology_TUI.Surfaces.Surface
+   is
+      Layout : constant Chats.Presentation := Chat_Presentation (Item);
+   begin
+      return Chats.Frame (Layout);
+   end Chat_View;
+
    function Windows_View
      (Item : Model) return Flyology_TUI.Surfaces.Surface
    is
@@ -2000,6 +2430,7 @@ procedure Kitchen_Sink is
             when Navigation_Page => Navigation_View (Item),
             when Editors_Page => Editors_View (Item),
             when Telemetry_Page => Telemetry_View (Item),
+            when Chat_Page       => Chat_View (Item),
             when Windows_Page   => Windows_View (Item));
       Help : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Components.Help.Render

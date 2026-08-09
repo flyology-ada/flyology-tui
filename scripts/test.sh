@@ -16,6 +16,8 @@ alr build
 ./bin/accordion_tests
 ./bin/data_navigation_tests
 ./bin/editing_tests
+./bin/streaming_text_tests
+./bin/chat_tests
 
 cd "$root_dir"
 alr exec -- gprbuild -P tests/editor_lifecycle_tests.gpr -p

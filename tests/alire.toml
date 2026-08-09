@@ -18,6 +18,8 @@ executables = [
   "accordion_tests",
   "data_navigation_tests",
   "editing_tests",
+  "streaming_text_tests",
+  "chat_tests",
 ]
 
 [[depends-on]]

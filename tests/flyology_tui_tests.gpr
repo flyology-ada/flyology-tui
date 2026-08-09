@@ -13,7 +13,9 @@ project Flyology_Tui_Tests is
       "window_components_tests.adb",
       "accordion_tests.adb",
       "data_navigation_tests.adb",
-      "editing_tests.adb");
+      "editing_tests.adb",
+      "streaming_text_tests.adb",
+      "chat_tests.adb");
 
    package Compiler is
       for Default_Switches ("Ada") use

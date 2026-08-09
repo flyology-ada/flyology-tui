@@ -444,11 +444,12 @@ package body Flyology_TUI.Components.Chats is
                then
                   Result.Ids.Append (Item.Messages.Element (Index).Id);
                   Result.Header_Regions.Append
-                    ((X      => 0,
-                      Y      => Signed_Difference
-                        (Block_Start, Item.First_Cell),
-                      Width  => Width,
-                      Height => 1));
+                    (Flyology_TUI.Geometry.Rectangle'
+                       (X      => 0,
+                        Y      => Signed_Difference
+                          (Block_Start, Item.First_Cell),
+                        Width  => Width,
+                        Height => 1));
                   Result.Body_Origins.Append
                     (Signed_Difference (Body_Start, Item.First_Cell));
                   Result.Action_Origins.Append
