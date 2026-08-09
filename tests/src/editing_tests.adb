@@ -58,11 +58,13 @@ procedure Editing_Tests is
      (X, Y : Integer;
       Action : Flyology_TUI.Events.Mouse_Action;
       Wheel_X : Integer := 0;
-      Wheel_Y : Integer := 0)
+      Wheel_Y : Integer := 0;
+      Button : Flyology_TUI.Events.Mouse_Button :=
+        Flyology_TUI.Events.Left_Button)
       return Flyology_TUI.Mouse.Local_Event is
      (X        => X,
       Y        => Y,
-      Button   => Flyology_TUI.Events.Left_Button,
+      Button   => Button,
       Action   => Action,
       Modified => (others => False),
       Wheel_X  => Wheel_X,
@@ -71,10 +73,16 @@ procedure Editing_Tests is
    type Token is (Word, Comment);
    type State is record
       In_Comment : Boolean := False;
+      Steps      : Natural := 0;
    end record;
 
    type Lexer_Behavior is
-     (Normal, Too_Many, Overlap, Out_Of_Range, Raise_Error);
+     (Normal,
+      Two_Tokens,
+      Too_Many,
+      Overlap,
+      Out_Of_Range,
+      Raise_Error);
    Behavior : Lexer_Behavior := Normal;
 
    procedure Lex
@@ -98,13 +106,18 @@ procedure Editing_Tests is
             Opened := False;
          end if;
       end loop;
-      Final := (In_Comment => Opened);
-      Kind := (if Initial.In_Comment then Comment else Word);
+      Final := (In_Comment => Opened, Steps => Initial.Steps);
+      Kind :=
+        (if Initial.In_Comment or else Initial.Steps > 0
+         then Comment else Word);
       First := From;
       Last := From;
       Has_Token := From < Line'Length;
       if not Has_Token then
          return;
+      elsif Behavior = Two_Tokens then
+         Last := From + 1;
+         Final.Steps := Initial.Steps + 1;
       elsif Behavior = Out_Of_Range then
          Last := Line'Length + 1;
       elsif Behavior = Overlap then
@@ -124,7 +137,7 @@ procedure Editing_Tests is
    package Editors is new Flyology_TUI.Components.Syntax_Editors
      (Token_Kind              => Token,
       Lexer_State             => State,
-      Initial_State           => (In_Comment => False),
+      Initial_State           => (In_Comment => False, Steps => 0),
       Maximum_Tokens_Per_Line => 2,
       Next_Token              => Lex);
 
@@ -315,6 +328,164 @@ procedure Editing_Tests is
       end;
    end Test_History_Mouse_And_Render;
 
+   procedure Test_Wrap_Extremes_And_Input_States is
+      Item : Areas.Model := Areas.Create (40, 3, 3, 80, 6, 2);
+      Success : Boolean;
+      Result : Flyology_TUI.Components.Interactions.Update_Result;
+      Line : Positive;
+      First, Last : Natural;
+      Exists : Boolean;
+      Cursor_Style : constant Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.With_Foreground
+          (Flyology_TUI.Styles.Default,
+           Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Bright_Red));
+      Line_Style : constant Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.With_Background
+          (Flyology_TUI.Styles.Default,
+           Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Bright_Blue));
+      Look : Areas.Appearance := Areas.From_Theme (Flyology_TUI.Themes.Charm);
+
+      procedure Check_Read_Only
+        (Event : Flyology_TUI.Events.Terminal_Event;
+         Message : String)
+      is
+         Outcome : constant
+           Flyology_TUI.Components.Interactions.Update_Result :=
+             Item.Handle (Event);
+      begin
+         Assert
+           (Outcome.Handled
+            and then not Outcome.Changed
+            and then not Outcome.Rejected,
+            Message);
+      end Check_Read_Only;
+   begin
+      Item.Try_Set_Text ("abcdefghijkl", Success);
+      Item.Set_Wrap (Areas.Soft_Wrap);
+      Item.Set_Cursor_Offset (0);
+      Item.Focus;
+      Item.Visible_Segment (0, Line, First, Last, Exists);
+      Assert (Exists and then First = 0 and then Last = 4,
+              "wrapped viewport did not begin at the first segment");
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Down_Key));
+      Assert (Item.Cursor_Offset = 4,
+              "Down did not enter the next wrapped visual row");
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Down_Key));
+      Assert (Item.Cursor_Offset = 8,
+              "Down did not navigate beyond one wrapped viewport");
+      Item.Visible_Segment (0, Line, First, Last, Exists);
+      Assert (First = 8 and then Last = 12,
+              "cursor visibility did not advance wrapped viewport origin");
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Up_Key));
+      Assert (Item.Cursor_Offset = 4,
+              "Up did not return to the previous wrapped visual row");
+      Result := Item.Handle
+        (Mouse (2, 0, Flyology_TUI.Events.Mouse_Wheel, Wheel_Y => 1));
+      Assert (Result.Handled and then Result.Changed,
+              "wheel did not scroll a wrapped visual row");
+
+      Item.Set_Tab_Width (Positive'Last);
+      Item.Try_Set_Text
+        ((1 => Wide_Wide_Character'Val (9), 2 => 'x'), Success);
+      Item.Set_Cursor_Offset (1);
+      Assert (Item.Cursor_Position.Cell_Column = Natural'Last,
+              "extreme tab width did not saturate cell position");
+      Item.Set_Wrap (Areas.No_Wrap);
+      Item.Set_Viewport (1, Natural'Last);
+      declare
+         Frame : constant Flyology_TUI.Surfaces.Surface := Item.Render (Look);
+         pragma Unreferenced (Frame);
+      begin
+         Result := Item.Handle
+           (Mouse
+              (2,
+               0,
+               Flyology_TUI.Events.Mouse_Wheel,
+               Wheel_X => Integer'First));
+         Assert (Result.Handled and then not Result.Changed,
+                 "saturated horizontal wheel reported a viewport change");
+         Result := Item.Handle
+           (Mouse (5, 0, Flyology_TUI.Events.Mouse_Click));
+         Result := Item.Handle
+           (Mouse (5, 0, Flyology_TUI.Events.Mouse_Release));
+      end;
+
+      Item.Try_Set_Text ("abc", Success);
+      Result := Item.Handle
+        (Mouse (2, 0, Flyology_TUI.Events.Mouse_Click));
+      Result := Item.Handle
+        (Mouse
+           (2,
+            0,
+            Flyology_TUI.Events.Mouse_Release,
+            Button => Flyology_TUI.Events.Right_Button));
+      Assert
+        (not Result.Handled
+         and then Result.Capture =
+           Flyology_TUI.Components.Interactions.No_Capture_Change,
+         "non-left release ended left-button capture");
+      Result := Item.Handle
+        (Mouse (2, 0, Flyology_TUI.Events.Mouse_Release));
+      Assert (Result.Capture =
+                Flyology_TUI.Components.Interactions.Release_Capture,
+              "left release did not end capture after unrelated release");
+      Result := Item.Handle
+        (Mouse (2, 0, Flyology_TUI.Events.Mouse_Click));
+      Item.Try_Set_Text ("replacement", Success);
+      Result := Item.Handle
+        (Mouse (5, 0, Flyology_TUI.Events.Mouse_Release));
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture
+         and then Item.Value = "replacement"
+         and then not Item.Has_Selection,
+         "text replacement retained stale drag semantics or capture");
+
+      Result := Item.Handle
+        (Mouse (2, 0, Flyology_TUI.Events.Mouse_Wheel));
+      Assert (not Result.Handled and then not Result.Changed,
+              "zero wheel event reported work");
+      Item.Set_Viewport (1, 0);
+      Result := Item.Handle
+        (Mouse (2, 0, Flyology_TUI.Events.Mouse_Wheel, Wheel_Y => 1));
+      Assert (Result.Handled and then not Result.Changed,
+              "wheel boundary reported a viewport change");
+
+      Item.Set_Read_Only (True);
+      Check_Read_Only (Character_Key ("z"),
+                       "read-only text key result was inconsistent");
+      Check_Read_Only (Key (Flyology_TUI.Events.Enter_Key),
+                       "read-only Enter result was inconsistent");
+      Check_Read_Only (Key (Flyology_TUI.Events.Tab_Key),
+                       "read-only Tab result was inconsistent");
+      Check_Read_Only (Key (Flyology_TUI.Events.Backspace_Key),
+                       "read-only Backspace result was inconsistent");
+      Check_Read_Only (Key (Flyology_TUI.Events.Delete_Key),
+                       "read-only Delete result was inconsistent");
+      Check_Read_Only (Paste ("paste"),
+                       "read-only paste result was inconsistent");
+      Check_Read_Only (Character_Key ("z", Control => True),
+                       "read-only undo result was inconsistent");
+      Check_Read_Only (Character_Key ("y", Control => True),
+                       "read-only redo result was inconsistent");
+
+      Item.Set_Read_Only (False);
+      Item.Set_Tab_Width (4);
+      Item.Try_Set_Text ("a", Success);
+      Item.Set_Size (8, 1);
+      Item.Set_Cursor_Offset (0);
+      Look.Cursor := Cursor_Style;
+      Look.Current_Line := Line_Style;
+      declare
+         Frame : constant Flyology_TUI.Surfaces.Surface := Item.Render (Look);
+      begin
+         Assert (Frame.Element (2, 0).Appearance = Cursor_Style,
+                 "explicit cursor appearance was not rendered");
+         Assert (Frame.Element (7, 0).Appearance = Line_Style,
+                 "explicit current-line appearance was not rendered");
+      end;
+   end Test_Wrap_Extremes_And_Input_States;
+
    procedure Test_Syntax is
       Item : Editors.Model := Editors.Create (40, 4, 3, 80, 12, 3);
       Success : Boolean;
@@ -360,6 +531,20 @@ procedure Editing_Tests is
       Assert (Result.Changed and then Item.First_Dirty_Line = 3,
               "edit did not invalidate from its first changed line");
 
+      Behavior := Two_Tokens;
+      Item.Try_Set_Text
+        ("ab" & Wide_Wide_Character'Val (10) & "q", Success);
+      Item.Advance_Highlighting (2);
+      declare
+         Frame : constant Flyology_TUI.Surfaces.Surface := Item.Render (Look);
+      begin
+         Assert
+           (Frame.Element (2, 0).Appearance = Look.Tokens (Word)
+            and then Frame.Element (3, 0).Appearance = Look.Tokens (Comment)
+            and then Frame.Element (2, 1).Appearance = Look.Tokens (Comment),
+            "token-to-token lexer state was not threaded through the line");
+      end;
+
       Behavior := Too_Many;
       Item.Try_Set_Text ("abc", Success);
       Item.Advance_Highlighting (1);
@@ -392,6 +577,7 @@ begin
    Test_Capacity_And_Normalization;
    Test_Graphemes_And_Navigation;
    Test_History_Mouse_And_Render;
+   Test_Wrap_Extremes_And_Input_States;
    Test_Syntax;
    Ada.Text_IO.Put_Line ("editing tests passed");
 end Editing_Tests;

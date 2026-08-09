@@ -11,6 +11,10 @@ generic
    type Lexer_State is private;
    Initial_State : Lexer_State;
    Maximum_Tokens_Per_Line : Positive;
+   --  Called repeatedly for one line. The first call receives the preceding
+   --  line's final state (or Initial_State); each later call receives Final
+   --  from the previous token call. From is the prior token's exclusive end.
+   --  A no-token call supplies the line's final state.
    with procedure Next_Token
      (Line          : Wide_Wide_String;
       Initial       : Lexer_State;

@@ -278,6 +278,7 @@ package body Flyology_TUI.Components.Syntax_Editors is
             Initial : constant Lexer_State :=
               (if Line_Number = 1 then Initial_State
                else Item.Cache (Line_Number - 1).Final);
+            Token_State : Lexer_State := Initial;
             Scan_From : Natural := 0;
             Kind : Token_Kind;
             First, Last : Natural;
@@ -295,7 +296,7 @@ package body Flyology_TUI.Components.Syntax_Editors is
                loop
                   Next_Token
                     (Line,
-                     Initial,
+                     Token_State,
                      Scan_From,
                      Kind,
                      First,
@@ -317,6 +318,7 @@ package body Flyology_TUI.Components.Syntax_Editors is
                   Candidate.Spans (Candidate.Count) :=
                     (Kind => Kind, First => First, Last => Last);
                   Scan_From := Last;
+                  Token_State := Final;
                end loop;
             exception
                when Flyology_TUI.Components.Structure_Error =>
@@ -402,13 +404,19 @@ package body Flyology_TUI.Components.Syntax_Editors is
                              Flyology_TUI.Components.Text_Areas.Position :=
                                Item.Editor.Position_At_Offset
                                  (Segment_First);
-                           X : constant Integer := Integer (Gutter)
-                             + Integer (Position.Cell_Column)
-                             - (if Item.Editor.Wrapping =
-                                  Flyology_TUI.Components.Text_Areas.Soft_Wrap
-                                then Integer
-                                  (Segment_Position.Cell_Column)
-                                else Integer (Item.Editor.Viewport_Cell));
+                           Origin : constant Natural :=
+                             (if Item.Editor.Wrapping =
+                                Flyology_TUI.Components.Text_Areas.Soft_Wrap
+                              then Segment_Position.Cell_Column
+                              else Item.Editor.Viewport_Cell);
+                           Is_Visible : constant Boolean :=
+                             Position.Cell_Column >= Origin;
+                           Relative_Cell : constant Natural :=
+                             (if Is_Visible
+                              then Position.Cell_Column - Origin else 0);
+                           X : constant Natural :=
+                             (if Relative_Cell <= Natural'Last - Gutter
+                              then Gutter + Relative_Cell else Natural'Last);
                         begin
                            if not
                              (Absolute < Last_Selected
@@ -419,8 +427,9 @@ package body Flyology_TUI.Components.Syntax_Editors is
                                   Item.Editor.Cursor_Offset)
                              and then Absolute >= Segment_First
                              and then Last < Segment_Last
-                             and then X >= Integer (Gutter)
-                             and then X < Integer (Item.Editor.Width)
+                             and then Is_Visible
+                             and then X >= Gutter
+                             and then X < Item.Editor.Width
                              and then Source (Source'First + Absolute) /=
                                Wide_Wide_Character'Val (9)
                            then
@@ -430,12 +439,11 @@ package body Flyology_TUI.Components.Syntax_Editors is
                                      (Source'First + Absolute ..
                                       Source'First + Last);
                               begin
-                                 if Natural (X)
-                                   + Flyology_TUI.Glyphs.Width_Of (Glyph)
-                                   <= Item.Editor.Width
+                                 if Flyology_TUI.Glyphs.Width_Of (Glyph)
+                                   <= Item.Editor.Width - X
                                  then
                                     Result.Put
-                                      (Natural (X),
+                                      (X,
                                        Row,
                                        Glyph,
                                        Look.Tokens (Span.Kind));

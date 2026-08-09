@@ -152,6 +152,7 @@ private
       Tabs           : Positive := 4;
       Wrap           : Wrap_Mode := No_Wrap;
       First_Line     : Positive := 1;
+      First_Segment  : Natural := 0;
       First_Cell     : Natural := 0;
       Preferred_Cell : Natural := 0;
       Has_Preferred  : Boolean := False;
@@ -159,6 +160,7 @@ private
       Enabled        : Boolean := True;
       Read_Only      : Boolean := False;
       Capturing      : Boolean := False;
+      Drag_Active    : Boolean := False;
       Undo_Items     : Snapshot_Array (1 .. Max_Undo_Entries);
       Undo_Count     : Natural := 0;
       Redo_Items     : Snapshot_Array (1 .. Max_Undo_Entries);

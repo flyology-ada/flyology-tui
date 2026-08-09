@@ -6,6 +6,9 @@ package body Flyology_TUI.Components.Text_Areas is
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
 
+   function Saturating_Add (Left, Right : Natural) return Natural is
+     (if Right > Natural'Last - Left then Natural'Last else Left + Right);
+
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance is
      (Text         => Theme.Input,
@@ -104,8 +107,10 @@ package body Flyology_TUI.Components.Text_Areas is
          Item.Cursor := Clean'Length;
          Item.Anchor := Item.Cursor;
          Item.First_Line := 1;
+         Item.First_Segment := 0;
          Item.First_Cell := 0;
          Item.Has_Preferred := False;
+         Item.Drag_Active := False;
          for Index in Item.Undo_Items'Range loop
             Item.Undo_Items (Index) := (others => <>);
             Item.Redo_Items (Index) := (others => <>);
@@ -115,10 +120,17 @@ package body Flyology_TUI.Components.Text_Areas is
       end if;
    end Try_Set_Text;
 
+   function Line_Start
+     (Value : Wide_Wide_String; Line : Positive) return Natural;
+
+   procedure Ensure_Visible (Item : in out Model);
+
    procedure Set_Size (Item : in out Model; Width, Height : Positive) is
    begin
       Item.Columns := Width;
       Item.Rows := Height;
+      Item.Drag_Active := False;
+      Ensure_Visible (Item);
    end Set_Size;
 
    function Width (Item : Model) return Positive is (Item.Columns);
@@ -127,9 +139,16 @@ package body Flyology_TUI.Components.Text_Areas is
    procedure Set_Wrap (Item : in out Model; Mode : Wrap_Mode) is
    begin
       Item.Wrap := Mode;
+      Item.Drag_Active := False;
       if Mode = Soft_Wrap then
          Item.First_Cell := 0;
+         Item.First_Segment := Line_Start
+           (Value (Item), Item.First_Line);
+      else
+         Item.First_Segment := Line_Start
+           (Value (Item), Item.First_Line);
       end if;
+      Ensure_Visible (Item);
    end Set_Wrap;
 
    function Wrapping (Item : Model) return Wrap_Mode is (Item.Wrap);
@@ -138,6 +157,8 @@ package body Flyology_TUI.Components.Text_Areas is
    begin
       Item.Tabs := Width;
       Item.Has_Preferred := False;
+      Item.Drag_Active := False;
+      Ensure_Visible (Item);
    end Set_Tab_Width;
 
    function Tab_Width (Item : Model) return Positive is (Item.Tabs);
@@ -150,6 +171,7 @@ package body Flyology_TUI.Components.Text_Areas is
    procedure Blur (Item : in out Model) is
    begin
       Item.Has_Focus := False;
+      Item.Drag_Active := False;
    end Blur;
 
    function Focused (Item : Model) return Boolean is (Item.Has_Focus);
@@ -157,6 +179,9 @@ package body Flyology_TUI.Components.Text_Areas is
    procedure Set_Enabled (Item : in out Model; Enabled : Boolean) is
    begin
       Item.Enabled := Enabled;
+      if not Enabled then
+         Item.Drag_Active := False;
+      end if;
    end Set_Enabled;
 
    function Is_Enabled (Item : Model) return Boolean is (Item.Enabled);
@@ -164,6 +189,7 @@ package body Flyology_TUI.Components.Text_Areas is
    procedure Set_Read_Only (Item : in out Model; Read_Only : Boolean) is
    begin
       Item.Read_Only := Read_Only;
+      Item.Drag_Active := False;
    end Set_Read_Only;
 
    function Is_Read_Only (Item : Model) return Boolean is (Item.Read_Only);
@@ -247,7 +273,8 @@ package body Flyology_TUI.Components.Text_Areas is
               Flyology_TUI.Glyphs.Cluster_Last
                 (Value, Value'First + Pos) - Value'First;
          begin
-            Result := Result + Cluster_Width (Item, Value, Pos, Stop, Result);
+            Result := Saturating_Add
+              (Result, Cluster_Width (Item, Value, Pos, Stop, Result));
             Pos := Stop + 1;
          end;
       end loop;
@@ -279,6 +306,8 @@ package body Flyology_TUI.Components.Text_Areas is
       Item.Cursor := Boundary_At_Or_Before (Current, Offset);
       Item.Anchor := Item.Cursor;
       Item.Has_Preferred := False;
+      Item.Drag_Active := False;
+      Ensure_Visible (Item);
    end Set_Cursor_Offset;
 
    function Has_Selection (Item : Model) return Boolean is
@@ -296,11 +325,14 @@ package body Flyology_TUI.Components.Text_Areas is
       Item.Anchor := 0;
       Item.Cursor := Text.Length (Item.Content);
       Item.Has_Preferred := False;
+      Item.Drag_Active := False;
+      Ensure_Visible (Item);
    end Select_All;
 
    procedure Clear_Selection (Item : in out Model) is
    begin
       Item.Anchor := Item.Cursor;
+      Item.Drag_Active := False;
    end Clear_Selection;
 
    procedure Set_Viewport
@@ -308,7 +340,9 @@ package body Flyology_TUI.Components.Text_Areas is
    is
    begin
       Item.First_Line := Positive'Min (First_Line, Line_Count (Item));
+      Item.First_Segment := Line_Start (Value (Item), Item.First_Line);
       Item.First_Cell := (if Item.Wrap = Soft_Wrap then 0 else First_Cell);
+      Item.Drag_Active := False;
    end Set_Viewport;
 
    function Viewport_Line (Item : Model) return Positive is (Item.First_Line);
@@ -417,6 +451,8 @@ package body Flyology_TUI.Components.Text_Areas is
          Drop_Oldest (Item.Redo_Items, Item.Redo_Count);
       end loop;
       Restore (Item, Previous);
+      Item.Drag_Active := False;
+      Ensure_Visible (Item);
    end Undo;
 
    procedure Redo (Item : in out Model) is
@@ -441,6 +477,8 @@ package body Flyology_TUI.Components.Text_Areas is
          Drop_Oldest (Item.Redo_Items, Item.Redo_Count);
       end loop;
       Restore (Item, Following);
+      Item.Drag_Active := False;
+      Ensure_Visible (Item);
    end Redo;
 
    function Next_Boundary
@@ -500,6 +538,7 @@ package body Flyology_TUI.Components.Text_Areas is
       Item.Cursor := First + Clean'Length;
       Item.Anchor := Item.Cursor;
       Item.Has_Preferred := False;
+      Item.Drag_Active := False;
       return True;
    end Try_Replace;
 
@@ -537,17 +576,27 @@ package body Flyology_TUI.Components.Text_Areas is
             Span : constant Natural :=
               Cluster_Width (Item, Value, Pos, Last, Cell_At);
          begin
-            if Cell < Cell_At + Span then
+            if Cell < Saturating_Add (Cell_At, Span) then
                return
-                 (if Cell - Cell_At < (Span + 1) / 2
+                 (if Cell - Cell_At < Span / 2 + Span mod 2
                   then Pos else Last + 1);
             end if;
-            Cell_At := Cell_At + Span;
+            Cell_At := Saturating_Add (Cell_At, Span);
             Pos := Last + 1;
          end;
       end loop;
       return Stop;
    end Offset_For_Cell;
+
+   procedure Move_Wrapped
+     (Item : in out Model; Row_Delta : Integer; Selecting : Boolean);
+
+   procedure Segment_Containing
+     (Item          : Model;
+      Line          : Positive;
+      Offset        : Natural;
+      Segment_First : out Natural;
+      Segment_Last  : out Natural);
 
    procedure Move_Vertical
      (Item : in out Model; Line_Delta : Integer; Selecting : Boolean)
@@ -557,6 +606,10 @@ package body Flyology_TUI.Components.Text_Areas is
       Target_Line : Positive;
       Start, Stop : Natural;
    begin
+      if Item.Wrap = Soft_Wrap then
+         Move_Wrapped (Item, Line_Delta, Selecting);
+         return;
+      end if;
       if not Item.Has_Preferred then
          Item.Preferred_Cell := Here.Cell_Column;
          Item.Has_Preferred := True;
@@ -593,17 +646,62 @@ package body Flyology_TUI.Components.Text_Areas is
       Content_Width : constant Positive :=
         (if Item.Columns > Gutter then Item.Columns - Gutter else 1);
    begin
+      if Item.Wrap = Soft_Wrap then
+         declare
+            First, Last : Natural;
+         begin
+            Segment_Containing
+              (Item,
+               Item.First_Line,
+               Item.First_Segment,
+               First,
+               Last);
+            Item.First_Segment := First;
+         end;
+         for Row in 0 .. Item.Rows - 1 loop
+            declare
+               Line : Positive;
+               First, Last : Natural;
+               Exists : Boolean;
+            begin
+               Visible_Segment (Item, Row, Line, First, Last, Exists);
+               exit when not Exists;
+               if Line = Here.Line
+                 and then Item.Cursor >= First
+                 and then
+                   (Item.Cursor < Last
+                    or else
+                      (Item.Cursor = Last
+                       and then Last = Line_End (Value (Item), First)))
+               then
+                  return;
+               end if;
+            end;
+         end loop;
+         Item.First_Line := Here.Line;
+         declare
+            Segment_Last : Natural;
+         begin
+            Segment_Containing
+              (Item,
+               Here.Line,
+               Item.Cursor,
+               Item.First_Segment,
+               Segment_Last);
+         end;
+         Item.First_Cell := 0;
+         return;
+      end if;
       if Here.Line < Item.First_Line then
          Item.First_Line := Here.Line;
       elsif Here.Line - Item.First_Line >= Item.Rows then
          Item.First_Line := Here.Line - Item.Rows + 1;
       end if;
-      if Item.Wrap = No_Wrap then
-         if Here.Cell_Column < Item.First_Cell then
-            Item.First_Cell := Here.Cell_Column;
-         elsif Here.Cell_Column - Item.First_Cell >= Content_Width then
-            Item.First_Cell := Here.Cell_Column - Content_Width + 1;
-         end if;
+      Item.First_Segment := Line_Start (Value (Item), Item.First_Line);
+      if Here.Cell_Column < Item.First_Cell then
+         Item.First_Cell := Here.Cell_Column;
+      elsif Here.Cell_Column - Item.First_Cell >= Content_Width then
+         Item.First_Cell := Here.Cell_Column - Content_Width + 1;
       end if;
    end Ensure_Visible;
 
@@ -620,6 +718,11 @@ package body Flyology_TUI.Components.Text_Areas is
    begin
       if not Item.Enabled or else not Item.Has_Focus then
          return Result;
+      end if;
+      if Event.Kind = Flyology_TUI.Events.Paste
+        or else Event.Kind = Flyology_TUI.Events.Key_Press
+      then
+         Item.Drag_Active := False;
       end if;
       if Event.Kind = Flyology_TUI.Events.Paste then
          Result.Handled := True;
@@ -647,32 +750,34 @@ package body Flyology_TUI.Components.Text_Areas is
                begin
                   if Key_Value = "a" or else Key_Value = "A" then
                      Select_All (Item);
-                  elsif (Key_Value = "z" or else Key_Value = "Z")
-                    and then not Item.Read_Only
-                  then
-                     if Event.Key.Modified.Shift then
+                  elsif Key_Value = "z" or else Key_Value = "Z" then
+                     if not Item.Read_Only then
+                        if Event.Key.Modified.Shift then
+                           Changed := Can_Redo (Item);
+                           Redo (Item);
+                        else
+                           Changed := Can_Undo (Item);
+                           Undo (Item);
+                        end if;
+                        Result.Changed := Changed;
+                     end if;
+                  elsif Key_Value = "y" or else Key_Value = "Y" then
+                     if not Item.Read_Only then
                         Changed := Can_Redo (Item);
                         Redo (Item);
-                     else
-                        Changed := Can_Undo (Item);
-                        Undo (Item);
+                        Result.Changed := Changed;
                      end if;
-                     Result.Changed := Changed;
-                  elsif (Key_Value = "y" or else Key_Value = "Y")
-                    and then not Item.Read_Only
-                  then
-                     Changed := Can_Redo (Item);
-                     Redo (Item);
-                     Result.Changed := Changed;
                   else
                      Result.Handled := False;
                   end if;
                end;
-            elsif not Event.Key.Modified.Super and then not Item.Read_Only then
-               Changed := Insert_Text
-                 (Item, Text.To_Wide_Wide_String (Event.Key.Value));
-               Result.Changed := Changed;
-               Result.Rejected := not Changed;
+            elsif not Event.Key.Modified.Super then
+               if not Item.Read_Only then
+                  Changed := Insert_Text
+                    (Item, Text.To_Wide_Wide_String (Event.Key.Value));
+                  Result.Changed := Changed;
+                  Result.Rejected := not Changed;
+               end if;
             else
                Result.Handled := False;
             end if;
@@ -797,15 +902,156 @@ package body Flyology_TUI.Components.Text_Areas is
               Cluster_Width
                 (Item, Value, Position, Cluster_Last, Logical_Cell);
          begin
-            exit when Used > 0 and then Used + Span > Available;
-            Logical_Cell := Logical_Cell + Span;
-            Used := Used + Span;
+            exit when Used > 0
+              and then Span > Available - Natural'Min (Used, Available);
+            Logical_Cell := Saturating_Add (Logical_Cell, Span);
+            Used := Saturating_Add (Used, Span);
             Position := Cluster_Last + 1;
             exit when Used >= Available;
          end;
       end loop;
       return Position;
    end Wrapped_End;
+
+   procedure Segment_Containing
+     (Item          : Model;
+      Line          : Positive;
+      Offset        : Natural;
+      Segment_First : out Natural;
+      Segment_Last  : out Natural)
+   is
+      Current : constant Wide_Wide_String := Value (Item);
+      Gutter : constant Positive := Gutter_Width (Item);
+      Available : constant Natural :=
+        (if Item.Columns > Gutter then Item.Columns - Gutter else 0);
+      Line_Last : constant Natural :=
+        Line_End (Current, Line_Start (Current, Line));
+      First : Natural := Line_Start (Current, Line);
+      Last  : Natural;
+   begin
+      loop
+         Last := Wrapped_End
+           (Item, Current, First, Line_Last, Available);
+         if Offset < Last or else Last = Line_Last then
+            Segment_First := First;
+            Segment_Last := Last;
+            return;
+         end if;
+         First := Last;
+      end loop;
+   end Segment_Containing;
+
+   function Previous_Segment_First
+     (Item : Model; Line : Positive; Before : Natural) return Natural
+   is
+      Current : constant Wide_Wide_String := Value (Item);
+      Gutter : constant Positive := Gutter_Width (Item);
+      Available : constant Natural :=
+        (if Item.Columns > Gutter then Item.Columns - Gutter else 0);
+      First : Natural := Line_Start (Current, Line);
+      Previous : Natural := First;
+      Last : Natural;
+      Line_Last : constant Natural := Line_End (Current, First);
+   begin
+      while First < Before loop
+         Previous := First;
+         Last := Wrapped_End (Item, Current, First, Line_Last, Available);
+         exit when Last >= Before or else Last = First;
+         First := Last;
+      end loop;
+      return Previous;
+   end Previous_Segment_First;
+
+   procedure Move_Wrapped
+     (Item : in out Model; Row_Delta : Integer; Selecting : Boolean)
+   is
+      Current : constant Wide_Wide_String := Value (Item);
+      Here : constant Position := Cursor_Position (Item);
+      Target_Line : Positive := Here.Line;
+      First, Last : Natural;
+      Amount : Natural :=
+        (if Row_Delta < 0 then Natural (-Row_Delta)
+         else Natural (Row_Delta));
+      Moving_Up : constant Boolean := Row_Delta < 0;
+   begin
+      Segment_Containing
+        (Item, Here.Line, Item.Cursor, First, Last);
+      if not Item.Has_Preferred then
+         Item.Preferred_Cell :=
+           Here.Cell_Column
+           - Position_At_Offset (Item, First).Cell_Column;
+         Item.Has_Preferred := True;
+      end if;
+      while Amount > 0 loop
+         if Moving_Up then
+            if First > Line_Start (Current, Target_Line) then
+               First := Previous_Segment_First (Item, Target_Line, First);
+               Last := Wrapped_End
+                 (Item,
+                  Current,
+                  First,
+                  Line_End (Current, First),
+                  (if Item.Columns > Gutter_Width (Item)
+                   then Item.Columns - Gutter_Width (Item) else 0));
+            elsif Target_Line > 1 then
+               Target_Line := Target_Line - 1;
+               First := Previous_Segment_First
+                 (Item,
+                  Target_Line,
+                  Line_End
+                    (Current, Line_Start (Current, Target_Line)));
+               Last := Wrapped_End
+                 (Item,
+                  Current,
+                  First,
+                  Line_End (Current, First),
+                  (if Item.Columns > Gutter_Width (Item)
+                   then Item.Columns - Gutter_Width (Item) else 0));
+            else
+               exit;
+            end if;
+         else
+            if Last < Line_End (Current, First) then
+               First := Last;
+               Last := Wrapped_End
+                 (Item,
+                  Current,
+                  First,
+                  Line_End (Current, First),
+                  (if Item.Columns > Gutter_Width (Item)
+                   then Item.Columns - Gutter_Width (Item) else 0));
+            elsif Target_Line < Line_Count (Item) then
+               Target_Line := Target_Line + 1;
+               First := Line_Start (Current, Target_Line);
+               Last := Wrapped_End
+                 (Item,
+                  Current,
+                  First,
+                  Line_End (Current, First),
+                  (if Item.Columns > Gutter_Width (Item)
+                   then Item.Columns - Gutter_Width (Item) else 0));
+            else
+               exit;
+            end if;
+         end if;
+         Amount := Amount - 1;
+      end loop;
+      declare
+         Initial_Cell : constant Natural :=
+           Position_At_Offset (Item, First).Cell_Column;
+      begin
+         Move_To
+           (Item,
+            Offset_For_Cell
+              (Item,
+               Current,
+               First,
+               Last,
+               Saturating_Add (Initial_Cell, Item.Preferred_Cell),
+               Initial_Cell),
+            Selecting);
+      end;
+   end Move_Wrapped;
 
    procedure Visible_Segment
      (Item          : Model;
@@ -820,7 +1066,15 @@ package body Flyology_TUI.Components.Text_Areas is
       Available : constant Natural :=
         (if Item.Columns > Gutter then Item.Columns - Gutter else 0);
       Current_Line : Positive := Item.First_Line;
-      First : Natural := Line_Start (Current, Current_Line);
+      First : Natural :=
+        (if Item.Wrap = Soft_Wrap
+         then Natural'Max
+           (Line_Start (Current, Current_Line),
+            Natural'Min
+              (Line_End
+                 (Current, Line_Start (Current, Current_Line)),
+               Boundary_At_Or_Before (Current, Item.First_Segment)))
+         else Line_Start (Current, Current_Line));
       Last  : Natural;
    begin
       for Visual_Row in 0 .. Row loop
@@ -882,11 +1136,85 @@ package body Flyology_TUI.Components.Text_Areas is
           (Item, Current, Line_Start (Current, Line), Start);
       Cell :=
         (if X < Gutter then Segment_Cell
-         elsif Item.Wrap = Soft_Wrap then Segment_Cell + X - Gutter
-         else X - Gutter + Item.First_Cell);
+         elsif Item.Wrap = Soft_Wrap
+         then Saturating_Add (Segment_Cell, X - Gutter)
+         else Saturating_Add (X - Gutter, Item.First_Cell));
       return Offset_For_Cell
         (Item, Current, Start, Stop, Cell, Segment_Cell);
    end Offset_At_Mouse;
+
+   procedure Scroll_Viewport
+     (Item       : in out Model;
+      Direction  : Integer;
+      Amount     : Natural;
+      Did_Change : out Boolean)
+   is
+      Current : constant Wide_Wide_String := Value (Item);
+      Before_Line : constant Positive := Item.First_Line;
+      Before_Segment : constant Natural := Item.First_Segment;
+      Remaining : Natural := Amount;
+      Available : constant Natural :=
+        (if Item.Columns > Gutter_Width (Item)
+         then Item.Columns - Gutter_Width (Item) else 0);
+   begin
+      if Item.Wrap = No_Wrap then
+         if Direction > 0 then
+            if Amount >= Line_Count (Item) - Item.First_Line then
+               Item.First_Line := Line_Count (Item);
+            else
+               Item.First_Line := Item.First_Line + Amount;
+            end if;
+         else
+            Item.First_Line := Item.First_Line -
+              Natural'Min (Item.First_Line - 1, Amount);
+         end if;
+         Item.First_Segment := Line_Start (Current, Item.First_Line);
+      else
+         while Remaining > 0 loop
+            declare
+               Line_First : constant Natural :=
+                 Line_Start (Current, Item.First_Line);
+               Line_Last : constant Natural :=
+                 Line_End (Current, Line_First);
+               Segment_Last : constant Natural :=
+                 Wrapped_End
+                   (Item,
+                    Current,
+                    Item.First_Segment,
+                    Line_Last,
+                    Available);
+            begin
+               if Direction > 0 then
+                  if Segment_Last < Line_Last then
+                     Item.First_Segment := Segment_Last;
+                  elsif Item.First_Line < Line_Count (Item) then
+                     Item.First_Line := Item.First_Line + 1;
+                     Item.First_Segment :=
+                       Line_Start (Current, Item.First_Line);
+                  else
+                     exit;
+                  end if;
+               elsif Item.First_Segment > Line_First then
+                  Item.First_Segment := Previous_Segment_First
+                    (Item, Item.First_Line, Item.First_Segment);
+               elsif Item.First_Line > 1 then
+                  Item.First_Line := Item.First_Line - 1;
+                  Item.First_Segment := Previous_Segment_First
+                    (Item,
+                     Item.First_Line,
+                     Line_End
+                       (Current, Line_Start (Current, Item.First_Line)));
+               else
+                  exit;
+               end if;
+               Remaining := Remaining - 1;
+            end;
+         end loop;
+      end if;
+      Did_Change :=
+        Item.First_Line /= Before_Line
+        or else Item.First_Segment /= Before_Segment;
+   end Scroll_Viewport;
 
    function Handle
      (Item  : in out Model;
@@ -904,57 +1232,74 @@ package body Flyology_TUI.Components.Text_Areas is
    begin
       if Event.Action = Flyology_TUI.Events.Mouse_Release
         and then Item.Capturing
+        and then Event.Button = Flyology_TUI.Events.Left_Button
       then
-         if Inside then
-            Item.Cursor := Offset_At_Mouse
-              (Item, Natural (Event.X), Natural (Event.Y));
-         end if;
-         Item.Capturing := False;
-         Ensure_Visible (Item);
-         return
-           (Handled => True,
-            Changed => True,
-            Capture => Flyology_TUI.Components.Interactions.Release_Capture,
-            others => <>);
+         declare
+            Before : constant Natural := Item.Cursor;
+         begin
+            if Inside and then Item.Drag_Active and then Item.Enabled then
+               Item.Cursor := Offset_At_Mouse
+                 (Item, Natural (Event.X), Natural (Event.Y));
+            end if;
+            Item.Capturing := False;
+            Item.Drag_Active := False;
+            Ensure_Visible (Item);
+            return
+              (Handled => True,
+               Changed => Item.Cursor /= Before,
+               Capture =>
+                 Flyology_TUI.Components.Interactions.Release_Capture,
+               others => <>);
+         end;
       elsif not Item.Enabled then
          return Result;
       elsif Event.Action = Flyology_TUI.Events.Mouse_Wheel and then Inside then
-         if Event.Wheel_Y < 0 then
+         if Event.Wheel_X = 0 and then Event.Wheel_Y = 0 then
+            return Result;
+         end if;
+         Result.Handled := True;
+         if Event.Wheel_Y /= 0 then
             declare
-               Amount : constant Natural := Magnitude (Event.Wheel_Y);
+               Changed : Boolean;
             begin
-               if Amount >= Line_Count (Item) - Item.First_Line then
-                  Item.First_Line := Line_Count (Item);
-               else
-                  Item.First_Line := Item.First_Line + Amount;
-               end if;
+               Scroll_Viewport
+                 (Item,
+                  (if Event.Wheel_Y < 0 then 1 else -1),
+                  Magnitude (Event.Wheel_Y),
+                  Changed);
+               Result.Changed := Result.Changed or else Changed;
             end;
-         elsif Event.Wheel_Y > 0 then
-            Item.First_Line := Positive'Max
-              (1,
-               Item.First_Line
-               - Natural'Min
-                   (Item.First_Line - 1, Natural (Event.Wheel_Y)));
          end if;
-         if Item.Wrap = No_Wrap then
-            if Event.Wheel_X < 0 then
-               declare
-                  Amount : constant Natural := Magnitude (Event.Wheel_X);
-               begin
-                  if Amount > Natural'Last - Item.First_Cell then
-                     Item.First_Cell := Natural'Last;
-                  else
-                     Item.First_Cell := Item.First_Cell + Amount;
-                  end if;
-               end;
-            elsif Event.Wheel_X > 0 then
-               Item.First_Cell :=
-                 Item.First_Cell
-                 - Natural'Min
-                     (Item.First_Cell, Natural (Event.Wheel_X));
-            end if;
+         if Item.Wrap = No_Wrap and then Event.Wheel_X /= 0 then
+            declare
+               Before : constant Natural := Item.First_Cell;
+            begin
+               if Event.Wheel_X < 0 then
+                  declare
+                     Amount : constant Natural := Magnitude (Event.Wheel_X);
+                  begin
+                     if Amount > Natural'Last - Item.First_Cell then
+                        Item.First_Cell := Natural'Last;
+                     else
+                        Item.First_Cell := Item.First_Cell + Amount;
+                     end if;
+                  end;
+               elsif Event.Wheel_X > 0 then
+                  Item.First_Cell :=
+                    Item.First_Cell
+                    - Natural'Min
+                        (Item.First_Cell, Natural (Event.Wheel_X));
+               end if;
+               Result.Changed :=
+                 Result.Changed or else Item.First_Cell /= Before;
+            end;
+         elsif Item.Wrap = Soft_Wrap
+           and then Event.Wheel_Y = 0
+           and then Event.Wheel_X /= 0
+         then
+            Result.Handled := False;
          end if;
-         return (Handled => True, Changed => True, others => <>);
+         return Result;
       elsif Event.Button = Flyology_TUI.Events.Left_Button
         and then Event.Action = Flyology_TUI.Events.Mouse_Click
         and then Inside
@@ -966,6 +1311,7 @@ package body Flyology_TUI.Components.Text_Areas is
             Item.Anchor := Item.Cursor;
          end if;
          Item.Capturing := True;
+         Item.Drag_Active := True;
          Item.Has_Preferred := False;
          return
            (Handled => True,
@@ -975,6 +1321,8 @@ package body Flyology_TUI.Components.Text_Areas is
             others => <>);
       elsif Event.Action = Flyology_TUI.Events.Mouse_Drag
         and then Item.Capturing
+        and then Item.Drag_Active
+        and then Event.Button = Flyology_TUI.Events.Left_Button
       then
          declare
             Clamped_X : constant Natural := Natural
@@ -1082,39 +1430,40 @@ package body Flyology_TUI.Components.Text_Areas is
                        Next_Boundary (Current, Pos) - 1;
                      Span : constant Natural :=
                        Cluster_Width (Item, Current, Pos, Last, Cell);
-                     Visible_Cell : constant Integer := Integer (Cell) -
-                       (if Item.Wrap = Soft_Wrap then Integer (Segment_Cell)
-                        else Integer (Item.First_Cell));
+                     Origin : constant Natural :=
+                       (if Item.Wrap = Soft_Wrap
+                        then Segment_Cell else Item.First_Cell);
+                     Is_Visible : constant Boolean := Cell >= Origin;
+                     Visible_Cell : constant Natural :=
+                       (if Is_Visible then Cell - Origin else 0);
                      Style : constant Flyology_TUI.Styles.Style :=
                        (if not Item.Enabled then Look.Disabled
                         elsif Pos < Sel_Last and then Last + 1 > Sel_First
                         then Look.Selection else Base);
                   begin
-                     if Visible_Cell >= 0
-                       and then Natural (Visible_Cell) < Content_Width
+                     if Is_Visible and then Visible_Cell < Content_Width
                      then
                         if Current (Current'First + Pos) =
                           Wide_Wide_Character'Val (9)
                         then
                            for Index in 0 .. Natural'Min
-                             (Span, Content_Width - Natural (Visible_Cell)) - 1
+                             (Span, Content_Width - Visible_Cell) - 1
                            loop
                               Result.Put
-                                (Gutter + Natural (Visible_Cell) + Index,
+                                (Gutter + Visible_Cell + Index,
                                  Row, " ", Style);
                            end loop;
-                        elsif Natural (Visible_Cell) + Span <=
-                          Content_Width
+                        elsif Span <= Content_Width - Visible_Cell
                         then
                            Result.Put
-                             (Gutter + Natural (Visible_Cell),
+                             (Gutter + Visible_Cell,
                               Row,
                               Current
                                 (Current'First + Pos .. Current'First + Last),
                               Style);
                         end if;
                      end if;
-                     Cell := Cell + Span;
+                     Cell := Saturating_Add (Cell, Span);
                      Pos := Last + 1;
                   end;
                end loop;
@@ -1131,8 +1480,9 @@ package body Flyology_TUI.Components.Text_Areas is
       if Item.Enabled and then Item.Has_Focus then
          declare
             Here : constant Position := Cursor_Position (Item);
-            Cursor_Row : Integer := -1;
-            Cursor_X : Integer := -1;
+            Cursor_Row : Natural := 0;
+            Cursor_X : Natural := 0;
+            Cursor_Visible : Boolean := False;
          begin
             for Candidate_Row in 0 .. Item.Rows - 1 loop
                declare
@@ -1150,32 +1500,46 @@ package body Flyology_TUI.Components.Text_Areas is
                   exit when not Exists;
                   if Line = Here.Line
                     and then Item.Cursor >= Start
-                    and then Item.Cursor <= Stop
+                    and then
+                      (Item.Cursor < Stop
+                       or else
+                         (Item.Cursor = Stop
+                          and then Stop = Line_End (Current, Start)))
                   then
-                     Cursor_Row := Integer (Candidate_Row);
-                     Cursor_X := Integer (Gutter)
-                       + Integer (Here.Cell_Column)
-                       - Integer
-                           (Position_At_Offset (Item, Start).Cell_Column);
+                     declare
+                        Start_Cell : constant Natural :=
+                          Position_At_Offset (Item, Start).Cell_Column;
+                        Origin : constant Natural :=
+                          (if Item.Wrap = Soft_Wrap
+                           then Start_Cell else Item.First_Cell);
+                        Relative_Cell : constant Natural :=
+                          (if Here.Cell_Column >= Origin
+                           then Here.Cell_Column - Origin else 0);
+                     begin
+                        Cursor_Row := Candidate_Row;
+                        if Here.Cell_Column >= Origin
+                          and then Relative_Cell <= Natural'Last - Gutter
+                        then
+                           Cursor_X := Gutter + Relative_Cell;
+                           Cursor_Visible := Cursor_X < Item.Columns;
+                        end if;
+                     end;
                      exit;
                   end if;
                end;
             end loop;
-            if Cursor_Row >= 0
-              and then Cursor_X >= Integer (Gutter)
-              and then Cursor_X < Integer (Item.Columns)
-            then
+            if Cursor_Visible then
                declare
                   Existing : constant Flyology_TUI.Surfaces.Cell :=
                     Result.Element
-                      (Natural (Cursor_X), Natural (Cursor_Row));
+                      (Cursor_X, Cursor_Row);
                   Glyph : constant Wide_Wide_String :=
                     Text.To_Wide_Wide_String (Existing.Glyph);
                begin
                   if not Existing.Continuation then
                      Result.Put
-                       (Natural (Cursor_X),
-                        Natural (Cursor_Row),
+                       (Cursor_X,
+                        Cursor_Row,
                         (if Glyph'Length = 0 then " " else Glyph),
                         Look.Cursor);
                   end if;
