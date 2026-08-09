@@ -129,7 +129,8 @@ package Flyology_TUI.Components.Progress_Groups is
    --  cells after flooring go to the largest fractional remainders, with
    --  insertion order breaking ties. Determinate segments use their own
    --  fraction; Indeterminate segments render Phase, which advances only for
-   --  Running rows.
+   --  Running rows. Succeeded overrides measurement mode and renders its
+   --  segment completely filled.
    function Render_Segments
      (Item       : Model;
       Width      : Natural;

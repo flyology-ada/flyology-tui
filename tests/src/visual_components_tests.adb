@@ -176,7 +176,8 @@ procedure Visual_Components_Tests is
          begin
             Assert
               (Bad.Mode = Sparklines.Fixed_Range,
-               "equal-bounds test unexpectedly constructed an automatic scale");
+               "equal-bounds test unexpectedly constructed an automatic "
+               & "scale");
          end;
       end Equal_Bounds;
 
@@ -227,7 +228,9 @@ procedure Visual_Components_Tests is
            Flyology_TUI.Themes.Charm.Success,
          "sparkline theme mapping changed");
       Assert
-        (Empty.Width = 3 and then Empty.Height = 1 and then Row (Empty, 0) = "   ",
+        (Empty.Width = 3
+         and then Empty.Height = 1
+         and then Row (Empty, 0) = "   ",
          "empty sparkline dimensions or cells were wrong");
       Assert
         (Zero.Width = 0 and then Zero.Height = 1,
@@ -506,6 +509,20 @@ procedure Visual_Components_Tests is
          and then Row (Item.Render, 1) = " ▶ B ▓░░░"
          and then Row (Item.Render, 2) = " ▶ C ███░",
          "progress group exact row output changed");
+      declare
+         Custom : constant Progress_Groups.Appearance :=
+           (Complete =>
+              Flyology_TUI.Styles.Emphasized
+                (Flyology_TUI.Styles.Default),
+            others => Flyology_TUI.Styles.Default);
+         Explicit : constant Flyology_TUI.Surfaces.Surface :=
+           Item.Render (Custom);
+      begin
+         Assert
+           (Explicit.Element (5, 0).Appearance = Custom.Complete
+            and then Explicit.Element (5, 0).Appearance.Bold,
+            "explicit progress appearance did not reach rendered cells");
+      end;
       Assert
         (Row (Item.Render_Segments (13), 0) = "░▓░░░░░░░░██░",
          "weighted segmented progress output changed");
@@ -590,7 +607,8 @@ procedure Visual_Components_Tests is
       Assert
         (Item.Length = 3 and then Item.Selected_Id = 10,
          "capacity failure partially changed the progress group");
-      Expect_Structure (Add_Duplicate'Access, "duplicate progress id accepted");
+      Expect_Structure
+        (Add_Duplicate'Access, "duplicate progress id accepted");
 
       Item.Select_Item (20);
       Item.Set_Value (10, 0.5);
