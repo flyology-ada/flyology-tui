@@ -36,17 +36,19 @@ package body Flyology_TUI.Components.Text_Areas is
       Height                 : Positive := 8;
       Placeholder            : Wide_Wide_String := "") return Model
    is
-      Result : Model
+   begin
+      Validate_Size (Width, Height);
+      return Result : Model
         (Max_Code_Points,
          Max_Lines,
          Max_Undo_Entries,
-         Max_History_Codepoints);
-   begin
-      Validate_Size (Width, Height);
-      Result.Columns := Width;
-      Result.Rows := Height;
-      Result.Placeholder := Text.To_Unbounded_Wide_Wide_String (Placeholder);
-      return Result;
+         Max_History_Codepoints)
+      do
+         Result.Columns := Width;
+         Result.Rows := Height;
+         Result.Placeholder :=
+           Text.To_Unbounded_Wide_Wide_String (Placeholder);
+      end return;
    end Create;
 
    procedure Normalize_Bounded
@@ -219,6 +221,13 @@ package body Flyology_TUI.Components.Text_Areas is
       Item.Drag_Active := False;
       Ensure_Visible (Item);
    end Set_Size;
+
+   procedure Set_Placeholder
+     (Item : in out Model; Placeholder : Wide_Wide_String) is
+   begin
+      Item.Placeholder :=
+        Text.To_Unbounded_Wide_Wide_String (Placeholder);
+   end Set_Placeholder;
 
    function Width (Item : Model) return Positive is (Item.Columns);
    function Height (Item : Model) return Positive is (Item.Rows);

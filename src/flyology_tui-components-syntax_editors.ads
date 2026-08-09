@@ -41,11 +41,13 @@ package Flyology_TUI.Components.Syntax_Editors is
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance;
 
+   --  A model owns its text editor and token cache. It is limited so nested
+   --  editor ownership remains build-in-place.
    type Model
      (Max_Code_Points        : Positive;
       Max_Lines              : Positive;
       Max_Undo_Entries       : Positive;
-      Max_History_Codepoints : Positive) is tagged private;
+      Max_History_Codepoints : Positive) is tagged limited private;
 
    function Create
      (Max_Code_Points        : Positive;
@@ -159,7 +161,7 @@ private
       Max_Lines              : Positive;
       Max_Undo_Entries       : Positive;
       Max_History_Codepoints : Positive) is
-   tagged record
+   tagged limited record
       Editor     : Flyology_TUI.Components.Text_Areas.Model
         (Max_Code_Points,
          Max_Lines,

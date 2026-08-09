@@ -31,11 +31,13 @@ package Flyology_TUI.Components.Text_Areas is
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance;
 
+   --  A model owns its bounded text and history storage. It is limited so
+   --  construction is build-in-place and ownership cannot be copied.
    type Model
      (Max_Code_Points        : Positive;
       Max_Lines              : Positive;
       Max_Undo_Entries       : Positive;
-      Max_History_Codepoints : Positive) is tagged private;
+      Max_History_Codepoints : Positive) is tagged limited private;
 
    --  Placeholder is presentation metadata. It is not editable text and is
    --  therefore outside Max_Code_Points, Max_Lines, and history accounting;
@@ -59,6 +61,9 @@ package Flyology_TUI.Components.Text_Areas is
    function Line_Count (Item : Model) return Positive;
 
    procedure Set_Size (Item : in out Model; Width, Height : Positive);
+   --  Replace presentation metadata without changing text or history.
+   procedure Set_Placeholder
+     (Item : in out Model; Placeholder : Wide_Wide_String);
    function Width (Item : Model) return Positive;
    function Height (Item : Model) return Positive;
    procedure Set_Wrap (Item : in out Model; Mode : Wrap_Mode);
@@ -145,7 +150,7 @@ private
       Max_Lines              : Positive;
       Max_Undo_Entries       : Positive;
       Max_History_Codepoints : Positive) is
-   tagged record
+   tagged limited record
       Content        : Text.Unbounded_Wide_Wide_String;
       Placeholder    : Text.Unbounded_Wide_Wide_String;
       Cursor         : Natural := 0;

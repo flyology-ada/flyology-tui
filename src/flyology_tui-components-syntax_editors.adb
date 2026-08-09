@@ -17,21 +17,16 @@ package body Flyology_TUI.Components.Syntax_Editors is
       Height                 : Positive := 8;
       Placeholder            : Wide_Wide_String := "") return Model
    is
-      Result : Model
-        (Max_Code_Points,
-         Max_Lines,
-         Max_Undo_Entries,
-         Max_History_Codepoints);
    begin
-      Result.Editor := Flyology_TUI.Components.Text_Areas.Create
+      return Result : Model
         (Max_Code_Points,
          Max_Lines,
          Max_Undo_Entries,
-         Max_History_Codepoints,
-         Width,
-         Height,
-         Placeholder);
-      return Result;
+         Max_History_Codepoints)
+      do
+         Result.Editor.Set_Size (Width, Height);
+         Result.Editor.Set_Placeholder (Placeholder);
+      end return;
    end Create;
 
    procedure Invalidate_From (Item : in out Model; Line : Positive) is
