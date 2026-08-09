@@ -20,6 +20,32 @@ package body Flyology_TUI.Components.Tables is
      (Value : Column_Definition) return Natural is
      (Natural'Max (Value.Width, Value.Minimum_Width));
 
+   procedure Validate_Dimensions
+     (Columns : Column_Definitions; Rows : Natural)
+   is
+      Remaining : Natural;
+   begin
+      if Rows = Natural'Last then
+         raise Flyology_TUI.Components.Capacity_Error;
+      end if;
+      if Natural'Last < 2 then
+         raise Flyology_TUI.Components.Capacity_Error;
+      end if;
+      Remaining := Natural'Last - 2;
+      for Column in Column_Id loop
+         if Effective_Width (Columns (Column)) > Remaining then
+            raise Flyology_TUI.Components.Capacity_Error;
+         end if;
+         Remaining := Remaining - Effective_Width (Columns (Column));
+         if Column /= Column_Id'Last then
+            if Remaining = 0 then
+               raise Flyology_TUI.Components.Capacity_Error;
+            end if;
+            Remaining := Remaining - 1;
+         end if;
+      end loop;
+   end Validate_Dimensions;
+
    procedure Validate (Values : Item_Array) is
    begin
       if Values'Length > Capacity then
@@ -123,7 +149,9 @@ package body Flyology_TUI.Components.Tables is
       if Item.Rows > 0 then
          if Item.Focused < Item.First then
             Item.First := Item.Focused;
-         elsif Item.Focused >= Item.First + Item.Rows then
+         elsif Item.Focused >= Item.First
+           and then Item.Focused - Item.First >= Item.Rows
+         then
             Item.First := Item.Focused - Item.Rows + 1;
          end if;
          Last_First :=
@@ -178,6 +206,7 @@ package body Flyology_TUI.Components.Tables is
          Item.Focused := 1;
       else
          Item.Focused := 0;
+         Item.Focus_Zone_Value := Header_Area;
       end if;
       Ensure_Visible (Item);
    end Set_Rows;
@@ -188,24 +217,29 @@ package body Flyology_TUI.Components.Tables is
       Viewport_Rows : Natural := 8;
       Enabled       : Boolean := True) return Model
    is
-      Result : Model :=
-        (Definitions => Columns,
-         Rows        => Viewport_Rows,
-         Enabled     => Enabled,
-         others      => <>);
+      Result : Model;
    begin
+      Validate_Dimensions (Columns, Viewport_Rows);
+      Result.Definitions := Columns;
+      Result.Rows := Viewport_Rows;
+      Result.Enabled := Enabled;
       Set_Rows (Result, Values);
+      if Result.Values.Is_Empty then
+         Result.Focus_Zone_Value := Header_Area;
+      end if;
       return Result;
    end Create;
 
    procedure Set_Columns
      (Item : in out Model; Columns : Column_Definitions) is
    begin
+      Validate_Dimensions (Columns, Item.Rows);
       Item.Definitions := Columns;
    end Set_Columns;
 
    procedure Set_Viewport_Rows (Item : in out Model; Rows : Natural) is
    begin
+      Validate_Dimensions (Item.Definitions, Rows);
       Item.Rows := Rows;
       Ensure_Visible (Item);
    end Set_Viewport_Rows;
@@ -234,6 +268,10 @@ package body Flyology_TUI.Components.Tables is
    end Sort_By;
 
    function Sort (Item : Model) return Sort_Description is (Item.Sorting);
+   function Focus_Zone (Item : Model) return Focus_Area is
+     (Item.Focus_Zone_Value);
+   function Focused_Column (Item : Model) return Column_Id is
+     (Item.Header_Column);
 
    procedure Select_Id (Item : in out Model; Id : Id_Type) is
    begin
@@ -242,6 +280,7 @@ package body Flyology_TUI.Components.Tables is
             if Id_Of (Item.Values.Element (Source)) = Id then
                Item.Selected := Source + 1;
                Item.Focused := Display_Of_Source (Item, Source);
+               Item.Focus_Zone_Value := Row_Area;
                Ensure_Visible (Item);
                return;
             end if;
@@ -275,7 +314,7 @@ package body Flyology_TUI.Components.Tables is
 
    function Visible_Row_Id
      (Item : Model; Visible_Position : Positive) return Id_Type is
-     (Row_Id (Item, Item.First + Visible_Position - 1));
+     (Row_Id (Item, Item.First + (Visible_Position - 1)));
 
    function Width (Item : Model) return Natural is
       Result : Natural := 2;
@@ -319,31 +358,72 @@ package body Flyology_TUI.Components.Tables is
      ((X => 0, Y => Integer (Visible_Position),
        Width => Width (Item), Height => 1));
 
+   type Move_Direction is (Toward_Start, Toward_End);
+
+   function Magnitude (Value : Integer) return Natural is
+     (if Value = Integer'First then Natural'Last else Natural (abs Value));
+
    procedure Move_Focus
-     (Item : in out Model; Amount : Integer; Changed : out Boolean)
+     (Item      : in out Model;
+      Direction : Move_Direction;
+      Steps     : Natural;
+      Changed   : out Boolean)
    is
       Before_Focus : constant Natural := Item.Focused;
       Before_Selected : constant Natural := Item.Selected;
-      Target : Integer;
    begin
       if Item.Values.Is_Empty then
          Changed := False;
          return;
       end if;
-      if Amount = Integer'First then
-         Target := Integer'First;
-      elsif Amount = Integer'Last then
-         Target := Integer'Last;
+      if Direction = Toward_Start then
+         Item.Focused := Item.Focused -
+           Natural'Min (Steps, Item.Focused - 1);
       else
-         Target := Integer (Item.Focused) + Amount;
+         Item.Focused := Item.Focused +
+           Natural'Min (Steps, Length (Item) - Item.Focused);
       end if;
-      Item.Focused := Natural
-        (Integer'Max (1, Integer'Min (Integer (Length (Item)), Target)));
       Item.Selected := Source_At (Item, Item.Focused) + 1;
       Ensure_Visible (Item);
       Changed := Item.Focused /= Before_Focus
         or else Item.Selected /= Before_Selected;
    end Move_Focus;
+
+   function Is_Activation_Key
+     (Event : Flyology_TUI.Events.Terminal_Event) return Boolean is
+   begin
+      return Event.Key.Kind = Flyology_TUI.Events.Enter_Key
+        or else
+          (Event.Key.Kind = Flyology_TUI.Events.Text_Key
+           and then Text_Impl.To_Wide_Wide_String (Event.Key.Value) = " ");
+   end Is_Activation_Key;
+
+   function Next_Sort
+     (Item : Model; Column : Column_Id) return Sort_Direction is
+     (if Item.Sorting.Column /= Column
+        or else Item.Sorting.Direction = Unsorted
+      then Ascending
+      elsif Item.Sorting.Direction = Ascending then Descending
+      else Unsorted);
+
+   procedure Move_Header
+     (Item      : in out Model;
+      Direction : Move_Direction;
+      Changed   : out Boolean)
+   is
+      Before : constant Column_Id := Item.Header_Column;
+   begin
+      if Direction = Toward_Start
+        and then Item.Header_Column /= Column_Id'First
+      then
+         Item.Header_Column := Column_Id'Pred (Item.Header_Column);
+      elsif Direction = Toward_End
+        and then Item.Header_Column /= Column_Id'Last
+      then
+         Item.Header_Column := Column_Id'Succ (Item.Header_Column);
+      end if;
+      Changed := Before /= Item.Header_Column;
+   end Move_Header;
 
    function Handle
      (Item  : in out Model;
@@ -351,28 +431,69 @@ package body Flyology_TUI.Components.Tables is
       return Flyology_TUI.Components.Interactions.Update_Result
    is
       Changed : Boolean := False;
-      Amount  : Integer := 0;
    begin
-      if not Item.Enabled or else Item.Values.Is_Empty
+      if not Item.Enabled
         or else Event.Kind /= Flyology_TUI.Events.Key_Press
       then
          return Flyology_TUI.Components.Interactions.Ignored;
       end if;
+      if Item.Focus_Zone_Value = Header_Area then
+         case Event.Key.Kind is
+            when Flyology_TUI.Events.Arrow_Left_Key =>
+               Move_Header (Item, Toward_Start, Changed);
+            when Flyology_TUI.Events.Arrow_Right_Key =>
+               Move_Header (Item, Toward_End, Changed);
+            when Flyology_TUI.Events.Arrow_Down_Key =>
+               if not Item.Values.Is_Empty then
+                  Item.Focus_Zone_Value := Row_Area;
+                  Changed := True;
+               end if;
+            when Flyology_TUI.Events.Arrow_Up_Key => null;
+            when others =>
+               if Is_Activation_Key (Event)
+                 and then Item.Definitions (Item.Header_Column).Sortable
+               then
+                  Sort_By
+                    (Item, Item.Header_Column,
+                     Next_Sort (Item, Item.Header_Column));
+                  return
+                    (Handled => True, Changed => True, Activated => True,
+                     others => <>);
+               end if;
+               return Flyology_TUI.Components.Interactions.Ignored;
+         end case;
+         return (Handled => True, Changed => Changed, others => <>);
+      elsif Item.Values.Is_Empty then
+         Item.Focus_Zone_Value := Header_Area;
+         return (Handled => True, Changed => True, others => <>);
+      end if;
+
       case Event.Key.Kind is
-         when Flyology_TUI.Events.Arrow_Up_Key => Amount := -1;
-         when Flyology_TUI.Events.Arrow_Down_Key => Amount := 1;
+         when Flyology_TUI.Events.Arrow_Up_Key =>
+            if Item.Focused = 1 then
+               Item.Focus_Zone_Value := Header_Area;
+               Changed := True;
+            else
+               Move_Focus (Item, Toward_Start, 1, Changed);
+            end if;
+         when Flyology_TUI.Events.Arrow_Down_Key =>
+            Move_Focus (Item, Toward_End, 1, Changed);
          when Flyology_TUI.Events.Page_Up_Key =>
-            Amount := -Integer (Natural'Max (1, Item.Rows));
+            Move_Focus
+              (Item, Toward_Start, Natural'Max (1, Item.Rows), Changed);
          when Flyology_TUI.Events.Page_Down_Key =>
-            Amount := Integer (Natural'Max (1, Item.Rows));
-         when Flyology_TUI.Events.Home_Key => Amount := Integer'First;
-         when Flyology_TUI.Events.End_Key => Amount := Integer'Last;
-         when Flyology_TUI.Events.Enter_Key =>
-            return (Handled => True, Activated => True, others => <>);
+            Move_Focus
+              (Item, Toward_End, Natural'Max (1, Item.Rows), Changed);
+         when Flyology_TUI.Events.Home_Key =>
+            Move_Focus (Item, Toward_Start, Natural'Last, Changed);
+         when Flyology_TUI.Events.End_Key =>
+            Move_Focus (Item, Toward_End, Natural'Last, Changed);
          when others =>
+            if Is_Activation_Key (Event) then
+               return (Handled => True, Activated => True, others => <>);
+            end if;
             return Flyology_TUI.Components.Interactions.Ignored;
       end case;
-      Move_Focus (Item, Amount, Changed);
       return (Handled => True, Changed => Changed, others => <>);
    end Handle;
 
@@ -407,12 +528,17 @@ package body Flyology_TUI.Components.Tables is
         and then Event.Y >= 0 and then Event.Y < Integer (Height (Item))
         and then Event.Wheel_Y /= 0 and then not Item.Values.Is_Empty
       then
-         if Event.Wheel_Y = Integer'First then
-            Move_Focus (Item, Integer'Last, Changed);
+         Item.Focus_Zone_Value := Row_Area;
+         if Event.Wheel_Y > 0 then
+            Move_Focus
+              (Item, Toward_Start, Magnitude (Event.Wheel_Y), Changed);
          else
-            Move_Focus (Item, -Event.Wheel_Y, Changed);
+            Move_Focus
+              (Item, Toward_End, Magnitude (Event.Wheel_Y), Changed);
          end if;
-         return (Handled => True, Changed => Changed, others => <>);
+         return
+           (Handled => True, Changed => Changed, Focus_Requested => True,
+            others => <>);
       elsif Event.Action /= Flyology_TUI.Events.Mouse_Click
         or else Event.Button /= Flyology_TUI.Events.Left_Button
         or else Event.X < 0 or else Event.X >= Integer (Width (Item))
@@ -424,35 +550,47 @@ package body Flyology_TUI.Components.Tables is
             declare
                Column : constant Column_Id := Hit_Column (Item, Event.X);
             begin
+               Changed := Item.Focus_Zone_Value /= Header_Area
+                 or else Item.Header_Column /= Column;
+               Item.Focus_Zone_Value := Header_Area;
+               Item.Header_Column := Column;
                if Item.Definitions (Column).Sortable
                  and then Flyology_TUI.Geometry.Contains
                    (Column_Region (Item, Column), Event.X, 0)
                then
                   Sort_By
-                    (Item, Column,
-                     (if Item.Sorting.Direction = Ascending
-                        and then Item.Sorting.Column = Column
-                      then Descending else Ascending));
+                    (Item, Column, Next_Sort (Item, Column));
                   return
                     (Handled => True, Changed => True,
                      Focus_Requested => True, others => <>);
                end if;
             end;
          end if;
-         return (Handled => True, Focus_Requested => True, others => <>);
+         if Item.Focus_Zone_Value /= Header_Area then
+            Item.Focus_Zone_Value := Header_Area;
+            Changed := True;
+         end if;
+         return
+           (Handled => True,
+            Changed => Changed,
+            Focus_Requested => True,
+            others => <>);
       else
          declare
             Visible : constant Natural := Natural (Event.Y);
          begin
             if Visible <= Visible_Row_Count (Item) then
                declare
-                  Display : constant Natural := Item.First + Visible - 1;
+                  Display : constant Natural :=
+                    Item.First + (Visible - 1);
                   Source  : constant Natural := Source_At (Item, Display);
                begin
                   Changed := Item.Selected /= Source + 1
-                    or else Item.Focused /= Display;
+                    or else Item.Focused /= Display
+                    or else Item.Focus_Zone_Value /= Row_Area;
                   Item.Selected := Source + 1;
                   Item.Focused := Display;
+                  Item.Focus_Zone_Value := Row_Area;
                   return
                     (Handled => True, Changed => Changed, Activated => True,
                      Focus_Requested => True, others => <>);
@@ -503,6 +641,20 @@ package body Flyology_TUI.Components.Tables is
       Target.Write (X + Offset, Y, Value, Style);
    end Write_Aligned;
 
+   function Render_Cell
+     (Columns : Natural;
+      Value   : Wide_Wide_String;
+      Align   : Alignment;
+      Style   : Flyology_TUI.Styles.Style)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Result : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (Columns, 1, Style);
+   begin
+      Write_Aligned (Result, 0, 0, Columns, Value, Align, Style);
+      return Result;
+   end Render_Cell;
+
    function Render
      (Item      : Model;
       Look      : Appearance;
@@ -519,6 +671,11 @@ package body Flyology_TUI.Components.Tables is
             X : constant Natural := Column_X (Item, Column);
             W : constant Natural :=
               Effective_Width (Item.Definitions (Column));
+            Header_Style : constant Flyology_TUI.Styles.Style :=
+              (if Has_Focus
+                 and then Item.Focus_Zone_Value = Header_Area
+                 and then Item.Header_Column = Column
+               then Look.Focused else Look.Header);
             Marker : constant Wide_Wide_String :=
               (if W = 0 then ""
                elsif Item.Sorting.Direction = Ascending
@@ -527,14 +684,19 @@ package body Flyology_TUI.Components.Tables is
                  and then Item.Sorting.Column = Column then "▼"
                else "");
          begin
-            Write_Aligned
-              (Result, X, 0, W,
-               Text_Impl.To_Wide_Wide_String
-                 (Item.Definitions (Column).Heading),
-               Item.Definitions (Column).Align, Look.Header);
-            if Marker'Length > 0 and then W > 0 then
-               Result.Write (X + W - 1, 0, Marker, Look.Header);
-            end if;
+            declare
+               Header_Cell : Flyology_TUI.Surfaces.Surface :=
+                 Render_Cell
+                   (W,
+                    Text_Impl.To_Wide_Wide_String
+                      (Item.Definitions (Column).Heading),
+                    Item.Definitions (Column).Align, Header_Style);
+            begin
+               if Marker'Length > 0 and then W > 0 then
+                  Header_Cell.Write (W - 1, 0, Marker, Header_Style);
+               end if;
+               Result.Overlay (Header_Cell, X, 0);
+            end;
             if Column /= Column_Id'Last and then X + W < Width (Item) then
                Result.Write (X + W, 0, "│", Look.Divider);
             end if;
@@ -543,7 +705,7 @@ package body Flyology_TUI.Components.Tables is
 
       for Visible in 1 .. Visible_Row_Count (Item) loop
          declare
-            Display : constant Natural := Item.First + Visible - 1;
+            Display : constant Natural := Item.First + (Visible - 1);
             Source  : constant Natural := Source_At (Item, Display);
             Selected : constant Boolean := Item.Selected = Source + 1;
             Focused : constant Boolean :=
@@ -562,10 +724,12 @@ package body Flyology_TUI.Components.Tables is
                   W : constant Natural :=
                     Effective_Width (Item.Definitions (Column));
                begin
-                  Write_Aligned
-                    (Result, X, Visible, W,
-                     Cell (Item.Values.Element (Source), Column),
-                     Item.Definitions (Column).Align, Style);
+                  Result.Overlay
+                    (Render_Cell
+                       (W,
+                        Cell (Item.Values.Element (Source), Column),
+                        Item.Definitions (Column).Align, Style),
+                     X, Visible);
                   if Column /= Column_Id'Last
                     and then X + W < Width (Item)
                   then

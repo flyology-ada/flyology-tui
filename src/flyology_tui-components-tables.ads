@@ -24,6 +24,7 @@ package Flyology_TUI.Components.Tables is
 
    type Alignment is (Align_Left, Align_Center, Align_Right);
    type Sort_Direction is (Unsorted, Ascending, Descending);
+   type Focus_Area is (Row_Area, Header_Area);
 
    type Column_Definition is record
       Heading       : Text.Unbounded_Wide_Wide_String;
@@ -73,6 +74,11 @@ package Flyology_TUI.Components.Tables is
       Column    : Column_Id;
       Direction : Sort_Direction);
    function Sort (Item : Model) return Sort_Description;
+   --  Row and header focus are distinct. Up from the first row enters the
+   --  header; Down returns to the preserved row selection.
+   function Focus_Zone (Item : Model) return Focus_Area;
+   --  The column targeted by header keyboard input and sort activation.
+   function Focused_Column (Item : Model) return Column_Id;
 
    procedure Select_Id (Item : in out Model; Id : Id_Type);
    procedure Clear_Selection (Item : in out Model);
@@ -143,6 +149,8 @@ private
       Sorting      : Sort_Description;
       Selected     : Natural := 0;
       Focused      : Natural := 0;
+      Focus_Zone_Value : Focus_Area := Row_Area;
+      Header_Column : Column_Id := Column_Id'First;
       First        : Natural := 0;
       Rows         : Natural := 8;
       Enabled      : Boolean := True;

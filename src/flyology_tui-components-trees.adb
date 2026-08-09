@@ -32,6 +32,17 @@ package body Flyology_TUI.Components.Trees is
          then
             raise Flyology_TUI.Components.Structure_Error;
          end if;
+         declare
+            Depth : constant Natural := Depth_Of (Values (Position));
+            Label_Width : constant Natural :=
+              Flyology_TUI.Glyphs.Width_Of (Label (Values (Position)));
+         begin
+            if Depth > (Natural'Last - 2) / 2
+              or else Label_Width > Natural'Last - (Depth * 2 + 2)
+            then
+               raise Flyology_TUI.Components.Capacity_Error;
+            end if;
+         end;
          Previous_Depth := Depth_Of (Values (Position));
          for Other in Values'Range loop
             if Other > Position
@@ -169,7 +180,9 @@ package body Flyology_TUI.Components.Trees is
             end if;
             if Position < Item.First then
                Item.First := Position;
-            elsif Position >= Item.First + Item.Rows then
+            elsif Position >= Item.First
+              and then Position - Item.First >= Item.Rows
+            then
                Item.First := Position - Item.Rows + 1;
             end if;
             Item.First := Natural'Min
@@ -314,7 +327,7 @@ package body Flyology_TUI.Components.Trees is
       return Flyology_TUI.Geometry.Rectangle
    is
       Source : constant Natural :=
-        Source_At_Visible (Item, Item.First + Visible_Position - 1);
+        Source_At_Visible (Item, Item.First + (Visible_Position - 1));
    begin
       return
         (X      => Integer (Depth_Of (Item.Values.Element (Source)) * 2),
@@ -323,23 +336,34 @@ package body Flyology_TUI.Components.Trees is
          Height => 1);
    end Disclosure_Region;
 
-   procedure Move_To_Visible
-     (Item : in out Model; Target : Integer; Changed : out Boolean)
+   type Move_Direction is (Toward_Start, Toward_End);
+
+   function Magnitude (Value : Integer) return Natural is
+     (if Value = Integer'First then Natural'Last else Natural (abs Value));
+
+   procedure Move_Visible
+     (Item      : in out Model;
+      Direction : Move_Direction;
+      Steps     : Natural;
+      Changed   : out Boolean)
    is
       Before : constant Natural := Item.Selected;
       Count  : constant Natural := Visible_Length (Item);
-      Position : Natural;
+      Position : Natural := Visible_Position_Of (Item, Item.Selected - 1);
    begin
       if Count = 0 then
          Changed := False;
          return;
       end if;
-      Position := Natural
-        (Integer'Max (1, Integer'Min (Integer (Count), Target)));
+      if Direction = Toward_Start then
+         Position := Position - Natural'Min (Steps, Position - 1);
+      else
+         Position := Position + Natural'Min (Steps, Count - Position);
+      end if;
       Item.Selected := Source_At_Visible (Item, Position) + 1;
       Ensure_Selected_Visible (Item);
       Changed := Before /= Item.Selected;
-   end Move_To_Visible;
+   end Move_Visible;
 
    function Handle
      (Item  : in out Model;
@@ -348,7 +372,6 @@ package body Flyology_TUI.Components.Trees is
    is
       Changed : Boolean := False;
       Source  : Natural;
-      Current : Natural;
    begin
       if not Item.Enabled or else Item.Values.Is_Empty
         or else Event.Kind /= Flyology_TUI.Events.Key_Press
@@ -356,24 +379,21 @@ package body Flyology_TUI.Components.Trees is
          return Flyology_TUI.Components.Interactions.Ignored;
       end if;
       Source := Item.Selected - 1;
-      Current := Visible_Position_Of (Item, Source);
       case Event.Key.Kind is
          when Flyology_TUI.Events.Arrow_Up_Key =>
-            Move_To_Visible (Item, Integer (Current) - 1, Changed);
+            Move_Visible (Item, Toward_Start, 1, Changed);
          when Flyology_TUI.Events.Arrow_Down_Key =>
-            Move_To_Visible (Item, Integer (Current) + 1, Changed);
+            Move_Visible (Item, Toward_End, 1, Changed);
          when Flyology_TUI.Events.Page_Up_Key =>
-            Move_To_Visible
-              (Item, Integer (Current) - Integer (Natural'Max (1, Item.Rows)),
-               Changed);
+            Move_Visible
+              (Item, Toward_Start, Natural'Max (1, Item.Rows), Changed);
          when Flyology_TUI.Events.Page_Down_Key =>
-            Move_To_Visible
-              (Item, Integer (Current) + Integer (Natural'Max (1, Item.Rows)),
-               Changed);
+            Move_Visible
+              (Item, Toward_End, Natural'Max (1, Item.Rows), Changed);
          when Flyology_TUI.Events.Home_Key =>
-            Move_To_Visible (Item, 1, Changed);
+            Move_Visible (Item, Toward_Start, Natural'Last, Changed);
          when Flyology_TUI.Events.End_Key =>
-            Move_To_Visible (Item, Integer (Visible_Length (Item)), Changed);
+            Move_Visible (Item, Toward_End, Natural'Last, Changed);
          when Flyology_TUI.Events.Arrow_Left_Key =>
             if Has_Child (Item, Source)
               and then Item.Expanded.Element (Source)
@@ -420,19 +440,16 @@ package body Flyology_TUI.Components.Trees is
       elsif Event.Action = Flyology_TUI.Events.Mouse_Wheel
         and then Event.Wheel_Y /= 0
       then
-         declare
-            Current : constant Natural :=
-              Visible_Position_Of (Item, Item.Selected - 1);
-            Amount : constant Integer :=
-              (if Event.Wheel_Y = Integer'First
-               then Integer'Last else -Event.Wheel_Y);
-            Target : constant Integer :=
-              (if Amount = Integer'Last then Integer'Last
-               else Integer (Current) + Amount);
-         begin
-            Move_To_Visible (Item, Target, Changed);
-         end;
-         return (Handled => True, Changed => Changed, others => <>);
+         if Event.Wheel_Y > 0 then
+            Move_Visible
+              (Item, Toward_Start, Magnitude (Event.Wheel_Y), Changed);
+         else
+            Move_Visible
+              (Item, Toward_End, Magnitude (Event.Wheel_Y), Changed);
+         end if;
+         return
+           (Handled => True, Changed => Changed, Focus_Requested => True,
+            others => <>);
       elsif Event.Action = Flyology_TUI.Events.Mouse_Click
         and then Event.Button = Flyology_TUI.Events.Left_Button
       then
@@ -442,7 +459,7 @@ package body Flyology_TUI.Components.Trees is
             if Slot <= Visible_Row_Count (Item) then
                declare
                   Source : constant Natural :=
-                    Source_At_Visible (Item, Item.First + Slot - 1);
+                    Source_At_Visible (Item, Item.First + (Slot - 1));
                   Disclosure_X : constant Integer :=
                     Integer (Depth_Of (Item.Values.Element (Source)) * 2);
                begin
@@ -500,7 +517,7 @@ package body Flyology_TUI.Components.Trees is
       for Slot in 1 .. Visible_Row_Count (Item) loop
          declare
             Source : constant Natural :=
-              Source_At_Visible (Item, Item.First + Slot - 1);
+              Source_At_Visible (Item, Item.First + (Slot - 1));
             Depth  : constant Natural :=
               Depth_Of (Item.Values.Element (Source));
             Chosen : constant Boolean := Item.Selected = Source + 1;

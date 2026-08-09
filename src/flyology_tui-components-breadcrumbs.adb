@@ -123,11 +123,21 @@ package body Flyology_TUI.Components.Breadcrumbs is
       end if;
       for Position in 0 .. Length (Item) - 1 loop
          if Position > 0 then
+            if Result > Natural'Last - Separator_Width then
+               return Natural'Last;
+            end if;
             Result := Result + Separator_Width;
          end if;
-         Result := Result +
-           Flyology_TUI.Glyphs.Width_Of
-             (Label (Item.Values.Element (Position)));
+         declare
+            Label_Width : constant Natural :=
+              Flyology_TUI.Glyphs.Width_Of
+                (Label (Item.Values.Element (Position)));
+         begin
+            if Label_Width > Natural'Last - Result then
+               return Natural'Last;
+            end if;
+            Result := Result + Label_Width;
+         end;
       end loop;
       return Result;
    end Natural_Width;
@@ -159,20 +169,33 @@ package body Flyology_TUI.Components.Breadcrumbs is
       First := Item.Focused;
       Last := First;
       Used := (if First > 1 then 2 else 0);
-      Used := Used +
-        Flyology_TUI.Glyphs.Width_Of
-          (Label (Item.Values.Element (First - 1)));
-      Candidate := First + 1;
-      while Candidate <= Length (Item) loop
+      declare
+         Label_Width : constant Natural :=
+           Flyology_TUI.Glyphs.Width_Of
+             (Label (Item.Values.Element (First - 1)));
+      begin
+         if Label_Width > Natural'Last - Used then
+            Used := Natural'Last;
+         else
+            Used := Used + Label_Width;
+         end if;
+      end;
+      Candidate := First;
+      while Candidate < Length (Item) loop
+         Candidate := Candidate + 1;
          declare
-            Added : constant Natural := Separator_Width +
+            Label_Width : constant Natural :=
               Flyology_TUI.Glyphs.Width_Of
                 (Label (Item.Values.Element (Candidate - 1)));
+            Added : constant Natural :=
+              (if Label_Width > Natural'Last - Separator_Width
+               then Natural'Last else Separator_Width + Label_Width);
             Right_Marker : constant Natural :=
               (if Candidate < Length (Item) then 2 else 0);
          begin
             exit when Used > Item.Max_Width
-              or else Added + Right_Marker > Item.Max_Width - Used;
+              or else Added > Item.Max_Width - Used
+              or else Right_Marker > Item.Max_Width - Used - Added;
             Used := Used + Added;
             Last := Candidate;
             Candidate := Candidate + 1;
@@ -195,7 +218,8 @@ package body Flyology_TUI.Components.Breadcrumbs is
       end if;
       for Candidate in First .. Position - 1 loop
          X := X + Flyology_TUI.Glyphs.Width_Of
-           (Label (Item.Values.Element (Candidate - 1))) + Separator_Width;
+           (Label (Item.Values.Element (Candidate - 1)));
+         X := X + Separator_Width;
       end loop;
       return
         (X => Integer (X), Y => 0,

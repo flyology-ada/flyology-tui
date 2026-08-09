@@ -35,11 +35,12 @@ procedure Data_Navigation_Tests is
      (case Which is
          when Name_Column => Row_Label (Item),
          when Score_Column =>
-           (case Item.Score is
-               when 10 => "10",
-               when 20 => "20",
-               when 30 => "30",
-               when others => "40"));
+           (if Item.Id = 3 or else Item.Id = 4 then ""
+            else (case Item.Score is
+                     when 10 => "10",
+                     when 20 => "20",
+                     when 30 => "30",
+                     when others => "40")));
    function Row_Less
      (Left, Right : Row; Which : Column) return Boolean is
      (case Which is
@@ -55,6 +56,7 @@ procedure Data_Navigation_Tests is
       Less      => Row_Less,
       Capacity  => 4);
    use type Tables.Sort_Direction;
+   use type Tables.Focus_Area;
 
    type Node is record
       Id    : Natural;
@@ -122,6 +124,18 @@ procedure Data_Navigation_Tests is
       return Flyology_TUI.Events.Pressed (Value);
    end Key;
 
+   function Space return Flyology_TUI.Events.Terminal_Event is
+     (Flyology_TUI.Events.Pressed
+        ((Kind     => Flyology_TUI.Events.Text_Key,
+          Modified => (others => False),
+          Repeated => False,
+          Value    => Text.To_Unbounded_Wide_Wide_String (" "))));
+
+   function Glyph
+     (Item : Flyology_TUI.Surfaces.Surface; X, Y : Natural)
+      return Wide_Wide_String is
+     (Text.To_Wide_Wide_String (Item.Element (X, Y).Glyph));
+
    function Mouse
      (X, Y    : Integer;
       Action  : Flyology_TUI.Events.Mouse_Action;
@@ -144,6 +158,7 @@ procedure Data_Navigation_Tests is
       Before : Flyology_TUI.Styles.Style;
       Frame  : Flyology_TUI.Surfaces.Surface;
       Raised : Boolean := False;
+      Before_Id : Natural;
    begin
       Item.Sort_By (Name_Column, Tables.Ascending);
       Assert
@@ -157,10 +172,15 @@ procedure Data_Navigation_Tests is
          "descending table sort is not stable");
 
       Item.Select_Id (2);
+      Item.Sort_By (Name_Column, Tables.Ascending);
+      Assert
+        (Item.Focused_Id = 2 and then Item.Selected_Id = 2,
+         "sorting changed the focused or selected row identity");
       Item.Set_Rows ((R3, R1, R2));
       Assert
-        (Item.Selected_Id = 2,
-         "table selection did not follow its stable ID");
+        (Item.Selected_Id = 2 and then Item.Focused_Id = 2,
+         "table selection or focus did not follow its stable ID");
+      Item.Sort_By (Score_Column, Tables.Unsorted);
       Result := Item.Handle
         (Mouse
            (Item.Column_Region (Score_Column).X, 0,
@@ -178,6 +198,44 @@ procedure Data_Navigation_Tests is
         (Item.Sort.Direction = Tables.Descending,
          "second table header click did not reverse order");
       Result := Item.Handle
+        (Mouse
+           (Item.Column_Region (Score_Column).X, 0,
+            Flyology_TUI.Events.Mouse_Click));
+      Assert
+        (Item.Sort.Direction = Tables.Unsorted,
+         "third table header click did not clear sorting");
+
+      Item.Select_Id (Item.Row_Id (1));
+      Before_Id := Item.Selected_Id;
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Up_Key));
+      Assert
+        (Result.Changed and then Item.Focus_Zone = Tables.Header_Area
+         and then Item.Selected_Id = Before_Id,
+         "table keyboard focus could not enter the header stably");
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Right_Key));
+      Assert
+        (Result.Handled and then Item.Focused_Column = Score_Column,
+         "table header keyboard navigation did not select a column");
+      Item.Sort_By (Score_Column, Tables.Unsorted);
+      Result := Item.Handle (Key (Flyology_TUI.Events.Enter_Key));
+      Assert
+        (Result.Activated and then Item.Sort.Direction = Tables.Ascending,
+         "table header Enter did not start ascending sorting");
+      Result := Item.Handle (Space);
+      Assert
+        (Result.Activated and then Item.Sort.Direction = Tables.Descending,
+         "table header Space did not reverse sorting");
+      Result := Item.Handle (Key (Flyology_TUI.Events.Enter_Key));
+      Assert
+        (Item.Sort.Direction = Tables.Unsorted,
+         "table keyboard sort cycle did not return to unsorted");
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Down_Key));
+      Assert
+        (Result.Changed and then Item.Focus_Zone = Tables.Row_Area
+         and then Item.Selected_Id = Before_Id,
+         "table keyboard focus did not return to stable row selection");
+
+      Result := Item.Handle
         (Mouse (1, 1, Flyology_TUI.Events.Mouse_Click));
       Assert
         (Result.Activated and then Result.Focus_Requested,
@@ -189,8 +247,38 @@ procedure Data_Navigation_Tests is
            (0, 0, Flyology_TUI.Events.Mouse_Wheel,
             Flyology_TUI.Events.No_Button, Integer'First));
       Assert
-        (Result.Handled and then Item.Focused_Id = Item.Row_Id (Item.Length),
+        (Result.Handled and then Result.Focus_Requested
+         and then Item.Focused_Id = Item.Row_Id (Item.Length),
          "extreme table wheel input did not saturate at the end");
+      Result := Item.Handle
+        (Mouse
+           (-1, 0, Flyology_TUI.Events.Mouse_Wheel,
+            Flyology_TUI.Events.No_Button, Integer'Last));
+      Assert (not Result.Handled,
+              "table handled an extreme wheel event outside its region");
+
+      Item.Select_Id (2);
+      Before_Id := Item.Selected_Id;
+      begin
+         Item.Select_Id (99);
+      exception
+         when Flyology_TUI.Components.Structure_Error => Raised := True;
+      end;
+      Assert
+        (Raised and then Item.Selected_Id = Before_Id,
+         "missing table ID changed selection before failing");
+      Raised := False;
+      Item.Set_Enabled (False);
+      Result := Item.Handle (Key (Flyology_TUI.Events.End_Key));
+      Assert (not Result.Handled and then Item.Selected_Id = Before_Id,
+              "disabled table accepted keyboard input");
+      Result := Item.Handle
+        (Mouse
+           (0, 1, Flyology_TUI.Events.Mouse_Wheel,
+            Flyology_TUI.Events.No_Button, Integer'First));
+      Assert (not Result.Handled and then Item.Selected_Id = Before_Id,
+              "disabled table accepted mouse input");
+      Item.Set_Enabled (True);
 
       begin
          Item.Set_Rows ((R1, R2, R2));
@@ -209,6 +297,48 @@ procedure Data_Navigation_Tests is
       Assert
         (Raised and then Item.Length = 3,
          "table capacity failure mutated the rows");
+      Raised := False;
+      declare
+         Old_Rows : constant Natural := Item.Viewport_Rows;
+      begin
+         begin
+            Item.Set_Viewport_Rows (Natural'Last);
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+         Assert
+           (Raised and then Item.Viewport_Rows = Old_Rows,
+            "table Natural'Last height failure was not atomic");
+      end;
+      Raised := False;
+      declare
+         Huge : Tables.Column_Definitions := Columns;
+         Old_Width : constant Natural := Item.Width;
+      begin
+         Huge (Name_Column).Width := Natural'Last;
+         begin
+            Item.Set_Columns (Huge);
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+         Assert
+           (Raised and then Item.Width = Old_Width,
+            "table overflowing columns changed dimensions before failing");
+      end;
+      Raised := False;
+      begin
+         declare
+            Too_Tall : constant Tables.Model :=
+              Tables.Create ((R1, R2), Columns, Natural'Last);
+            pragma Unreferenced (Too_Tall);
+         begin
+            null;
+         end;
+      exception
+         when Flyology_TUI.Components.Capacity_Error => Raised := True;
+      end;
+      Assert (Raised,
+              "table creation accepted an overflowing Natural'Last height");
 
       Assert
         (Empty.Is_Empty and then Empty.Visible_Row_Count = 0
@@ -227,6 +357,24 @@ procedure Data_Navigation_Tests is
       Assert
         (Before = Flyology_TUI.Themes.Charm.Error,
          "table ignored an explicit header appearance");
+      Result := Item.Handle
+        (Mouse
+           (Item.Column_Region (Score_Column).X, 0,
+            Flyology_TUI.Events.Mouse_Click));
+      Frame := Item.Render
+        (Look => Tables.Appearance'
+           (Header   => Flyology_TUI.Themes.Charm.Error,
+            Normal   => Flyology_TUI.Themes.Charm.Success,
+            Selected => Flyology_TUI.Themes.Charm.Selected,
+            Focused  => Flyology_TUI.Themes.Charm.Focused,
+            Muted    => Flyology_TUI.Themes.Charm.Muted,
+            Divider  => Flyology_TUI.Themes.Charm.Border),
+         Has_Focus => True);
+      Assert
+        (Frame.Element
+           (Natural (Item.Column_Region (Score_Column).X), 0).Appearance =
+           Flyology_TUI.Themes.Charm.Focused,
+         "table did not render keyboard/mouse header focus distinctly");
       Assert
         (Tables.From_Theme (Flyology_TUI.Themes.Charm).Selected =
            Flyology_TUI.Themes.Charm.Selected,
@@ -236,9 +384,15 @@ procedure Data_Navigation_Tests is
          "Unicode table cells collapsed the table geometry");
       declare
          Tiny_Columns : constant Tables.Column_Definitions :=
-           (others =>
+           (Name_Column =>
+              (Heading       => Text.To_Unbounded_Wide_Wide_String ("Long"),
+               Width         => 2,
+               Minimum_Width => 0,
+               Align         => Tables.Align_Left,
+               Sortable      => False),
+            Score_Column =>
               (Heading       => Text.Null_Unbounded_Wide_Wide_String,
-               Width         => 0,
+               Width         => 2,
                Minimum_Width => 0,
                Align         => Tables.Align_Left,
                Sortable      => False));
@@ -248,8 +402,14 @@ procedure Data_Navigation_Tests is
            Tiny.Render (Theme => Flyology_TUI.Themes.Charm);
       begin
          Assert
-           (Tiny_Frame.Width = 3 and then Tiny_Frame.Height = 2,
+           (Tiny_Frame.Width = 7 and then Tiny_Frame.Height = 2,
             "tiny table rendering changed its declared geometry");
+         Assert
+           (Glyph (Tiny_Frame, 5, 0) = " "
+            and then Glyph (Tiny_Frame, 5, 1) = " "
+            and then not Tiny_Frame.Element (5, 1).Continuation,
+            "overlong or wide table cell bled into the following " &
+            "blank column");
       end;
    end Test_Tables;
 
@@ -279,6 +439,7 @@ procedure Data_Navigation_Tests is
       Assert
         (Item.Is_Expanded (2),
          "collapsing an ancestor discarded descendant expansion state");
+      Item.Select_Id (4);
       Item.Set_Nodes
         (((Id => 1, Depth => 0),
           (Id => 4, Depth => 1),
@@ -286,8 +447,10 @@ procedure Data_Navigation_Tests is
           (Id => 3, Depth => 2),
           (Id => 5, Depth => 0)));
       Assert
-        (Item.Is_Expanded (1) and then Item.Is_Expanded (2),
-         "tree expansion did not follow stable IDs through reorder");
+        (Item.Is_Expanded (1) and then Item.Is_Expanded (2)
+         and then Item.Selected_Id = 4,
+         "tree expansion or selection did not follow stable IDs through " &
+         "reorder");
 
       Item.Set_Expanded (1, False);
       Item.Select_Id (1);
@@ -307,8 +470,62 @@ procedure Data_Navigation_Tests is
            (0, 0, Flyology_TUI.Events.Mouse_Wheel,
             Flyology_TUI.Events.No_Button, Integer'First));
       Assert
-        (Result.Handled and then Item.Selected_Id = 5,
+        (Result.Handled and then Result.Focus_Requested
+         and then Item.Selected_Id = 5,
          "extreme tree wheel input did not saturate at the end");
+      Result := Item.Handle
+        (Mouse
+           (-1, 0, Flyology_TUI.Events.Mouse_Wheel,
+            Flyology_TUI.Events.No_Button, Integer'Last));
+      Assert (not Result.Handled,
+              "tree handled an extreme wheel event outside its region");
+      Item.Select_Id (5);
+      Result := Item.Handle
+        (Mouse
+           (0, 0, Flyology_TUI.Events.Mouse_Wheel,
+            Flyology_TUI.Events.No_Button, Integer'Last));
+      Assert
+        (Result.Handled and then Item.Selected_Id = 1,
+         "positive extreme tree wheel did not saturate at the start");
+
+      begin
+         Item.Select_Id (99);
+      exception
+         when Flyology_TUI.Components.Structure_Error => Raised := True;
+      end;
+      Assert
+        (Raised and then Item.Selected_Id = 1,
+         "missing tree selection ID changed state before failing");
+      Raised := False;
+      begin
+         Item.Set_Expanded (99);
+      exception
+         when Flyology_TUI.Components.Structure_Error => Raised := True;
+      end;
+      Assert
+        (Raised and then Item.Selected_Id = 1,
+         "missing tree expansion ID changed state before failing");
+      Raised := False;
+      Item.Set_Enabled (False);
+      Result := Item.Handle (Key (Flyology_TUI.Events.End_Key));
+      Assert (not Result.Handled and then Item.Selected_Id = 1,
+              "disabled tree accepted keyboard input");
+      Result := Item.Handle
+        (Mouse
+           (0, 0, Flyology_TUI.Events.Mouse_Wheel,
+            Flyology_TUI.Events.No_Button, Integer'First));
+      Assert (not Result.Handled and then Item.Selected_Id = 1,
+              "disabled tree accepted mouse input");
+      Item.Set_Enabled (True);
+
+      Item.Set_Expanded (1);
+      Item.Set_Viewport_Rows (Natural'Last);
+      Result := Item.Handle (Key (Flyology_TUI.Events.Page_Down_Key));
+      Assert
+        (Result.Handled and then Item.Selected_Id = 5
+         and then Item.Height = Natural'Last,
+         "Natural'Last tree viewport overflowed page navigation");
+      Item.Set_Viewport_Rows (3);
 
       begin
          Item.Set_Nodes
@@ -359,6 +576,19 @@ procedure Data_Navigation_Tests is
         (Trees.From_Theme (Flyology_TUI.Themes.Charm).Disclosure =
            Flyology_TUI.Themes.Charm.Border,
          "tree theme mapping changed disclosure semantics");
+      Item.Set_Maximum_Width (20);
+      Item.Select_Id (1);
+      Frame := Item.Render
+        (Look => Trees.Appearance'
+           (Normal     => Flyology_TUI.Themes.Charm.Success,
+            Selected   => Flyology_TUI.Themes.Charm.Selected,
+            Focused    => Flyology_TUI.Themes.Charm.Error,
+            Muted      => Flyology_TUI.Themes.Charm.Muted,
+            Disclosure => Flyology_TUI.Themes.Charm.Border),
+         Has_Focus => True);
+      Assert
+        (Frame.Element (2, 0).Appearance = Flyology_TUI.Themes.Charm.Error,
+         "tree ignored its explicit focused appearance");
    end Test_Trees;
 
    procedure Test_Breadcrumbs is
@@ -368,6 +598,7 @@ procedure Data_Navigation_Tests is
       Region : Flyology_TUI.Geometry.Rectangle;
       Raised : Boolean := False;
       Before : Natural;
+      Frame  : Flyology_TUI.Surfaces.Surface;
    begin
       Assert
         (Item.Width = 8 and then Item.Is_Visible (4),
@@ -391,6 +622,15 @@ procedure Data_Navigation_Tests is
         (Result.Activated and then Result.Focus_Requested,
          "breadcrumb mouse activation did not request focus");
       Before := Item.Active_Id;
+      begin
+         Item.Set_Active (99);
+      exception
+         when Flyology_TUI.Components.Structure_Error => Raised := True;
+      end;
+      Assert
+        (Raised and then Item.Active_Id = Before,
+         "missing breadcrumb ID changed active state before failing");
+      Raised := False;
       Item.Set_Enabled (False);
       Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Right_Key));
       Assert
@@ -419,6 +659,20 @@ procedure Data_Navigation_Tests is
       Assert
         (Raised and then Item.Active_Id = Before,
          "breadcrumb capacity failure was not atomic");
+      Item.Set_Enabled (True);
+      Item.Set_Maximum_Width (Natural'Last);
+      Frame := Item.Render
+        (Look => Breadcrumbs.Appearance'
+           (Normal    => Flyology_TUI.Themes.Charm.Success,
+            Active    => Flyology_TUI.Themes.Charm.Error,
+            Focused   => Flyology_TUI.Themes.Charm.Focused,
+            Separator => Flyology_TUI.Themes.Charm.Border,
+            Muted     => Flyology_TUI.Themes.Charm.Muted));
+      Region := Item.Item_Region (Item.Active_Id);
+      Assert
+        (Frame.Element (Natural (Region.X), 0).Appearance =
+           Flyology_TUI.Themes.Charm.Error,
+         "breadcrumb ignored its explicit active appearance");
       Assert
         (Breadcrumbs.From_Theme (Flyology_TUI.Themes.Charm).Active =
            Flyology_TUI.Themes.Charm.Selected,
