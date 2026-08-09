@@ -21,6 +21,8 @@
 - Input parsing is incremental and bounded. Preserve incomplete UTF-8, escape,
   and bracketed-paste sequences across reads without exposing raw control
   strings to applications.
+- Mouse events use terminal-cell coordinates until the application routes them
+  through `Mouse.Region`; interactive components consume localized coordinates.
 - The stock runner has one bounded command worker. Shutdown interrupts input,
   completes accepted command work, joins both workers, and restores the
   backend before returning.

@@ -1,5 +1,7 @@
 package body Flyology_TUI.Components.Lists is
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Flyology_TUI.Events.Mouse_Action;
+   use type Flyology_TUI.Events.Mouse_Button;
 
    function Create (Width, Height : Positive) return Model is
      (Values   => Item_Vectors.Empty_Vector,
@@ -43,7 +45,28 @@ package body Flyology_TUI.Components.Lists is
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event) is
    begin
-      if Event.Kind /= Flyology_TUI.Events.Key_Press then
+      if Event.Kind = Flyology_TUI.Events.Mouse_Input then
+         if Event.Mouse.X >= Item.Columns or else Event.Mouse.Y >= Item.Rows
+         then
+            return;
+         elsif Event.Mouse.Action = Flyology_TUI.Events.Mouse_Click
+           and then Event.Mouse.Button = Flyology_TUI.Events.Left_Button
+         then
+            declare
+               Index : constant Natural := Item.Offset + Event.Mouse.Y;
+            begin
+               if Index < Natural (Item.Values.Length) then
+                  Item.Selected := Index;
+                  Keep_Visible (Item);
+               end if;
+            end;
+         elsif Event.Mouse.Action = Flyology_TUI.Events.Mouse_Wheel
+           and then Event.Mouse.Wheel_Y /= 0
+         then
+            Move (Item, -Event.Mouse.Wheel_Y);
+         end if;
+         return;
+      elsif Event.Kind /= Flyology_TUI.Events.Key_Press then
          return;
       end if;
       case Event.Key.Kind is

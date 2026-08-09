@@ -10,6 +10,8 @@ package Flyology_TUI.Components.Viewports is
       Content : Flyology_TUI.Surfaces.Surface);
    procedure Resize (Item : in out Model; Width, Height : Positive);
    procedure Scroll (Item : in out Model; Delta_X, Delta_Y : Integer);
+   --  Mouse coordinates are relative to Render. The wheel scrolls vertically,
+   --  horizontally when reported by the terminal, or horizontally with Shift.
    procedure Update
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event);

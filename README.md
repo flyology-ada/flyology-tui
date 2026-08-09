@@ -16,6 +16,7 @@ Flyology-aware adapter can be added separately.
 - serial initialize/update/present dispatch with one model owner;
 - one bounded command worker whose results re-enter as typed messages;
 - incremental UTF-8, CSI, SGR mouse, focus, and bracketed-paste input parsing;
+- typed mouse regions, terminal-to-local hit testing, and component interaction;
 - terminal-oriented grapheme clusters and one- or two-cell glyph widths;
 - typed RGB, indexed, and ANSI colors plus text attributes;
 - clipped cell surfaces, compositing, borders, padding, alignment, and joins;
@@ -90,7 +91,8 @@ live model reference.
 See [docs/architecture.md](docs/architecture.md) for ownership and shutdown
 details. [examples/src/counter.adb](examples/src/counter.adb) is the compact
 starting point; [examples/src/kitchen_sink.adb](examples/src/kitchen_sink.adb)
-composes every component and uses a repeating typed command for animation.
+composes every component, supports mouse focus/selection/scrolling, and uses a
+repeating typed command for animation.
 
 ## Build and test
 

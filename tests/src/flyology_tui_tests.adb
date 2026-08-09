@@ -18,6 +18,7 @@ with Flyology_TUI.Events;
 with Flyology_TUI.Glyphs;
 with Flyology_TUI.Input;
 with Flyology_TUI.Layouts;
+with Flyology_TUI.Mouse;
 with Flyology_TUI.Programs;
 with Flyology_TUI.Renderers;
 with Flyology_TUI.Runners;
@@ -32,6 +33,7 @@ procedure Flyology_TUI_Tests is
 
    use type Flyology_TUI.Events.Key_Kind;
    use type Flyology_TUI.Events.Mouse_Action;
+   use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
    use type Interfaces.C.int;
 
@@ -41,6 +43,26 @@ procedure Flyology_TUI_Tests is
      (Input_FD, Wake_FD, Timeout_MS : Interfaces.C.int)
       return Interfaces.C.int
      with Import, Convention => C, External_Name => "flyology_tui_poll";
+
+   function Mouse_Input
+     (X, Y      : Natural;
+      Action    : Flyology_TUI.Events.Mouse_Action;
+      Button    : Flyology_TUI.Events.Mouse_Button :=
+        Flyology_TUI.Events.No_Button;
+      Wheel_X   : Integer := 0;
+      Wheel_Y   : Integer := 0;
+      Modified  : Flyology_TUI.Events.Modifiers := (others => False))
+      return Flyology_TUI.Events.Terminal_Event
+   is
+     ((Kind  => Flyology_TUI.Events.Mouse_Input,
+       Mouse =>
+         (X        => X,
+          Y        => Y,
+          Button   => Button,
+          Action   => Action,
+          Modified => Modified,
+          Wheel_X  => Wheel_X,
+          Wheel_Y  => Wheel_Y)));
 
    procedure Assert (Condition : Boolean; Message : String) is
    begin
@@ -199,6 +221,14 @@ procedure Flyology_TUI_Tests is
          "initial frame did not contain content");
       Renderer.Render (View, Output);
       Assert (Bytes.Length (Output) = 0, "unchanged frame emitted bytes");
+      View.Mouse := Flyology_TUI.Views.Button_Events;
+      Renderer.Render (View, Output);
+      Assert
+        (Ada.Strings.Fixed.Index
+           (Bytes.To_String (Output), ESC & "[?1000h") /= 0
+         and then Ada.Strings.Fixed.Index
+           (Bytes.To_String (Output), ESC & "[?1006h") /= 0,
+         "button mouse mode was not enabled with SGR coordinates");
       Framed.Put (2, 1, "x");
       View.Frame := Framed;
       Renderer.Render (View, Output);
@@ -221,6 +251,10 @@ procedure Flyology_TUI_Tests is
         (Ada.Strings.Fixed.Index
            (Bytes.To_String (Output), ESC & "[0 q") /= 0,
          "renderer reset did not restore the default cursor shape");
+      Assert
+        (Ada.Strings.Fixed.Index
+           (Bytes.To_String (Output), ESC & "[?1000l") /= 0,
+         "renderer reset did not disable button mouse mode");
    end Test_Layout_And_Renderer;
 
    procedure Test_Input is
@@ -253,6 +287,16 @@ procedure Flyology_TUI_Tests is
          and then Event.Mouse.Action = Flyology_TUI.Events.Mouse_Wheel
          and then Event.Mouse.X = 2 and then Event.Mouse.Y = 3,
          "SGR mouse event was not parsed");
+
+      Parser.Feed (ESC & "[<128;5;6M");
+      Parser.Next_Event (Event, Available);
+      Assert
+        (Available and then Event.Kind = Flyology_TUI.Events.Mouse_Input
+         and then Event.Mouse.Action = Flyology_TUI.Events.Mouse_Click
+         and then Event.Mouse.Button =
+           Flyology_TUI.Events.Auxiliary_Button_1
+         and then Event.Mouse.X = 4 and then Event.Mouse.Y = 5,
+         "SGR auxiliary mouse button was not parsed");
 
       Parser.Feed (ESC & "");
       Parser.Flush_Escape;
@@ -312,6 +356,31 @@ procedure Flyology_TUI_Tests is
       end;
    end Test_Input;
 
+   procedure Test_Mouse is
+      Area : constant Flyology_TUI.Mouse.Region :=
+        (X => 10, Y => 5, Width => 4, Height => 3);
+      Event : constant Flyology_TUI.Events.Terminal_Event :=
+        Mouse_Input
+          (11, 7,
+           Flyology_TUI.Events.Mouse_Drag,
+           Flyology_TUI.Events.Left_Button,
+           Modified => (Shift => True, others => False));
+      Local : Flyology_TUI.Events.Terminal_Event;
+   begin
+      Assert
+        (Flyology_TUI.Mouse.Contains (Area, Event.Mouse),
+         "mouse region rejected an interior point");
+      Assert
+        (not Flyology_TUI.Mouse.Contains (Area, 14, 7),
+         "mouse region included its right edge");
+      Local := Flyology_TUI.Mouse.Localize (Event, Area);
+      Assert
+        (Local.Mouse.X = 1 and then Local.Mouse.Y = 2
+         and then Local.Mouse.Action = Flyology_TUI.Events.Mouse_Drag
+         and then Local.Mouse.Modified.Shift,
+         "mouse localization changed event state");
+   end Test_Mouse;
+
    procedure Test_POSIX_Poll is
    begin
       Assert
@@ -344,7 +413,7 @@ procedure Flyology_TUI_Tests is
       Progress : Flyology_TUI.Components.Progress.Model :=
         Flyology_TUI.Components.Progress.Create (10, False);
       Spinner : Flyology_TUI.Components.Spinners.Model;
-      List : Integer_Lists.Model := Integer_Lists.Create (8, 2);
+      List : Integer_Lists.Model := Integer_Lists.Create (8, 3);
       Viewport : Flyology_TUI.Components.Viewports.Model :=
         Flyology_TUI.Components.Viewports.Create (2, 1);
       Form : Flyology_TUI.Components.Forms.Model :=
@@ -356,6 +425,18 @@ procedure Flyology_TUI_Tests is
                  Placeholder =>
                    Text.To_Unbounded_Wide_Wide_String ("name"))),
            Input_Width => 8);
+      Mouse_Form : Flyology_TUI.Components.Forms.Model :=
+        Flyology_TUI.Components.Forms.Create
+          (Flyology_TUI.Components.Forms.Field_Array'
+             (1 =>
+                (Label       => Text.To_Unbounded_Wide_Wide_String ("One"),
+                 Initial     => Text.Null_Unbounded_Wide_Wide_String,
+                 Placeholder => Text.Null_Unbounded_Wide_Wide_String),
+              2 =>
+                (Label       => Text.To_Unbounded_Wide_Wide_String ("Two"),
+                 Initial     => Text.Null_Unbounded_Wide_Wide_String,
+                 Placeholder => Text.Null_Unbounded_Wide_Wide_String)),
+           Input_Width => 8);
    begin
       Input.Focus;
       Parsed.Feed ("abc");
@@ -364,6 +445,18 @@ procedure Flyology_TUI_Tests is
          Input.Update (Event);
       end loop;
       Assert (Input.Value = "abc", "text input rejected printable keys");
+      Input.Update
+        (Mouse_Input
+           (0, 0,
+            Flyology_TUI.Events.Mouse_Click,
+            Flyology_TUI.Events.Left_Button));
+      Input.Update
+        (Flyology_TUI.Events.Pressed
+           ((Kind     => Flyology_TUI.Events.Text_Key,
+             Modified => (others => False),
+             Repeated => False,
+             Value    => Text.To_Unbounded_Wide_Wide_String ("z"))));
+      Assert (Input.Value = "zabc", "mouse click did not place text cursor");
       Flyology_TUI.Components.Progress.Set (Progress, 0.5);
       Assert (Progress.Render.Width = 10, "progress width changed");
       Spinner.Tick;
@@ -375,17 +468,60 @@ procedure Flyology_TUI_Tests is
              Modified => (others => False),
              Repeated => False)));
       Assert (List.Selected_Index = 1, "list selection did not move");
+      List.Update
+        (Mouse_Input
+           (0, 2,
+            Flyology_TUI.Events.Mouse_Click,
+            Flyology_TUI.Events.Left_Button));
+      Assert (List.Selected_Index = 2, "mouse click did not select list row");
+      List.Update
+        (Mouse_Input
+           (0, 2, Flyology_TUI.Events.Mouse_Wheel, Wheel_Y => 1));
+      Assert
+        (List.Selected_Index = 1,
+         "mouse wheel did not move list selection");
       Viewport.Set_Content (Flyology_TUI.Surfaces.From_Text ("abcd"));
       Viewport.Scroll (1, 0);
       Assert
         (Cell_Text (Viewport.Render, 0, 0) = "b",
          "viewport did not apply horizontal offset");
+      Viewport.Set_Content
+        (Flyology_TUI.Surfaces.From_Text
+           ("a" & Wide_Wide_Character'Val (10)
+            & "b" & Wide_Wide_Character'Val (10)
+            & "c" & Wide_Wide_Character'Val (10) & "d"));
+      Viewport.Update
+        (Mouse_Input
+           (0, 0, Flyology_TUI.Events.Mouse_Wheel, Wheel_Y => -1));
+      Assert (Viewport.Y_Offset = 3, "mouse wheel did not scroll viewport");
       Form.Update
         (Flyology_TUI.Events.Pressed
            ((Kind     => Flyology_TUI.Events.Enter_Key,
              Modified => (others => False),
              Repeated => False)));
       Assert (Form.Submitted, "single-field form did not submit");
+      Mouse_Form.Update
+        (Mouse_Input
+           (5, 1,
+            Flyology_TUI.Events.Mouse_Click,
+            Flyology_TUI.Events.Left_Button));
+      Mouse_Form.Update
+        (Flyology_TUI.Events.Pressed
+           ((Kind     => Flyology_TUI.Events.Text_Key,
+             Modified => (others => False),
+             Repeated => False,
+             Value    => Text.To_Unbounded_Wide_Wide_String ("x"))));
+      Assert
+        (Mouse_Form.Field_Value (2) = "x",
+         "mouse click did not focus the selected form field");
+      declare
+         X, Y : Natural;
+      begin
+         Mouse_Form.Cursor_Position (X, Y);
+         Assert
+           (X = 6 and then Y = 1,
+            "form did not report its active mouse cursor position");
+      end;
    end Test_Components;
 
    type Runner_Model is limited record
@@ -524,6 +660,7 @@ begin
    Test_Glyphs_And_Surfaces;
    Test_Layout_And_Renderer;
    Test_Input;
+   Test_Mouse;
    Test_POSIX_Poll;
    Test_Components;
    Test_Runner;

@@ -1,5 +1,6 @@
 package body Flyology_TUI.Components.Viewports is
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Flyology_TUI.Events.Mouse_Action;
 
    procedure Clamp (Item : in out Model) is
       Max_X : constant Natural :=
@@ -65,6 +66,17 @@ package body Flyology_TUI.Components.Viewports is
                Clamp (Item);
             when others => null;
          end case;
+      elsif Event.Kind = Flyology_TUI.Events.Mouse_Input
+        and then Event.Mouse.Action = Flyology_TUI.Events.Mouse_Wheel
+        and then Event.Mouse.X < Item.Columns
+        and then Event.Mouse.Y < Item.Rows
+      then
+         if Event.Mouse.Modified.Shift and then Event.Mouse.Wheel_X = 0 then
+            Item.Scroll (-3 * Event.Mouse.Wheel_Y, 0);
+         else
+            Item.Scroll
+              (3 * Event.Mouse.Wheel_X, -3 * Event.Mouse.Wheel_Y);
+         end if;
       end if;
    end Update;
 

@@ -2,6 +2,8 @@ with Flyology_TUI.Glyphs;
 
 package body Flyology_TUI.Components.Text_Inputs is
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Flyology_TUI.Events.Mouse_Action;
+   use type Flyology_TUI.Events.Mouse_Button;
 
    function Create
      (Width       : Positive := 30;
@@ -98,12 +100,63 @@ package body Flyology_TUI.Components.Text_Inputs is
       end if;
    end Delete;
 
+   procedure Visible_Range
+     (Item         : Model;
+      First        : out Natural;
+      Cursor_Cell  : out Natural);
+
+   procedure Place_Cursor (Item : in out Model; Column : Natural) is
+      Current : constant Wide_Wide_String := Value (Item);
+      First, Cursor_Cell : Natural;
+      Cell : Natural := 0;
+      Pos  : Natural;
+   begin
+      if Current'Length = 0 then
+         Item.Cursor := 0;
+         return;
+      end if;
+
+      Visible_Range (Item, First, Cursor_Cell);
+      pragma Unreferenced (Cursor_Cell);
+      Item.Cursor := First - 1;
+      Pos := First;
+      while Pos <= Current'Last loop
+         declare
+            Last : constant Natural :=
+              Flyology_TUI.Glyphs.Cluster_Last (Current, Pos);
+            Width : constant Natural :=
+              Natural'Max
+                (1, Flyology_TUI.Glyphs.Width_Of (Current (Pos .. Last)));
+         begin
+            exit when Cell >= Item.Columns;
+            if Column < Cell + Width then
+               Item.Cursor :=
+                 (if Column - Cell < (Width + 1) / 2 then Pos - 1 else Last);
+               return;
+            end if;
+            Item.Cursor := Last;
+            Cell := Cell + Width;
+            Pos := Last + 1;
+         end;
+      end loop;
+   end Place_Cursor;
+
    procedure Update
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event)
    is
    begin
-      if not Item.Has_Focus then
+      if Event.Kind = Flyology_TUI.Events.Mouse_Input then
+         if Event.Mouse.Action = Flyology_TUI.Events.Mouse_Click
+           and then Event.Mouse.Button = Flyology_TUI.Events.Left_Button
+           and then Event.Mouse.X < Item.Columns
+           and then Event.Mouse.Y = 0
+         then
+            Item.Has_Focus := True;
+            Place_Cursor (Item, Event.Mouse.X);
+         end if;
+         return;
+      elsif not Item.Has_Focus then
          return;
       elsif Event.Kind = Flyology_TUI.Events.Paste then
          Insert (Item, Text.To_Wide_Wide_String (Event.Pasted_Text));

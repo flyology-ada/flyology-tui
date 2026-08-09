@@ -14,6 +14,7 @@ with Flyology_TUI.Components.Text_Inputs;
 with Flyology_TUI.Components.Viewports;
 with Flyology_TUI.Events;
 with Flyology_TUI.Layouts;
+with Flyology_TUI.Mouse;
 with Flyology_TUI.Runners;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
@@ -39,6 +40,24 @@ procedure Kitchen_Sink is
    type Command is (Wait_For_Tick);
    type Pane is (Text_Pane, List_Pane, Viewport_Pane, Form_Pane);
 
+   Text_Panel : constant Flyology_TUI.Mouse.Region :=
+     (X => 0, Y => 2, Width => 28, Height => 7);
+   List_Panel : constant Flyology_TUI.Mouse.Region :=
+     (X => 0, Y => 10, Width => 29, Height => 10);
+   Viewport_Panel : constant Flyology_TUI.Mouse.Region :=
+     (X => 31, Y => 2, Width => 35, Height => 11);
+   Form_Panel : constant Flyology_TUI.Mouse.Region :=
+     (X => 31, Y => 14, Width => 33, Height => 8);
+
+   Text_Content : constant Flyology_TUI.Mouse.Region :=
+     (X => 2, Y => 6, Width => 24, Height => 1);
+   List_Content : constant Flyology_TUI.Mouse.Region :=
+     (X => 2, Y => 14, Width => 25, Height => 4);
+   Viewport_Content : constant Flyology_TUI.Mouse.Region :=
+     (X => 33, Y => 6, Width => 31, Height => 5);
+   Form_Content : constant Flyology_TUI.Mouse.Region :=
+     (X => 33, Y => 18, Width => 29, Height => 2);
+
    type Model is limited record
       Active   : Pane := Text_Pane;
       Spinner  : Flyology_TUI.Components.Spinners.Model :=
@@ -58,6 +77,8 @@ procedure Kitchen_Sink is
    package Transitions is new Flyology_TUI.Transitions (Command);
    use type Events.Event_Kind;
    use type Flyology_TUI.Events.Key_Kind;
+   use type Flyology_TUI.Events.Mouse_Action;
+   use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
 
    procedure Initialize
@@ -125,6 +146,39 @@ procedure Kitchen_Sink is
       and then Event.Key.Modified.Control
       and then Text.To_Wide_Wide_String (Event.Key.Value) = "c");
 
+   procedure Handle_Mouse
+     (Item  : in out Model;
+      Event : Flyology_TUI.Events.Terminal_Event) is
+   begin
+      if Event.Mouse.Action = Flyology_TUI.Events.Mouse_Click
+        and then Event.Mouse.Button = Flyology_TUI.Events.Left_Button
+      then
+         if Flyology_TUI.Mouse.Contains (Text_Panel, Event.Mouse) then
+            Activate (Item, Text_Pane);
+         elsif Flyology_TUI.Mouse.Contains (List_Panel, Event.Mouse) then
+            Activate (Item, List_Pane);
+         elsif Flyology_TUI.Mouse.Contains (Viewport_Panel, Event.Mouse) then
+            Activate (Item, Viewport_Pane);
+         elsif Flyology_TUI.Mouse.Contains (Form_Panel, Event.Mouse) then
+            Activate (Item, Form_Pane);
+         end if;
+      end if;
+
+      if Flyology_TUI.Mouse.Contains (Text_Content, Event.Mouse) then
+         Item.Input.Update
+           (Flyology_TUI.Mouse.Localize (Event, Text_Content));
+      elsif Flyology_TUI.Mouse.Contains (List_Content, Event.Mouse) then
+         Item.Choices.Update
+           (Flyology_TUI.Mouse.Localize (Event, List_Content));
+      elsif Flyology_TUI.Mouse.Contains (Viewport_Content, Event.Mouse) then
+         Item.Viewport.Update
+           (Flyology_TUI.Mouse.Localize (Event, Viewport_Content));
+      elsif Flyology_TUI.Mouse.Contains (Form_Content, Event.Mouse) then
+         Item.Form.Update
+           (Flyology_TUI.Mouse.Localize (Event, Form_Content));
+      end if;
+   end Handle_Mouse;
+
    procedure Update
      (Item  : in out Model;
       Event : Events.Event;
@@ -150,6 +204,8 @@ procedure Kitchen_Sink is
         and then Event.Terminal.Key.Kind = Flyology_TUI.Events.Tab_Key
       then
          Next_Pane (Item, Event.Terminal.Key.Modified.Shift);
+      elsif Event.Terminal.Kind = Flyology_TUI.Events.Mouse_Input then
+         Handle_Mouse (Item, Event.Terminal);
       else
          case Item.Active is
             when Text_Pane => Item.Input.Update (Event.Terminal);
@@ -250,13 +306,13 @@ procedure Kitchen_Sink is
       Help : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Components.Help.Render
           ([(Key         => U ("tab"),
-             Description => U ("next panel"),
+             Description => U ("focus"),
              Enabled     => True),
             (Key         => U ("arrows"),
-             Description => U ("interact"),
+             Description => U ("move"),
              Enabled     => True),
-            (Key         => U ("enter"),
-             Description => U ("advance form"),
+            (Key         => U ("mouse"),
+             Description => U ("click/wheel"),
              Enabled     => True),
             (Key         => U ("ctrl-c"),
              Description => U ("quit"),
@@ -274,9 +330,31 @@ procedure Kitchen_Sink is
         Flyology_TUI.Views.From_Surface (Dashboard);
    begin
       Result.Alternate_Screen := True;
+      Result.Mouse := Flyology_TUI.Views.Button_Events;
       Result.Report_Focus := True;
       Result.Bracketed_Paste := True;
       Result.Window_Title := U ("Flyology TUI kitchen sink");
+      if Item.Active = Text_Pane then
+         Result.Cursor.Visible := True;
+         Result.Cursor.X := Text_Content.X + Item.Input.Cursor_Column;
+         Result.Cursor.Y := Text_Content.Y;
+         Result.Cursor.Shape := Flyology_TUI.Views.Cursor_Bar;
+         Result.Cursor.Blink := False;
+      elsif Item.Active = Form_Pane
+        and then not Item.Form.Submitted
+        and then not Item.Form.Cancelled
+      then
+         declare
+            X, Y : Natural;
+         begin
+            Item.Form.Cursor_Position (X, Y);
+            Result.Cursor.Visible := True;
+            Result.Cursor.X := Form_Content.X + X;
+            Result.Cursor.Y := Form_Content.Y + Y;
+            Result.Cursor.Shape := Flyology_TUI.Views.Cursor_Bar;
+            Result.Cursor.Blink := False;
+         end;
+      end if;
       return Result;
    end Present;
 

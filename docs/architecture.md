@@ -62,6 +62,19 @@ an Escape event followed by normally parsed suffix bytes. `Feed` raises
 control sequences are consumed without exposing raw terminal commands to
 applications.
 
+## Mouse routing
+
+Mouse events enter `Update` in terminal-cell coordinates. `Mouse.Region`
+performs overflow-safe hit testing and translates matching events into local
+component coordinates. Applications retain routing ownership because only the
+application knows where a rendered component was placed.
+
+Lists accept local row clicks and wheel selection, viewports accept vertical
+and horizontal wheel scrolling, text inputs place their cursor on a local
+left-click, and forms select fields and place the nested text cursor. Views may
+request button events, button-drag cell motion, or all cell motion. Every mode
+uses SGR coordinates and is disabled during backend restoration.
+
 ## Backend contract
 
 `Backends.Backend` defines `Open`, `Next_Event`, `Render`, `Interrupt`, and

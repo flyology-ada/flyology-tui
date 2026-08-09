@@ -18,6 +18,8 @@ package Flyology_TUI.Components.Text_Inputs is
    procedure Blur (Item : in out Model);
    function Focused (Item : Model) return Boolean;
 
+   --  A local left-click focuses the input and places its cursor. Mouse
+   --  coordinates are relative to the surface returned by Render.
    procedure Update
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event);

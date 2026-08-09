@@ -107,6 +107,8 @@ package body Flyology_TUI.Renderers is
    begin
       case Mode is
          when Flyology_TUI.Views.Mouse_Disabled => return "";
+         when Flyology_TUI.Views.Button_Events =>
+            return CSI & "?1000h" & CSI & "?1006h";
          when Flyology_TUI.Views.Cell_Motion =>
             return CSI & "?1002h" & CSI & "?1006h";
          when Flyology_TUI.Views.All_Motion =>

@@ -176,12 +176,25 @@ package body Flyology_TUI.Input is
             when others => Mouse.Wheel_X := 1;
          end case;
       else
-         case Code mod 4 is
-            when 0 => Mouse.Button := Flyology_TUI.Events.Left_Button;
-            when 1 => Mouse.Button := Flyology_TUI.Events.Middle_Button;
-            when 2 => Mouse.Button := Flyology_TUI.Events.Right_Button;
-            when others => Mouse.Button := Flyology_TUI.Events.No_Button;
-         end case;
+         if (Code / 128) mod 2 = 1 then
+            case Code mod 4 is
+               when 0 =>
+                  Mouse.Button :=
+                    Flyology_TUI.Events.Auxiliary_Button_1;
+               when 1 =>
+                  Mouse.Button :=
+                    Flyology_TUI.Events.Auxiliary_Button_2;
+               when others =>
+                  Mouse.Button := Flyology_TUI.Events.No_Button;
+            end case;
+         else
+            case Code mod 4 is
+               when 0 => Mouse.Button := Flyology_TUI.Events.Left_Button;
+               when 1 => Mouse.Button := Flyology_TUI.Events.Middle_Button;
+               when 2 => Mouse.Button := Flyology_TUI.Events.Right_Button;
+               when others => Mouse.Button := Flyology_TUI.Events.No_Button;
+            end case;
+         end if;
          if Final = 'm' then
             Mouse.Action := Flyology_TUI.Events.Mouse_Release;
          elsif (Code / 32) mod 2 = 1 then

@@ -2,6 +2,20 @@ with Flyology_TUI.Glyphs;
 
 package body Flyology_TUI.Components.Forms is
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Flyology_TUI.Events.Mouse_Action;
+   use type Flyology_TUI.Events.Mouse_Button;
+
+   function Label_Width (Item : Model) return Natural is
+      Result : Natural := 0;
+   begin
+      for Value of Item.Fields loop
+         Result := Natural'Max
+           (Result,
+            Flyology_TUI.Glyphs.Width_Of
+              (Text.To_Wide_Wide_String (Value.Label)));
+      end loop;
+      return Result;
+   end Label_Width;
 
    function Create
      (Fields      : Field_Array;
@@ -46,7 +60,32 @@ package body Flyology_TUI.Components.Forms is
       then
          return;
       end if;
-      if Event.Kind = Flyology_TUI.Events.Key_Press then
+      if Event.Kind = Flyology_TUI.Events.Mouse_Input then
+         if Event.Mouse.Action = Flyology_TUI.Events.Mouse_Click
+           and then Event.Mouse.Button = Flyology_TUI.Events.Left_Button
+           and then Event.Mouse.Y < Natural (Item.Fields.Length)
+         then
+            Set_Active (Item, Event.Mouse.Y);
+            declare
+               Input_X : constant Natural := Label_Width (Item) + 2;
+               Input_Width : constant Natural :=
+                 Item.Fields.Element (Item.Active).Input.Render.Width;
+            begin
+               if Event.Mouse.X >= Input_X
+                 and then Event.Mouse.X - Input_X < Input_Width
+               then
+                  declare
+                     Local : Flyology_TUI.Events.Terminal_Event := Event;
+                  begin
+                     Local.Mouse.X := Event.Mouse.X - Input_X;
+                     Local.Mouse.Y := 0;
+                     Item.Fields.Reference (Item.Active).Input.Update (Local);
+                  end;
+               end if;
+            end;
+         end if;
+         return;
+      elsif Event.Kind = Flyology_TUI.Events.Key_Press then
          case Event.Key.Kind is
             when Flyology_TUI.Events.Enter_Key =>
                if Item.Active + 1 < Natural (Item.Fields.Length) then
@@ -91,6 +130,20 @@ package body Flyology_TUI.Components.Forms is
       return Wide_Wide_String
    is (Item.Fields.Element (Index - 1).Input.Value);
 
+   procedure Cursor_Position
+     (Item : Model;
+      X, Y : out Natural) is
+   begin
+      if Item.Fields.Is_Empty then
+         X := 0;
+         Y := 0;
+      else
+         X := Label_Width (Item) + 2
+           + Item.Fields.Element (Item.Active).Input.Cursor_Column;
+         Y := Item.Active;
+      end if;
+   end Cursor_Position;
+
    function Render
      (Item                : Model;
       Label_Appearance    : Flyology_TUI.Styles.Style :=
@@ -101,14 +154,8 @@ package body Flyology_TUI.Components.Forms is
         Flyology_TUI.Styles.Default)
       return Flyology_TUI.Surfaces.Surface
    is
-      Label_Width : Natural := 0;
+      Labels : constant Natural := Label_Width (Item);
    begin
-      for Value of Item.Fields loop
-         Label_Width := Natural'Max
-           (Label_Width,
-            Flyology_TUI.Glyphs.Width_Of
-              (Text.To_Wide_Wide_String (Value.Label)));
-      end loop;
       if Item.Fields.Is_Empty then
          return Flyology_TUI.Surfaces.Create (0, 0);
       end if;
@@ -117,7 +164,7 @@ package body Flyology_TUI.Components.Forms is
            Item.Fields.First_Element.Input.Render.Width;
          Result : Flyology_TUI.Surfaces.Surface :=
            Flyology_TUI.Surfaces.Create
-             (Label_Width + 2 + Input_Width,
+             (Labels + 2 + Input_Width,
               Natural (Item.Fields.Length));
       begin
          for Index in Item.Fields.First_Index .. Item.Fields.Last_Index loop
@@ -134,7 +181,7 @@ package body Flyology_TUI.Components.Forms is
                   Text.To_Wide_Wide_String (Value.Label),
                   Label_Appearance);
                Result.Overlay
-                 (Value.Input.Render (Style, Style), Label_Width + 2, Index);
+                 (Value.Input.Render (Style, Style), Labels + 2, Index);
             end;
          end loop;
          return Result;

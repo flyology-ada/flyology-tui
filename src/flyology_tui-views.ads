@@ -5,7 +5,11 @@ with Flyology_TUI.Surfaces;
 package Flyology_TUI.Views is
    package Text renames Ada.Strings.Wide_Wide_Unbounded;
 
-   type Mouse_Mode is (Mouse_Disabled, Cell_Motion, All_Motion);
+   type Mouse_Mode is
+     (Mouse_Disabled,
+      Button_Events,
+      Cell_Motion,
+      All_Motion);
    type Cursor_Shape is
      (Cursor_Block, Cursor_Underline, Cursor_Bar);
 

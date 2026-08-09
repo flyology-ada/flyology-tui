@@ -15,6 +15,8 @@ package Flyology_TUI.Components.Lists is
 
    function Create (Width, Height : Positive) return Model;
    procedure Set_Items (Item : in out Model; Values : Item_Array);
+   --  Mouse coordinates are relative to the surface returned by Render.
+   --  Left-click selects a visible row; the wheel moves the selection.
    procedure Update
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event);

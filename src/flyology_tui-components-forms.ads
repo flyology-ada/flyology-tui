@@ -21,6 +21,8 @@ package Flyology_TUI.Components.Forms is
      (Fields      : Field_Array;
       Input_Width : Positive := 30) return Model;
 
+   --  Mouse coordinates are relative to Render. A local left-click selects a
+   --  field and places its text cursor when the input cells are clicked.
    procedure Update
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event);
@@ -33,6 +35,12 @@ package Flyology_TUI.Components.Forms is
    function Field_Value (Item : Model; Index : Positive)
       return Wide_Wide_String
      with Pre => Index <= Field_Count (Item);
+
+   --  Return the active input cursor position relative to Render. Empty forms
+   --  return (0, 0).
+   procedure Cursor_Position
+     (Item : Model;
+      X, Y : out Natural);
 
    function Render
      (Item                : Model;
