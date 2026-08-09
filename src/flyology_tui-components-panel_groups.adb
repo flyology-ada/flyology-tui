@@ -498,7 +498,7 @@ package body Flyology_TUI.Components.Panel_Groups is
    function Is_Enabled (Item : Model) return Boolean is (Item.Enabled);
 
    function Divider_At
-     (Item     : Model;
+     (Item     : Layout_Snapshot;
       Point    : Flyology_TUI.Geometry.Point;
       Position : out Natural) return Boolean
    is
@@ -509,7 +509,9 @@ package body Flyology_TUI.Components.Panel_Groups is
       end if;
       for Candidate in 0 .. Divider_Count (Item) - 1 loop
          if Flyology_TUI.Geometry.Contains
-           (Divider_Region (Item, Index_Of (Item, Candidate)), Point)
+           (Divider_Region
+              (Item, Item.First_Pane_Index + Integer (Candidate)),
+            Point)
          then
             Position := Candidate;
             return True;
@@ -518,6 +520,12 @@ package body Flyology_TUI.Components.Panel_Groups is
       Position := 0;
       return False;
    end Divider_At;
+
+   function Compatible
+     (Item : Model; Geometry : Layout_Snapshot) return Boolean
+   is
+     (Item.Flow_Value = Geometry.Flow_Value
+      and then Pane_Count (Item) = Pane_Count (Geometry));
 
    function Axis
      (Item : Model; Event : Flyology_TUI.Mouse.Local_Event) return Integer
@@ -584,6 +592,13 @@ package body Flyology_TUI.Components.Panel_Groups is
      (Item  : in out Model;
       Event : Flyology_TUI.Mouse.Local_Event)
       return Flyology_TUI.Components.Interactions.Update_Result
+   is (Handle (Item, Layout (Item), Event));
+
+   function Handle
+     (Item     : in out Model;
+      Geometry : Layout_Snapshot;
+      Event    : Flyology_TUI.Mouse.Local_Event)
+      return Flyology_TUI.Components.Interactions.Update_Result
    is
       Result : Flyology_TUI.Components.Interactions.Update_Result;
       Point : constant Flyology_TUI.Geometry.Point := (Event.X, Event.Y);
@@ -602,8 +617,8 @@ package body Flyology_TUI.Components.Panel_Groups is
          Result.Changed := Item.Dragging;
          Item.Capturing := False;
          Item.Dragging := False;
-         if Item.Enabled then
-            Hit := Divider_At (Item, Point, Hit_Position);
+         if Item.Enabled and then Compatible (Item, Geometry) then
+            Hit := Divider_At (Geometry, Point, Hit_Position);
             Item.Has_Hover := Hit;
             if Hit then
                Item.Hover_Position := Hit_Position;
@@ -617,45 +632,6 @@ package body Flyology_TUI.Components.Panel_Groups is
               and then Before_Hover_Position /= Item.Hover_Position);
          return Result;
       elsif not Item.Enabled then
-         return Result;
-      elsif Event.Action = Flyology_TUI.Events.Mouse_Move
-        and then not Item.Capturing
-      then
-         Hit := Divider_At (Item, Point, Hit_Position);
-         Result.Changed :=
-           Item.Has_Hover /= Hit
-           or else (Hit and then Item.Hover_Position /= Hit_Position);
-         Item.Has_Hover := Hit;
-         if Hit then
-            Item.Hover_Position := Hit_Position;
-         end if;
-         Result.Handled := Result.Changed;
-         return Result;
-      elsif Event.Action = Flyology_TUI.Events.Mouse_Click
-        and then Event.Button = Flyology_TUI.Events.Left_Button
-        and then not Item.Capturing
-        and then Flyology_TUI.Geometry.Contains (Bounds (Item), Point)
-      then
-         Hit := Divider_At (Item, Point, Hit_Position);
-         Result.Handled := True;
-         Result.Focus_Requested := True;
-         Result.Changed :=
-           not Item.Has_Focus or else Before_Hover;
-         Item.Has_Focus := True;
-         Item.Has_Hover := False;
-         if Hit then
-            Result.Changed := True;
-            Item.Focused_Position := Hit_Position;
-            Item.Has_Hover := False;
-            Item.Dragging := True;
-            Item.Drag_Position := Hit_Position;
-            Item.Capturing := True;
-            Item.Press_Coordinate := Axis (Item, Event);
-            Item.Press_First_Span := Item.Panes (Hit_Position).Span;
-            Item.Press_Second_Span := Item.Panes (Hit_Position + 1).Span;
-            Result.Capture :=
-              Flyology_TUI.Components.Interactions.Acquire_Capture;
-         end if;
          return Result;
       elsif Event.Action = Flyology_TUI.Events.Mouse_Drag
         and then Event.Button = Flyology_TUI.Events.Left_Button
@@ -697,6 +673,45 @@ package body Flyology_TUI.Components.Panel_Groups is
                 Before_Second;
          end;
          Result.Handled := True;
+         return Result;
+      elsif not Compatible (Item, Geometry) then
+         Result.Rejected := True;
+         return Result;
+      elsif Event.Action = Flyology_TUI.Events.Mouse_Move
+        and then not Item.Capturing
+      then
+         Hit := Divider_At (Geometry, Point, Hit_Position);
+         Result.Changed :=
+           Item.Has_Hover /= Hit
+           or else (Hit and then Item.Hover_Position /= Hit_Position);
+         Item.Has_Hover := Hit;
+         if Hit then
+            Item.Hover_Position := Hit_Position;
+         end if;
+         Result.Handled := Result.Changed;
+         return Result;
+      elsif Event.Action = Flyology_TUI.Events.Mouse_Click
+        and then Event.Button = Flyology_TUI.Events.Left_Button
+        and then not Item.Capturing
+      then
+         Hit := Divider_At (Geometry, Point, Hit_Position);
+         if not Hit then
+            return Result;
+         end if;
+         Result.Handled := True;
+         Result.Focus_Requested := True;
+         Result.Changed := True;
+         Item.Has_Focus := True;
+         Item.Focused_Position := Hit_Position;
+         Item.Has_Hover := False;
+         Item.Dragging := True;
+         Item.Drag_Position := Hit_Position;
+         Item.Capturing := True;
+         Item.Press_Coordinate := Axis (Item, Event);
+         Item.Press_First_Span := Item.Panes (Hit_Position).Span;
+         Item.Press_Second_Span := Item.Panes (Hit_Position + 1).Span;
+         Result.Capture :=
+           Flyology_TUI.Components.Interactions.Acquire_Capture;
          return Result;
       end if;
       return Result;
@@ -791,6 +806,17 @@ package body Flyology_TUI.Components.Panel_Groups is
    is
       Discard : constant Flyology_TUI.Components.Interactions.Update_Result :=
         Handle (Item, Event);
+   begin
+      null;
+   end Update;
+
+   procedure Update
+     (Item     : in out Model;
+      Geometry : Layout_Snapshot;
+      Event    : Flyology_TUI.Mouse.Local_Event)
+   is
+      Discard : constant Flyology_TUI.Components.Interactions.Update_Result :=
+        Handle (Item, Geometry, Event);
    begin
       null;
    end Update;

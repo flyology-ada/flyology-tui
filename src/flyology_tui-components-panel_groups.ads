@@ -132,11 +132,24 @@ package Flyology_TUI.Components.Panel_Groups is
    procedure Set_Enabled (Item : in out Model; Enabled : Boolean);
    function Is_Enabled (Item : Model) return Boolean;
 
-   --  Coordinates are local to the fixed group origin. Captured drag and
-   --  release coordinates remain signed outside the old or current Bounds.
+   --  Coordinates are local to the fixed group origin. Only divider hits are
+   --  consumed or request focus; pane body clicks remain available to the
+   --  caller-owned children. Captured drag and release coordinates remain
+   --  signed outside the old or current Bounds.
    function Handle
      (Item  : in out Model;
       Event : Flyology_TUI.Mouse.Local_Event)
+      return Flyology_TUI.Components.Interactions.Update_Result;
+   --  Use Geometry when the parent routed the event from a previously
+   --  captured layout snapshot. Width and height may differ from the current
+   --  model after Resize. Orientation and pane count must still match; a new
+   --  interaction against an incompatible snapshot reports Rejected. An
+   --  active drag uses its captured divider position, and a matching release
+   --  always relinquishes capture even after Configure changes pane count.
+   function Handle
+     (Item     : in out Model;
+      Geometry : Layout_Snapshot;
+      Event    : Flyology_TUI.Mouse.Local_Event)
       return Flyology_TUI.Components.Interactions.Update_Result;
 
    --  Keyboard input is accepted only while focused and enabled. Tab selects
@@ -152,6 +165,10 @@ package Flyology_TUI.Components.Panel_Groups is
    procedure Update
      (Item  : in out Model;
       Event : Flyology_TUI.Mouse.Local_Event);
+   procedure Update
+     (Item     : in out Model;
+      Geometry : Layout_Snapshot;
+      Event    : Flyology_TUI.Mouse.Local_Event);
    procedure Update
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event);

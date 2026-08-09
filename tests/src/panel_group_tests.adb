@@ -240,6 +240,112 @@ procedure Panel_Group_Tests is
       end loop;
    end Test_All_Mouse_Dividers;
 
+   procedure Test_Body_Click_And_Snapshot_Input is
+      Constraints : constant Groups.Pane_Constraint_Array (1 .. 3) :=
+        (others => (Minimum_Span => 1, Initial_Span => 2, Weight => 1));
+      Reconfigured : constant Groups.Pane_Constraint_Array (80 .. 82) :=
+        (others => (Minimum_Span => 1, Initial_Span => 3, Weight => 1));
+      Four_Panes : constant Groups.Pane_Constraint_Array (90 .. 93) :=
+        (others => (Minimum_Span => 1, Initial_Span => 2, Weight => 1));
+      Group : Groups.Model := Groups.Create
+        (Flyology_TUI.Layouts.Boxes.Horizontal, 10, 3, Constraints);
+      Old_Layout : constant Groups.Layout_Snapshot := Group.Layout;
+      Old_Divider : constant Flyology_TUI.Geometry.Rectangle :=
+        Groups.Divider_Region (Old_Layout, 1);
+      Result : Flyology_TUI.Components.Interactions.Update_Result;
+      Before : Natural;
+   begin
+      Result := Group.Handle
+        (Pointer (0, 1, Flyology_TUI.Events.Mouse_Click));
+      Assert
+        (not Result.Handled and then not Result.Focus_Requested
+         and then Result.Capture =
+           Flyology_TUI.Components.Interactions.No_Capture_Change
+         and then not Group.Focused,
+         "pane body click was consumed instead of reaching its child");
+
+      Group.Resize (16, 3);
+      Before := Group.Pane_Span (1);
+      Result := Group.Handle
+        (Old_Layout,
+         Pointer (Old_Divider.X, 1, Flyology_TUI.Events.Mouse_Click));
+      Assert
+        (Result.Handled and then Result.Focus_Requested
+         and then Result.Capture =
+           Flyology_TUI.Components.Interactions.Acquire_Capture,
+         "stale resize snapshot did not identify its divider");
+      Result := Group.Handle
+        (Old_Layout,
+         Pointer (Old_Divider.X + 2, 1,
+                  Flyology_TUI.Events.Mouse_Drag));
+      Assert
+        (Result.Changed and then Group.Pane_Span (1) = Before + 2,
+         "captured stale-snapshot drag did not resize current panes");
+      Result := Group.Handle
+        (Old_Layout,
+         Pointer (-100, 1, Flyology_TUI.Events.Mouse_Release));
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture,
+         "stale resize snapshot did not release capture outside");
+
+      Group.Configure (15, 3, Reconfigured);
+      Before := Group.Pane_Span (80);
+      Result := Group.Handle
+        (Old_Layout,
+         Pointer (Old_Divider.X, 1, Flyology_TUI.Events.Mouse_Click));
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Acquire_Capture
+         and then Group.Focused_Divider = 80,
+         "same-count Configure did not map snapshot divider by position");
+      Result := Group.Handle
+        (Old_Layout,
+         Pointer (Old_Divider.X + 1, 1,
+                  Flyology_TUI.Events.Mouse_Drag));
+      Assert
+        (Result.Changed and then Group.Pane_Span (80) = Before + 1,
+         "same-count Configure snapshot drag used stale pane spans");
+      Result := Group.Handle
+        (Old_Layout,
+         Pointer (-100, 1, Flyology_TUI.Events.Mouse_Release));
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture,
+         "same-count Configure snapshot did not release capture");
+
+      Group.Configure (18, 3, Four_Panes);
+      Result := Group.Handle
+        (Old_Layout,
+         Pointer (Old_Divider.X, 1, Flyology_TUI.Events.Mouse_Click));
+      Assert
+        (Result.Rejected and then not Result.Handled
+         and then Result.Capture =
+           Flyology_TUI.Components.Interactions.No_Capture_Change,
+         "pane-count mismatch did not reject stale snapshot input");
+
+      Group.Configure (10, 3, Constraints);
+      declare
+         Captured_Layout : constant Groups.Layout_Snapshot := Group.Layout;
+         Captured_Divider : constant Flyology_TUI.Geometry.Rectangle :=
+           Groups.Divider_Region (Captured_Layout, 1);
+      begin
+         Result := Group.Handle
+           (Captured_Layout,
+            Pointer (Captured_Divider.X, 1,
+                     Flyology_TUI.Events.Mouse_Click));
+         Group.Configure (18, 3, Four_Panes);
+         Result := Group.Handle
+           (Captured_Layout,
+            Pointer (-100, 1, Flyology_TUI.Events.Mouse_Release));
+         Assert
+           (Result.Handled and then not Result.Rejected
+            and then Result.Capture =
+              Flyology_TUI.Components.Interactions.Release_Capture,
+            "pane-count change stranded existing capture ownership");
+      end;
+   end Test_Body_Click_And_Snapshot_Input;
+
    procedure Test_Vertical_Mouse_And_Interruption is
       Constraints : constant Groups.Pane_Constraint_Array (1 .. 3) :=
         (others => (Minimum_Span => 2, Initial_Span => 4, Weight => 1));
@@ -570,6 +676,7 @@ begin
    Test_Initial_Layout_And_Bounds;
    Test_Zero_One_And_Tiny;
    Test_All_Mouse_Dividers;
+   Test_Body_Click_And_Snapshot_Input;
    Test_Vertical_Mouse_And_Interruption;
    Test_Keyboard;
    Test_Minimums_Resize_And_Snapshot;
