@@ -267,6 +267,15 @@ procedure Foundation_Layout_Tests is
       High_Box : constant Layout_Result :=
         Horizontally
           (High_Items, High_Rules, Width => 4, Height => 1, Gap => 1);
+      Last_Items : constant
+        Surface_Array (Positive'Last .. Positive'Last) :=
+          (Positive'Last => Flyology_TUI.Surfaces.From_Text ("Z"));
+      Last_Rules : constant
+        Constraint_Array (Positive'Last .. Positive'Last) :=
+          (Positive'Last => Content_Size);
+      Last_Box : constant Layout_Result :=
+        Horizontally
+          (Last_Items, Last_Rules, Width => 2, Height => 1);
       Empty_Items : constant Surface_Array (1 .. 0) := (others => <>);
       Empty_Rules : constant Constraint_Array (1 .. 0) := (others => <>);
       Empty_Box : constant Layout_Result :=
@@ -350,6 +359,11 @@ procedure Foundation_Layout_Tests is
          and then Cell_Text (High_Box.Frame, 0, 0) = "L"
          and then Cell_Text (High_Box.Frame, 2, 0) = "R",
          "box indexing assumed one-based input arrays");
+      Assert
+        (Last_Box.Region (1) =
+           (X => 0, Y => 0, Width => 1, Height => 1)
+         and then Cell_Text (Last_Box.Frame, 0, 0) = "Z",
+         "box indexing overflowed at Positive'Last lower bounds");
       Assert
         (Empty_Box.Item_Count = 0
          and then Empty_Box.Frame.Width = 4
