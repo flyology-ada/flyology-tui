@@ -1,0 +1,22 @@
+name = "flyology_tui_examples"
+description = "Interactive examples for flyology_tui"
+version = "0.1.0-dev"
+
+authors = ["Yurii Rashkovskii"]
+maintainers = ["Yurii Rashkovskii <yrashk@gmail.com>"]
+maintainers-logins = ["yrashk"]
+licenses = "MIT OR Apache-2.0"
+website = "https://github.com/flyology-ada/flyology-tui"
+tags = ["ada", "tui", "examples"]
+project-files = ["examples.gpr"]
+
+executables = [
+  "counter",
+  "kitchen_sink",
+]
+
+[[depends-on]]
+flyology_tui = "*"
+
+[[pins]]
+flyology_tui = { path='..' }

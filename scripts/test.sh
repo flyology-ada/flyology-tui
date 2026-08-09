@@ -20,4 +20,6 @@ alr build
 cd "$root_dir"
 alr exec -- gprbuild -P tests/editor_lifecycle_tests.gpr -p
 ./tests/bin/editor_lifecycle_tests
-alr exec -- gprbuild -P examples/examples.gpr -p
+
+cd "$root_dir/examples"
+alr build
