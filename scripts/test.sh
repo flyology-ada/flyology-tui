@@ -9,6 +9,57 @@ alr build
 cd "$root_dir/tests"
 alr build
 ./bin/flyology_tui_tests
+
+case "$(uname -s)" in
+    Darwin)
+        run_posix_color_lifecycle() {
+            script -q /dev/null ./bin/flyology_tui_tests
+        }
+        ;;
+    Linux)
+        run_posix_color_lifecycle() {
+            script -q -e -c "./bin/flyology_tui_tests" /dev/null
+        }
+        ;;
+    *)
+        echo "unsupported host for POSIX color lifecycle test" >&2
+        exit 1
+        ;;
+esac
+
+(
+    unset NO_COLOR
+    TERM=xterm-256color
+    COLORTERM=
+    FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE=ansi256
+    export TERM COLORTERM FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE
+    run_posix_color_lifecycle
+)
+(
+    NO_COLOR=
+    TERM=xterm-256color
+    COLORTERM=
+    FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE=ansi256
+    export NO_COLOR TERM COLORTERM FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE
+    run_posix_color_lifecycle
+)
+(
+    NO_COLOR=1
+    TERM=xterm-256color
+    COLORTERM=
+    FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE=monochrome
+    export NO_COLOR TERM COLORTERM FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE
+    run_posix_color_lifecycle
+)
+(
+    NO_COLOR=1
+    TERM=dumb
+    COLORTERM=
+    FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE=forced_truecolor
+    export NO_COLOR TERM COLORTERM FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE
+    run_posix_color_lifecycle
+)
+
 ./bin/foundation_layout_tests
 ./bin/controls_tests
 ./bin/visual_components_tests

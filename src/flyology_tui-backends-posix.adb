@@ -97,6 +97,7 @@ package body Flyology_TUI.Backends.POSIX is
    is
      (Flyology_TUI.Color_Profiles.Detect
         (NO_Color_Present => Ada.Environment_Variables.Exists ("NO_COLOR"),
+         NO_Color_Value   => Environment_Value ("NO_COLOR"),
          Color_Term       => Environment_Value ("COLORTERM"),
          Term             => Environment_Value ("TERM")));
 

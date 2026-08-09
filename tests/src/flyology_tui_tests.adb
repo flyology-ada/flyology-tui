@@ -295,29 +295,34 @@ procedure Flyology_TUI_Tests is
       Adapted : Colors.Color;
    begin
       Assert
-        (Profiles.Detect (True, "truecolor", "xterm-256color") =
+        (Profiles.Detect
+           (True, "1", "truecolor", "xterm-256color") =
            Profiles.Monochrome,
-         "NO_COLOR did not suppress detected color support");
+         "nonempty NO_COLOR did not suppress detected color support");
       Assert
-        (Profiles.Detect (False, "TRUECOLOR", "dumb") =
+        (Profiles.Detect (False, "", "TRUECOLOR", "dumb") =
            Profiles.Truecolor,
          "COLORTERM truecolor was not detected case-insensitively");
       Assert
-        (Profiles.Detect (False, "", "xterm-direct") =
+        (Profiles.Detect (False, "", "", "xterm-direct") =
            Profiles.Truecolor,
          "direct-color TERM was not detected");
       Assert
-        (Profiles.Detect (False, "", "screen-256color") =
+        (Profiles.Detect (False, "ignored", "", "screen-256color") =
            Profiles.ANSI_256,
          "256-color TERM was not detected");
       Assert
-        (Profiles.Detect (False, "", "xterm") = Profiles.ANSI_16,
+        (Profiles.Detect (False, "", "", "xterm") = Profiles.ANSI_16,
          "ordinary TERM did not conservatively select ANSI16");
       Assert
-        (Profiles.Detect (False, "", "") = Profiles.Monochrome
-         and then Profiles.Detect (False, "", "dumb") =
+        (Profiles.Detect (False, "", "", "") = Profiles.Monochrome
+         and then Profiles.Detect (False, "", "", "dumb") =
            Profiles.Monochrome,
          "missing or dumb TERM did not select monochrome");
+      Assert
+        (Profiles.Detect (True, "", "truecolor", "dumb") =
+           Profiles.Truecolor,
+         "empty NO_COLOR unexpectedly disabled color");
       Assert
         (Profiles.Resolve (Profiles.Automatic, Profiles.ANSI_256) =
            Profiles.ANSI_256
@@ -496,27 +501,68 @@ procedure Flyology_TUI_Tests is
          return;
       end if;
 
-      Backend.Set_Color_Policy (Profiles.Force_Truecolor);
-      Backend.Open;
+      declare
+         Scenario : constant String :=
+           Ada.Environment_Variables.Value
+             ("FLYOLOGY_TUI_TEST_POSIX_COLOR_LIFECYCLE");
+         Expected : Profiles.Profile;
+         Appearance : constant Flyology_TUI.Styles.Style :=
+           Flyology_TUI.Styles.With_Foreground
+             (Flyology_TUI.Styles.Default,
+              Flyology_TUI.Colors.True_Color (95, 0, 0));
       begin
-         Assert
-           (Backend.Color_Profile = Profiles.Truecolor,
-            "POSIX explicit profile did not override environment detection");
+         if Scenario = "ansi256" then
+            Expected := Profiles.ANSI_256;
+         elsif Scenario = "monochrome" then
+            Expected := Profiles.Monochrome;
+         elsif Scenario = "forced_truecolor" then
+            Expected := Profiles.Truecolor;
+            Backend.Set_Color_Policy (Profiles.Force_Truecolor);
+         else
+            raise Program_Error with "unknown POSIX color lifecycle scenario";
+         end if;
+
+         Backend.Open;
          begin
-            Backend.Set_Color_Policy (Profiles.Force_ANSI_16);
+            Assert
+              (Backend.Color_Profile = Expected,
+               "POSIX Open resolved the wrong color profile");
+            begin
+               Backend.Set_Color_Policy (Profiles.Force_ANSI_16);
+            exception
+               when Flyology_TUI.Backends.Backend_Error =>
+                  Raised := True;
+            end;
+            Assert
+              (Raised,
+               "POSIX backend accepted color configuration after Open");
+            Backend.Render
+              (Flyology_TUI.Views.From_Surface
+                 (Flyology_TUI.Surfaces.From_Text
+                    ("color lifecycle", Appearance)));
+         exception
+            when others =>
+               Backend.Close;
+               raise;
+         end;
+         Backend.Close;
+         Raised := False;
+         begin
+            declare
+               Unavailable : constant Profiles.Profile :=
+                 Backend.Color_Profile;
+               pragma Unreferenced (Unavailable);
+            begin
+               null;
+            end;
          exception
             when Flyology_TUI.Backends.Backend_Error =>
                Raised := True;
          end;
          Assert
            (Raised,
-            "POSIX backend accepted color configuration after Open");
-      exception
-         when others =>
-            Backend.Close;
-            raise;
+            "POSIX backend remained open after Close and mode restoration");
       end;
-      Backend.Close;
    end Test_POSIX_Color_Lifecycle;
 
    procedure Test_Input is

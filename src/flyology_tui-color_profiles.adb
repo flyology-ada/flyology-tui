@@ -118,6 +118,7 @@ package body Flyology_TUI.Color_Profiles is
 
    function Detect
      (NO_Color_Present : Boolean;
+      NO_Color_Value   : String;
       Color_Term       : String;
       Term             : String) return Profile
    is
@@ -128,7 +129,7 @@ package body Flyology_TUI.Color_Profiles is
       function Contains (Source, Pattern : String) return Boolean is
         (Ada.Strings.Fixed.Index (Source, Pattern) /= 0);
    begin
-      if NO_Color_Present then
+      if NO_Color_Present and then NO_Color_Value'Length > 0 then
          return Monochrome;
       elsif Contains (Lower_Color_Term, "truecolor")
         or else Contains (Lower_Color_Term, "24bit")

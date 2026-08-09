@@ -11,9 +11,11 @@ package Flyology_TUI.Color_Profiles is
       Force_Truecolor);
 
    --  Detect a conservative terminal profile from environment values supplied
-   --  by a backend. This package never reads the process environment itself.
+   --  by a backend. NO_COLOR suppresses color only when it is both present and
+   --  nonempty. This package never reads the process environment itself.
    function Detect
      (NO_Color_Present : Boolean;
+      NO_Color_Value   : String;
       Color_Term       : String;
       Term             : String) return Profile;
 
