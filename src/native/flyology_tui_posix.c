@@ -120,6 +120,10 @@ int flyology_tui_poll(int input_fd, int wake_fd, int timeout_ms)
     if (result < 0) {
         return -1;
     }
+    if ((descriptors[0].revents & (POLLERR | POLLNVAL)) != 0
+        || (descriptors[1].revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+        return -1;
+    }
     if ((descriptors[0].revents & (POLLIN | POLLHUP)) != 0) {
         ready |= 1;
     }

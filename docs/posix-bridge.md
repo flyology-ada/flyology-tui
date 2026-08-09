@@ -18,6 +18,10 @@ view reconciliation, cleanup ordering, and all application-visible behavior.
 No application pointer, model value, command, surface, or parser state crosses
 the C boundary.
 
+The poll wrapper reports descriptor error states as failure rather than as a
+timeout, so Ada can stop the backend instead of repeatedly polling an invalid
+descriptor.
+
 The behavioral suite covers parsing and rendering without the bridge. Building
 the library and counter example compiles and links the native symbols on the
 host platform. A pseudoterminal integration suite is a suitable follow-up when

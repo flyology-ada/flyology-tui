@@ -17,6 +17,9 @@ package body Flyology_TUI.Input is
      (Item  : in out Parser;
       Event : Flyology_TUI.Events.Terminal_Event) is
    begin
+      if Natural (Item.Events.Length) >= Item.Max_Queued_Events then
+         raise Input_Error with "terminal input event capacity exceeded";
+      end if;
       Item.Events.Append (Event);
    end Push;
 
@@ -240,6 +243,9 @@ package body Flyology_TUI.Input is
             Push (Item, Special_Key (Flyology_TUI.Events.End_Key, Modified));
          when 'I' => Push (Item, (Kind => Flyology_TUI.Events.Focus_Gained));
          when 'O' => Push (Item, (Kind => Flyology_TUI.Events.Focus_Lost));
+         when 'Z' =>
+            Modified.Shift := True;
+            Push (Item, Special_Key (Flyology_TUI.Events.Tab_Key, Modified));
          when '~' =>
             declare
                Last : constant Natural :=
@@ -484,15 +490,25 @@ package body Flyology_TUI.Input is
    end Process;
 
    procedure Initialize
-     (Item            : in out Parser;
-      Max_Paste_Bytes : Positive := 1_048_576) is
+     (Item              : in out Parser;
+      Max_Paste_Bytes   : Positive := 1_048_576;
+      Max_Pending_Bytes : Positive := 16_384;
+      Max_Queued_Events : Positive := 4_096) is
    begin
       Reset (Item);
       Item.Max_Paste_Bytes := Max_Paste_Bytes;
+      Item.Max_Pending_Bytes := Max_Pending_Bytes;
+      Item.Max_Queued_Events := Max_Queued_Events;
    end Initialize;
 
    procedure Feed (Item : in out Parser; Data : String) is
+      Pending : constant Natural := Bytes.Length (Item.Buffer);
    begin
+      if Data'Length > Item.Max_Pending_Bytes - Natural'Min
+          (Pending, Item.Max_Pending_Bytes)
+      then
+         raise Input_Error with "terminal input fragment exceeds capacity";
+      end if;
       Bytes.Append (Item.Buffer, Data);
       Process (Item);
    end Feed;
@@ -500,9 +516,13 @@ package body Flyology_TUI.Input is
    procedure Flush_Escape (Item : in out Parser) is
       Value : constant String := Bytes.To_String (Item.Buffer);
    begin
-      if Value'Length = 1 and then Value (Value'First) = ESC then
+      if not Item.In_Paste
+        and then Value'Length > 0
+        and then Value (Value'First) = ESC
+      then
          Push (Item, Special_Key (Flyology_TUI.Events.Escape_Key));
          Consume (Item, 1);
+         Process (Item);
       end if;
    end Flush_Escape;
 

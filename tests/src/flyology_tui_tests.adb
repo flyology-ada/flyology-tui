@@ -3,7 +3,9 @@ with Ada.Strings;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Ada.Strings.Wide_Wide_Unbounded;
+with Interfaces.C;
 with Flyology_TUI.Application_Events;
+with Flyology_TUI.Backends;
 with Flyology_TUI.Backends.Headless;
 with Flyology_TUI.Colors;
 with Flyology_TUI.Components.Lists;
@@ -31,8 +33,14 @@ procedure Flyology_TUI_Tests is
    use type Flyology_TUI.Events.Key_Kind;
    use type Flyology_TUI.Events.Mouse_Action;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Interfaces.C.int;
 
    ESC : constant Character := Ada.Characters.Latin_1.ESC;
+
+   function POSIX_Poll
+     (Input_FD, Wake_FD, Timeout_MS : Interfaces.C.int)
+      return Interfaces.C.int
+     with Import, Convention => C, External_Name => "flyology_tui_poll";
 
    procedure Assert (Condition : Boolean; Message : String) is
    begin
@@ -197,10 +205,22 @@ procedure Flyology_TUI_Tests is
       Assert
         (Ada.Strings.Fixed.Index (Bytes.To_String (Output), "x") /= 0,
          "changed cell was not rendered");
+      View.Cursor.Visible := True;
+      View.Cursor.Shape := Flyology_TUI.Views.Cursor_Bar;
+      Renderer.Render (View, Output);
+      View.Alternate_Screen := True;
+      Renderer.Render (View, Output);
+      Assert
+        (Ada.Strings.Fixed.Index (Bytes.To_String (Output), "x") /= 0,
+         "alternate-screen transition did not repaint the frame");
       Renderer.Reset (Output);
       Assert
         (Bytes.Length (Output) > 0,
          "renderer reset emitted no restore bytes");
+      Assert
+        (Ada.Strings.Fixed.Index
+           (Bytes.To_String (Output), ESC & "[0 q") /= 0,
+         "renderer reset did not restore the default cursor shape");
    end Test_Layout_And_Renderer;
 
    procedure Test_Input is
@@ -240,7 +260,64 @@ procedure Flyology_TUI_Tests is
       Assert
         (Available and then Event.Key.Kind = Flyology_TUI.Events.Escape_Key,
          "escape timeout did not resolve escape key");
+
+      Parser.Feed (ESC & "[");
+      Parser.Flush_Escape;
+      Parser.Next_Event (Event, Available);
+      Assert
+        (Available and then Event.Key.Kind = Flyology_TUI.Events.Escape_Key,
+         "escape timeout did not resolve an incomplete CSI prefix");
+      Parser.Next_Event (Event, Available);
+      Assert
+        (Available and then Event.Key.Kind = Flyology_TUI.Events.Text_Key
+         and then Text.To_Wide_Wide_String (Event.Key.Value) = "[",
+         "escape timeout swallowed an incomplete CSI suffix");
+
+      Parser.Feed (ESC & "[Z");
+      Parser.Next_Event (Event, Available);
+      Assert
+        (Available and then Event.Key.Kind = Flyology_TUI.Events.Tab_Key
+         and then Event.Key.Modified.Shift,
+         "shift-tab was not decoded from CSI Z");
+
+      declare
+         Limited_Parser : Flyology_TUI.Input.Parser;
+      begin
+         Limited_Parser.Initialize
+           (Max_Pending_Bytes => 8, Max_Queued_Events => 2);
+         begin
+            Limited_Parser.Feed (ESC & "[1234567");
+            Assert (False, "oversized pending input was accepted");
+         exception
+            when Flyology_TUI.Input.Input_Error => null;
+         end;
+         Assert
+           (not Limited_Parser.Has_Event,
+            "rejected pending input changed the event queue");
+
+         Limited_Parser.Feed ("ab");
+         begin
+            Limited_Parser.Feed ("c");
+            Assert (False, "event queue grew beyond its bound");
+         exception
+            when Flyology_TUI.Input.Input_Error => null;
+         end;
+         Limited_Parser.Next_Event (Event, Available);
+         Assert (Available, "bounded event queue lost its first event");
+         Limited_Parser.Next_Event (Event, Available);
+         Assert (Available, "bounded event queue lost its second event");
+         Assert
+           (not Limited_Parser.Has_Event,
+            "bounded event queue retained more than its capacity");
+      end;
    end Test_Input;
+
+   procedure Test_POSIX_Poll is
+   begin
+      Assert
+        (POSIX_Poll (999_998, 999_999, 0) < 0,
+         "poll descriptor errors were reported as timeouts");
+   end Test_POSIX_Poll;
 
    function Integer_Label (Item : Integer) return Wide_Wide_String is
       Image : constant String := Ada.Strings.Fixed.Trim
@@ -360,6 +437,62 @@ procedure Flyology_TUI_Tests is
       Present     => Runner_Present,
       Execute     => Execute);
 
+   type Partial_Backend is limited new Flyology_TUI.Backends.Backend with
+      record
+         Opened : Boolean := False;
+         Closed : Boolean := False;
+      end record;
+
+   overriding procedure Open (Item : in out Partial_Backend);
+   overriding procedure Close (Item : in out Partial_Backend);
+   overriding procedure Next_Event
+     (Item   : in out Partial_Backend;
+      Event  : out Flyology_TUI.Events.Terminal_Event;
+      Status : out Flyology_TUI.Backends.Input_Status);
+   overriding procedure Render
+     (Item : in out Partial_Backend;
+      View : Flyology_TUI.Views.View);
+   overriding procedure Interrupt (Item : in out Partial_Backend);
+
+   overriding procedure Open (Item : in out Partial_Backend) is
+   begin
+      Item.Opened := True;
+      raise Flyology_TUI.Backends.Backend_Error with
+        "synthetic partial initialization";
+   end Open;
+
+   overriding procedure Close (Item : in out Partial_Backend) is
+   begin
+      Item.Opened := False;
+      Item.Closed := True;
+   end Close;
+
+   overriding procedure Next_Event
+     (Item   : in out Partial_Backend;
+      Event  : out Flyology_TUI.Events.Terminal_Event;
+      Status : out Flyology_TUI.Backends.Input_Status)
+   is
+      pragma Unreferenced (Item);
+   begin
+      Event := (Kind => Flyology_TUI.Events.Interrupt);
+      Status := Flyology_TUI.Backends.Interrupted;
+   end Next_Event;
+
+   overriding procedure Render
+     (Item : in out Partial_Backend;
+      View : Flyology_TUI.Views.View)
+   is
+      pragma Unreferenced (Item, View);
+   begin
+      null;
+   end Render;
+
+   overriding procedure Interrupt (Item : in out Partial_Backend) is
+      pragma Unreferenced (Item);
+   begin
+      null;
+   end Interrupt;
+
    procedure Test_Runner is
       State : Runner_Model;
       Backend : Flyology_TUI.Backends.Headless.Headless_Backend;
@@ -368,6 +501,22 @@ procedure Flyology_TUI_Tests is
       Assert (State.Count = 7, "command result did not reach model");
       Assert (Backend.Render_Count >= 2, "runner did not render updates");
       Assert (not Backend.Is_Open, "runner did not close backend");
+
+      declare
+         Partial : Partial_Backend;
+         Raised  : Boolean := False;
+      begin
+         begin
+            Runtime.Run (State, Partial);
+         exception
+            when Flyology_TUI.Backends.Backend_Error =>
+               Raised := True;
+         end;
+         Assert (Raised, "runner suppressed an Open failure");
+         Assert
+           (Partial.Closed and then not Partial.Opened,
+            "runner did not close a partially opened backend");
+      end;
    end Test_Runner;
 
 begin
@@ -375,6 +524,7 @@ begin
    Test_Glyphs_And_Surfaces;
    Test_Layout_And_Renderer;
    Test_Input;
+   Test_POSIX_Poll;
    Test_Components;
    Test_Runner;
 end Flyology_TUI_Tests;

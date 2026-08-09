@@ -5,16 +5,24 @@ with Flyology_TUI.Events;
 package Flyology_TUI.Input is
    use type Flyology_TUI.Events.Terminal_Event;
 
+   Input_Error : exception;
+
    type Parser is tagged private;
 
    procedure Initialize
-     (Item            : in out Parser;
-      Max_Paste_Bytes : Positive := 1_048_576);
+     (Item              : in out Parser;
+      Max_Paste_Bytes   : Positive := 1_048_576;
+      Max_Pending_Bytes : Positive := 16_384;
+      Max_Queued_Events : Positive := 4_096);
 
+   --  Feed raises Input_Error before accepting a fragment that would exceed
+   --  Max_Pending_Bytes, or before adding an event beyond Max_Queued_Events.
+   --  Callers may feed larger reads as multiple bounded fragments.
    procedure Feed (Item : in out Parser; Data : String);
 
-   --  Resolve a pending escape byte as Escape rather than waiting for a
-   --  possible sequence suffix. A backend calls this after its escape delay.
+   --  Resolve the leading escape of an incomplete sequence as Escape, then
+   --  parse its remaining bytes normally. A backend calls this after its
+   --  escape delay.
    procedure Flush_Escape (Item : in out Parser);
 
    function Has_Event (Item : Parser) return Boolean;
@@ -38,5 +46,7 @@ private
       In_Paste        : Boolean := False;
       Paste_Buffer    : Ada.Strings.Unbounded.Unbounded_String;
       Max_Paste_Bytes : Positive := 1_048_576;
+      Max_Pending_Bytes : Positive := 16_384;
+      Max_Queued_Events : Positive := 4_096;
    end record;
 end Flyology_TUI.Input;

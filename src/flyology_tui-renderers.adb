@@ -185,6 +185,8 @@ package body Flyology_TUI.Renderers is
    is
       Full : constant Boolean :=
         not Item.Initialized
+        or else Desired.Alternate_Screen
+          /= Item.Previous.Alternate_Screen
         or else Flyology_TUI.Surfaces.Width (Desired.Frame)
           /= Flyology_TUI.Surfaces.Width (Item.Previous.Frame)
         or else Flyology_TUI.Surfaces.Height (Desired.Frame)
@@ -298,6 +300,7 @@ package body Flyology_TUI.Renderers is
          & CSI & "?1004l"
          & CSI & "?2004l"
          & CSI & "?25h"
+         & CSI & "0 q"
          & CSI & "?1049l");
       Item.Initialized := False;
    end Reset;

@@ -45,8 +45,9 @@ construct cursor-motion or SGR byte strings.
 
 ## Input pipeline
 
-`Input.Parser` accepts arbitrary byte fragments. It retains incomplete UTF-8
-and escape sequences between calls and emits typed events for:
+`Input.Parser` accepts byte fragments up to its configured pending-byte bound.
+It retains incomplete UTF-8 and escape sequences between calls and emits typed
+events into a separately bounded queue for:
 
 - printable and control keys;
 - navigation and function keys, including xterm modifiers;
@@ -54,10 +55,12 @@ and escape sequences between calls and emits typed events for:
 - SGR mouse clicks, releases, motion, drag, and wheel input;
 - bounded bracketed paste.
 
-A lone escape is intentionally ambiguous. The POSIX backend waits for one poll
-interval before calling `Flush_Escape`; tests can invoke that boundary directly.
-Unknown complete control sequences are consumed without exposing raw terminal
-commands to applications.
+A leading escape is intentionally ambiguous. The POSIX backend waits for one
+poll interval before calling `Flush_Escape`; an incomplete sequence then becomes
+an Escape event followed by normally parsed suffix bytes. `Feed` raises
+`Input_Error` instead of growing past either configured bound. Unknown complete
+control sequences are consumed without exposing raw terminal commands to
+applications.
 
 ## Backend contract
 

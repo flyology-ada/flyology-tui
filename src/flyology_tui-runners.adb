@@ -149,7 +149,17 @@ package body Flyology_TUI.Runners is
          end if;
       end Stop_Workers;
    begin
-      Flyology_TUI.Backends.Open (Backend);
+      begin
+         Flyology_TUI.Backends.Open (Backend);
+      exception
+         when others =>
+            begin
+               Flyology_TUI.Backends.Close (Backend);
+            exception
+               when others => null;
+            end;
+            raise;
+      end;
       Opened := True;
       begin
          Program.Start (Model, Next);
