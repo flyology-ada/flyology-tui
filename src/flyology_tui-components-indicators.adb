@@ -160,7 +160,7 @@ package body Flyology_TUI.Components.Indicators is
       Separator_Width : constant Natural := 3;
 
       function Segment_At (Offset : Positive) return Status_Segment is
-        (Segments (Segments'First + Offset - 1));
+        (Segments (Segments'First + (Offset - 1)));
 
       function Fits return Boolean is
          Used : Natural := 0;
@@ -169,15 +169,23 @@ package body Flyology_TUI.Components.Indicators is
          for Offset in 1 .. Count loop
             if Included (Offset) then
                declare
-                  Needed : constant Natural :=
+                  Label_Width : constant Natural :=
                     Flyology_TUI.Glyphs.Width_Of
-                      (Text.To_Wide_Wide_String (Segment_At (Offset).Label))
-                    + (if Seen then Separator_Width else 0);
+                      (Text.To_Wide_Wide_String
+                         (Segment_At (Offset).Label));
                begin
-                  if Used > Width or else Needed > Width - Used then
+                  if Seen then
+                     if Used > Width
+                       or else Separator_Width > Width - Used
+                     then
+                        return False;
+                     end if;
+                     Used := Used + Separator_Width;
+                  end if;
+                  if Used > Width or else Label_Width > Width - Used then
                      return False;
                   end if;
-                  Used := Used + Needed;
+                  Used := Used + Label_Width;
                   Seen := True;
                end;
             end if;
@@ -239,7 +247,12 @@ package body Flyology_TUI.Components.Indicators is
                if Seen and then Column < Width then
                   Result.Write
                     (Column, 0, " │ ", Appearance.Separator);
-                  Column := Natural'Min (Width, Column + Separator_Width);
+                  declare
+                     Consumed : constant Natural :=
+                       Natural'Min (Width - Column, Separator_Width);
+                  begin
+                     Column := Column + Consumed;
+                  end;
                end if;
                if Column < Width then
                   declare
@@ -251,11 +264,13 @@ package body Flyology_TUI.Components.Indicators is
                         0,
                         Label,
                         Style_For (Segment_At (Offset).Kind, Appearance));
-                     Column := Natural'Min
-                       (Width,
-                        Column + Natural'Min
+                     declare
+                        Consumed : constant Natural := Natural'Min
                           (Width - Column,
-                           Flyology_TUI.Glyphs.Width_Of (Label)));
+                           Flyology_TUI.Glyphs.Width_Of (Label));
+                     begin
+                        Column := Column + Consumed;
+                     end;
                   end;
                end if;
                Seen := True;

@@ -12,7 +12,13 @@ package body Flyology_TUI.Components.Progress_Groups is
        Selected      => Theme.Selected,
        Complete      => Theme.Success,
        Remaining     => Theme.Muted,
-       Indeterminate => Theme.Primary);
+       Indeterminate => Theme.Primary,
+       Pending_State => Theme.Muted,
+       Running_State => Theme.Primary,
+       Paused_State  => Theme.Focused,
+       Success_State => Theme.Success,
+       Failed_State  => Theme.Error,
+       Cancelled_State => Theme.Muted);
 
    function Create (Width : Natural := 40) return Model is
       Result : Model;
@@ -55,7 +61,8 @@ package body Flyology_TUI.Components.Progress_Groups is
       Id            : Item_Id;
       Label         : Wide_Wide_String;
       Relative_Weight : Weight := 1.0;
-      Value         : Fraction := 0.0)
+      Value         : Fraction := 0.0;
+      Work          : Work_State := Running)
    is
       New_Entry : Row_Entry;
    begin
@@ -66,7 +73,8 @@ package body Flyology_TUI.Components.Progress_Groups is
       New_Entry :=
         (Id              => Id,
          Label           => Text.To_Unbounded_Wide_Wide_String (Label),
-         Kind            => Determinate,
+         Measurement     => Determinate,
+         Work            => Work,
          Current         => Value,
          Relative_Weight => Relative_Weight,
          Phase           => 0);
@@ -81,7 +89,8 @@ package body Flyology_TUI.Components.Progress_Groups is
      (Item          : in out Model;
       Id            : Item_Id;
       Label         : Wide_Wide_String;
-      Relative_Weight : Weight := 1.0)
+      Relative_Weight : Weight := 1.0;
+      Work          : Work_State := Running)
    is
       New_Entry : Row_Entry;
    begin
@@ -89,7 +98,8 @@ package body Flyology_TUI.Components.Progress_Groups is
       New_Entry :=
         (Id              => Id,
          Label           => Text.To_Unbounded_Wide_Wide_String (Label),
-         Kind            => Indeterminate,
+         Measurement     => Indeterminate,
+         Work            => Work,
          Current         => 0.0,
          Relative_Weight => Relative_Weight,
          Phase           => 0);
@@ -133,28 +143,61 @@ package body Flyology_TUI.Components.Progress_Groups is
       elsif Value /= Value then
          raise Flyology_TUI.Components.Structure_Error;
       end if;
-      Item.Entries (Index).Kind := Determinate;
+      Item.Entries (Index).Measurement := Determinate;
       Item.Entries (Index).Current := Value;
       Item.Entries (Index).Phase := 0;
    end Set_Value;
 
-   procedure Set_Indeterminate (Item : in out Model; Id : Item_Id) is
+   procedure Set_Mode
+     (Item : in out Model;
+      Id   : Item_Id;
+      Mode : Progress_Mode)
+   is
       Index : constant Natural := Index_Of (Item, Id);
    begin
       if Index = 0 then
          raise Flyology_TUI.Components.Structure_Error;
       end if;
-      Item.Entries (Index).Kind := Indeterminate;
-      Item.Entries (Index).Phase := 0;
-   end Set_Indeterminate;
+      Item.Entries (Index).Measurement := Mode;
+      if Mode = Indeterminate then
+         Item.Entries (Index).Phase := 0;
+      end if;
+   end Set_Mode;
+
+   procedure Set_Work_State
+     (Item : in out Model;
+      Id   : Item_Id;
+      Work : Work_State)
+   is
+      Index : constant Natural := Index_Of (Item, Id);
+   begin
+      if Index = 0 then
+         raise Flyology_TUI.Components.Structure_Error;
+      end if;
+      Item.Entries (Index).Work := Work;
+   end Set_Work_State;
+
+   function Advanced_Phase
+     (Current : Natural;
+      Steps   : Positive) return Natural
+   is
+      Available : constant Natural := Natural'Last - Current;
+   begin
+      if Natural (Steps) <= Available then
+         return Current + Natural (Steps);
+      else
+         return Natural (Steps) - Available - 1;
+      end if;
+   end Advanced_Phase;
 
    procedure Advance (Item : in out Model; Steps : Positive := 1) is
-      Phase_Step : constant Natural := Steps mod 4;
    begin
       for Index in 1 .. Item.Count loop
-         if Item.Entries (Index).Kind = Indeterminate then
+         if Item.Entries (Index).Measurement = Indeterminate
+           and then Item.Entries (Index).Work = Running
+         then
             Item.Entries (Index).Phase :=
-              (Item.Entries (Index).Phase + Phase_Step) mod 4;
+              Advanced_Phase (Item.Entries (Index).Phase, Steps);
          end if;
       end loop;
    end Advance;
@@ -162,19 +205,30 @@ package body Flyology_TUI.Components.Progress_Groups is
    function Length (Item : Model) return Natural is (Item.Count);
    function Is_Empty (Item : Model) return Boolean is (Item.Count = 0);
 
-   function State (Item : Model; Id : Item_Id) return Progress_State is
+   function Mode (Item : Model; Id : Item_Id) return Progress_Mode is
       Index : constant Natural := Index_Of (Item, Id);
    begin
       if Index = 0 then
          raise Flyology_TUI.Components.Structure_Error;
       end if;
-      return Item.Entries (Index).Kind;
-   end State;
+      return Item.Entries (Index).Measurement;
+   end Mode;
+
+   function Work_Status (Item : Model; Id : Item_Id) return Work_State is
+      Index : constant Natural := Index_Of (Item, Id);
+   begin
+      if Index = 0 then
+         raise Flyology_TUI.Components.Structure_Error;
+      end if;
+      return Item.Entries (Index).Work;
+   end Work_Status;
 
    function Value (Item : Model; Id : Item_Id) return Fraction is
       Index : constant Natural := Index_Of (Item, Id);
    begin
-      if Index = 0 or else Item.Entries (Index).Kind /= Determinate then
+      if Index = 0
+        or else Item.Entries (Index).Measurement /= Determinate
+      then
          raise Flyology_TUI.Components.Structure_Error;
       end if;
       return Item.Entries (Index).Current;
@@ -195,11 +249,24 @@ package body Flyology_TUI.Components.Progress_Groups is
       Item.Selected := Index;
    end Select_Item;
 
+   function Contributes (Value : Row_Entry) return Boolean is
+     (Value.Relative_Weight > 0.0
+      and then Value.Work /= Cancelled
+      and then
+        (Value.Work = Succeeded
+         or else Value.Measurement = Determinate
+         or else Value.Work = Pending));
+
+   function Effective_Value (Value : Row_Entry) return Fraction is
+     (if Value.Work = Succeeded then 1.0
+      elsif Value.Measurement = Determinate then Value.Current
+      else 0.0);
+
    function Weighted_Total (Item : Model) return Fraction is
       Largest : Long_Float := 0.0;
    begin
       for Index in 1 .. Item.Count loop
-         if Item.Entries (Index).Kind = Determinate then
+         if Contributes (Item.Entries (Index)) then
             Largest := Long_Float'Max
               (Largest, Item.Entries (Index).Relative_Weight);
          end if;
@@ -212,16 +279,15 @@ package body Flyology_TUI.Components.Progress_Groups is
          Total_Value  : Long_Float := 0.0;
       begin
          for Index in 1 .. Item.Count loop
-            if Item.Entries (Index).Kind = Determinate
-              and then Item.Entries (Index).Relative_Weight > 0.0
-            then
+            if Contributes (Item.Entries (Index)) then
                declare
                   Scaled : constant Long_Float :=
                     Item.Entries (Index).Relative_Weight / Largest;
                begin
                   Total_Weight := Total_Weight + Scaled;
                   Total_Value :=
-                    Total_Value + Scaled * Item.Entries (Index).Current;
+                    Total_Value
+                    + Scaled * Effective_Value (Item.Entries (Index));
                end;
             end if;
          end loop;
@@ -313,13 +379,15 @@ package body Flyology_TUI.Components.Progress_Groups is
       return Flyology_TUI.Components.Interactions.Update_Result
    is
       Result : Flyology_TUI.Components.Interactions.Update_Result;
+      Inside : constant Boolean :=
+        Event.X >= 0
+        and then Event.Y >= 0
+        and then Natural (Event.X) < Item.Columns
+        and then Natural (Event.Y) < Item.Count;
    begin
       if Event.Action = Flyology_TUI.Events.Mouse_Click
         and then Event.Button = Flyology_TUI.Events.Left_Button
-        and then Event.X >= 0
-        and then Event.X < Integer (Item.Columns)
-        and then Event.Y >= 0
-        and then Event.Y < Integer (Item.Count)
+        and then Inside
       then
          declare
             New_Index : constant Positive := Event.Y + 1;
@@ -331,6 +399,7 @@ package body Flyology_TUI.Components.Progress_Groups is
          end;
       elsif Event.Action = Flyology_TUI.Events.Mouse_Wheel
         and then Event.Wheel_Y /= 0
+        and then Inside
       then
          Result.Handled := True;
          Result.Focus_Requested := True;
@@ -375,6 +444,26 @@ package body Flyology_TUI.Components.Progress_Groups is
       return Result;
    end Label_Width;
 
+   function Work_Glyph (Work : Work_State) return Wide_Wide_String is
+     (case Work is
+         when Pending   => "○",
+         when Running   => "▶",
+         when Paused    => "‖",
+         when Succeeded => "✓",
+         when Failed    => "✕",
+         when Cancelled => "⊘");
+
+   function Work_Appearance
+     (Work  : Work_State;
+      Value : Appearance) return Flyology_TUI.Styles.Style
+   is (case Work is
+          when Pending   => Value.Pending_State,
+          when Running   => Value.Running_State,
+          when Paused    => Value.Paused_State,
+          when Succeeded => Value.Success_State,
+          when Failed    => Value.Failed_State,
+          when Cancelled => Value.Cancelled_State);
+
    function Render
      (Item       : Model;
       Appearance : Progress_Groups.Appearance := (others => <>))
@@ -384,9 +473,9 @@ package body Flyology_TUI.Components.Progress_Groups is
         Flyology_TUI.Surfaces.Create (Item.Columns, Item.Count);
       Labels : constant Natural := Label_Width (Item);
       Bar_Start : constant Natural :=
-        (if Item.Columns <= 3 or else Labels >= Item.Columns - 3
+        (if Item.Columns <= 4 or else Labels >= Item.Columns - 4
          then Item.Columns
-         else Labels + 3);
+         else Labels + 4);
       Bar_Width : constant Natural := Item.Columns - Bar_Start;
    begin
       for Index in 1 .. Item.Count loop
@@ -397,19 +486,30 @@ package body Flyology_TUI.Components.Progress_Groups is
                then Appearance.Selected
                else Appearance.Label);
          begin
-            Result.Write
+            Result.Put
               (0,
                Row,
-               (if Index = Item.Selected then "› " else "  ")
-               & Text.To_Wide_Wide_String (Item.Entries (Index).Label),
+               (if Index = Item.Selected then "›" else " "),
+               Label_Style);
+            Result.Put
+              (1,
+               Row,
+               Work_Glyph (Item.Entries (Index).Work),
+               Work_Appearance (Item.Entries (Index).Work, Appearance));
+            Result.Write
+              (3,
+               Row,
+               Text.To_Wide_Wide_String (Item.Entries (Index).Label),
                Label_Style);
 
             if Bar_Width > 0 then
-               if Item.Entries (Index).Kind = Determinate then
+               if Item.Entries (Index).Work = Succeeded
+                 or else Item.Entries (Index).Measurement = Determinate
+               then
                   declare
                      Filled : constant Natural := Natural
                        (Long_Float'Floor
-                          (Item.Entries (Index).Current
+                          (Effective_Value (Item.Entries (Index))
                            * Long_Float (Bar_Width)));
                   begin
                      for Offset in 0 .. Bar_Width - 1 loop
@@ -543,11 +643,14 @@ package body Flyology_TUI.Components.Progress_Groups is
                   Segment_Width : constant Natural := Segment_Widths (Index);
                begin
                   if Segment_Width > 0 then
-                     if Item.Entries (Index).Kind = Determinate then
+                     if Item.Entries (Index).Work = Succeeded
+                       or else
+                         Item.Entries (Index).Measurement = Determinate
+                     then
                         declare
                            Filled : constant Natural := Natural
                              (Long_Float'Floor
-                                (Item.Entries (Index).Current
+                                (Effective_Value (Item.Entries (Index))
                                  * Long_Float (Segment_Width)));
                         begin
                            for Offset in 0 .. Segment_Width - 1 loop

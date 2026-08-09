@@ -14,7 +14,9 @@ package Flyology_TUI.Components.Progress_Groups is
 
    subtype Fraction is Long_Float range 0.0 .. 1.0;
    subtype Weight is Long_Float range 0.0 .. Long_Float'Last;
-   type Progress_State is (Determinate, Indeterminate);
+   type Progress_Mode is (Determinate, Indeterminate);
+   type Work_State is
+     (Pending, Running, Paused, Succeeded, Failed, Cancelled);
 
    type Appearance is record
       Label         : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
@@ -22,6 +24,13 @@ package Flyology_TUI.Components.Progress_Groups is
       Complete      : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Remaining     : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Indeterminate : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Pending_State : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Running_State : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Paused_State  : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Success_State : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Failed_State  : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Cancelled_State : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
    end record;
 
    function From_Theme
@@ -36,13 +45,15 @@ package Flyology_TUI.Components.Progress_Groups is
       Id            : Item_Id;
       Label         : Wide_Wide_String;
       Relative_Weight : Weight := 1.0;
-      Value         : Fraction := 0.0);
+      Value         : Fraction := 0.0;
+      Work          : Work_State := Running);
 
    procedure Add_Indeterminate
      (Item          : in out Model;
       Id            : Item_Id;
       Label         : Wide_Wide_String;
-      Relative_Weight : Weight := 1.0);
+      Relative_Weight : Weight := 1.0;
+      Work          : Work_State := Running);
 
    procedure Remove (Item : in out Model; Id : Item_Id);
    function Contains (Item : Model; Id : Item_Id) return Boolean;
@@ -52,25 +63,37 @@ package Flyology_TUI.Components.Progress_Groups is
       Id   : Item_Id;
       Value : Fraction);
 
-   procedure Set_Indeterminate (Item : in out Model; Id : Item_Id);
+   procedure Set_Mode
+     (Item : in out Model;
+      Id   : Item_Id;
+      Mode : Progress_Mode);
 
-   --  Advance only indeterminate rows. Applications call this from their own
-   --  Tick/update policy; the component owns no clock or task.
+   procedure Set_Work_State
+     (Item : in out Model;
+      Id   : Item_Id;
+      Work : Work_State);
+
+   --  Advance only Running, Indeterminate rows. Applications call this from
+   --  their own Tick/update policy; the component owns no clock or task.
    procedure Advance (Item : in out Model; Steps : Positive := 1);
 
    function Length (Item : Model) return Natural;
    function Is_Empty (Item : Model) return Boolean;
-   function State (Item : Model; Id : Item_Id) return Progress_State;
+   function Mode (Item : Model; Id : Item_Id) return Progress_Mode;
+   function Work_Status (Item : Model; Id : Item_Id) return Work_State;
    function Value (Item : Model; Id : Item_Id) return Fraction
-     with Pre => State (Item, Id) = Determinate;
+     with Pre => Mode (Item, Id) = Determinate;
 
    function Has_Selection (Item : Model) return Boolean;
    function Selected_Id (Item : Model) return Item_Id
      with Pre => Has_Selection (Item);
    procedure Select_Item (Item : in out Model; Id : Item_Id);
 
-   --  Weighted mean of determinate rows with positive weight. Indeterminate
-   --  and zero-weight rows do not participate; an empty total is 0.0.
+   --  Weighted mean of positive-weight contributions. Cancelled rows and
+   --  Running, Paused, or Failed Indeterminate rows are excluded. Succeeded
+   --  rows contribute 1.0 regardless of mode; Pending Indeterminate rows
+   --  contribute 0.0; every other Determinate row contributes Value. An empty
+   --  total is 0.0.
    function Weighted_Total (Item : Model) return Fraction;
 
    function Handle
@@ -105,7 +128,8 @@ package Flyology_TUI.Components.Progress_Groups is
    --  Segment widths follow Relative_Weight in insertion order. Remaining
    --  cells after flooring go to the largest fractional remainders, with
    --  insertion order breaking ties. Determinate segments use their own
-   --  fraction and indeterminate segments use Phase.
+   --  fraction; Indeterminate segments render Phase, which advances only for
+   --  Running rows.
    function Render_Segments
      (Item       : Model;
       Width      : Natural;
@@ -122,10 +146,11 @@ private
    type Row_Entry is record
       Id       : Item_Id;
       Label    : Text.Unbounded_Wide_Wide_String;
-      Kind     : Progress_State := Determinate;
+      Measurement : Progress_Mode := Determinate;
+      Work     : Work_State := Running;
       Current  : Fraction := 0.0;
       Relative_Weight : Weight := 1.0;
-      Phase    : Natural range 0 .. 3 := 0;
+      Phase    : Natural := 0;
    end record;
 
    type Entry_Array is
