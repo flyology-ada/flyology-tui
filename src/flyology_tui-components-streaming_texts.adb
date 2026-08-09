@@ -329,23 +329,23 @@ package body Flyology_TUI.Components.Streaming_Texts is
             end if;
          end loop;
       end if;
-      if Same then
+      if Same and then not Append_Mode then
          return Unchanged;
       end if;
 
-      for Position in 1 .. New_Length loop
-         Item.Buffer (Position) :=
-           Virtual_Character (Start + Wide_Count (Position) - 1);
-      end loop;
-      Item.Used := New_Length;
+      if not Same then
+         for Position in 1 .. New_Length loop
+            Item.Buffer (Position) :=
+              Virtual_Character (Start + Wide_Count (Position) - 1);
+         end loop;
+         Item.Used := New_Length;
+      end if;
       Item.First_Row := Natural'Min (Item.First_Row, Maximum_First (Item));
 
       if Append_Mode and then not Was_Following then
          Item.Follow := False;
          Recompute_Unseen_Rows (Item);
-         if Item.Unseen_Rows > 0 then
-            Item.Unseen_Chunks := Saturating_Add (Item.Unseen_Chunks, 1);
-         end if;
+         Item.Unseen_Chunks := Saturating_Add (Item.Unseen_Chunks, 1);
       elsif Append_Mode then
          Follow_Current_Tail (Item);
       else

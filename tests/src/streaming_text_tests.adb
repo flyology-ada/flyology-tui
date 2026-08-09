@@ -25,11 +25,17 @@ procedure Streaming_Text_Tests is
       Max_Lines          => 8,
       Max_Viewport_Cells => 256);
 
+   package Rolling is new Flyology_TUI.Components.Streaming_Texts
+     (Max_Code_Points    => 2,
+      Max_Lines          => 2,
+      Max_Viewport_Cells => 16);
+
    use type Flyology_TUI.Components.Interactions.Capture_Action;
    use type Flyology_TUI.Styles.Style;
    use type Rejecting.Operation_Result;
    use type Rejecting.Stream_State;
    use type Roomy.Operation_Result;
+   use type Rolling.Operation_Result;
    use type Trimming.Operation_Result;
 
    Combining_Acute : constant Wide_Wide_String :=
@@ -230,6 +236,29 @@ procedure Streaming_Text_Tests is
          "cancelled state transition is not terminal");
    end Test_State_Transitions;
 
+   procedure Test_Identical_Rolling_Append is
+      Item : Rolling.Model :=
+        Rolling.Create (2, 1, Overflow => Rolling.Trim_Oldest);
+      Line : constant Wide_Wide_String :=
+        "a" & Wide_Wide_Character'Val (10);
+   begin
+      Assert
+        (Item.Append (Line) = Rolling.Applied
+         and then Item.Content = Line
+         and then Item.Is_Following_Tail,
+         "rolling append setup failed");
+      Item.Set_Follow_Tail (False);
+      Assert
+        (Item.Append (Line) = Rolling.Applied,
+         "byte-identical rolling append hid an accepted history transition");
+      Assert
+        (Item.Content = Line
+         and then not Item.Is_Following_Tail
+         and then Item.Unseen_Row_Count = 0
+         and then Item.Unseen_Chunk_Count = 1,
+         "byte-identical rolling append skipped detached unseen accounting");
+   end Test_Identical_Rolling_Append;
+
    procedure Test_Follow_Unseen_And_Scrolling is
       Item : Roomy.Model := Roomy.Create (3, 2);
       Result : Flyology_TUI.Components.Interactions.Update_Result;
@@ -376,6 +405,7 @@ begin
    Test_Clusters_Wrapping_And_Appearance;
    Test_Reject_And_Trim_Atomicity;
    Test_State_Transitions;
+   Test_Identical_Rolling_Append;
    Test_Follow_Unseen_And_Scrolling;
    Test_Resize_Preflight_And_Zero_Extents;
    Ada.Text_IO.Put_Line ("streaming text tests passed");

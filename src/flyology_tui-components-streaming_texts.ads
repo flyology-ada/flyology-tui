@@ -13,6 +13,10 @@ package Flyology_TUI.Components.Streaming_Texts is
    type Overflow_Policy is (Reject, Trim_Oldest);
    type Stream_State is (Streaming, Finished, Failed, Cancelled);
 
+   --  Applied on Append means a nonempty chunk was accepted as a stream
+   --  history transition, even when Trim_Oldest leaves byte-identical retained
+   --  text. Unchanged is reserved for empty appends and replacements whose
+   --  retained text is already identical.
    type Operation_Result is
      (Applied,
       Unchanged,
@@ -87,6 +91,10 @@ package Flyology_TUI.Components.Streaming_Texts is
    function Viewport_Height (Item : Model) return Natural;
    function First_Visible_Row (Item : Model) return Natural;
    function Is_Following_Tail (Item : Model) return Boolean;
+   --  Unseen_Row_Count is the current wrapped-row distance below the viewport.
+   --  Unseen_Chunk_Count records accepted nonempty appends while detached. A
+   --  rolling byte-identical append can therefore add a chunk without adding
+   --  geometric rows. Reaching or explicitly following the tail clears both.
    function Unseen_Row_Count (Item : Model) return Natural;
    function Unseen_Chunk_Count (Item : Model) return Natural;
 
