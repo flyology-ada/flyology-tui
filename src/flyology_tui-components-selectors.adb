@@ -148,6 +148,7 @@ package body Flyology_TUI.Components.Selectors is
          end loop;
       end if;
       Item.Selected := Replacement;
+      Item.Armed := 0;
    end Replace_Selection;
 
    procedure Set_Selected
@@ -169,6 +170,7 @@ package body Flyology_TUI.Components.Selectors is
       end if;
       Item.Selected.Replace_Element (Index - 1, Value);
       Item.Focused := Index;
+      Item.Armed := 0;
    end Set_Selected;
 
    function Length (Item : Model) return Natural is
@@ -336,6 +338,7 @@ package body Flyology_TUI.Components.Selectors is
       elsif Event.Action = Flyology_TUI.Events.Mouse_Click then
          if Item.Enabled and then Hit > 0 then
             Item.Armed := Hit;
+            Item.Capturing := True;
             Item.Focused := Hit;
             return
               (Handled         => True,
@@ -346,12 +349,12 @@ package body Flyology_TUI.Components.Selectors is
                others          => <>);
          end if;
       elsif Event.Action = Flyology_TUI.Events.Mouse_Release
-        and then Item.Armed > 0
+        and then Item.Capturing
       then
          Result.Handled := True;
          Result.Capture :=
            Flyology_TUI.Components.Interactions.Release_Capture;
-         if Item.Enabled and then Hit = Item.Armed then
+         if Item.Enabled and then Item.Armed > 0 and then Hit = Item.Armed then
             Item.Focused := Hit;
             Result := Toggle_Focused (Item);
             Result.Focus_Requested := True;
@@ -359,6 +362,7 @@ package body Flyology_TUI.Components.Selectors is
               Flyology_TUI.Components.Interactions.Release_Capture;
          end if;
          Item.Armed := 0;
+         Item.Capturing := False;
          return Result;
       end if;
       return Result;

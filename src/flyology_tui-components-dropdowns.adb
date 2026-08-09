@@ -90,6 +90,7 @@ package body Flyology_TUI.Components.Dropdowns is
       end if;
       Item.Selected := Index;
       Item.Highlighted := Index;
+      Item.Armed_Row := 0;
    end Select_Id;
 
    function Length (Item : Model) return Natural is
@@ -105,6 +106,7 @@ package body Flyology_TUI.Components.Dropdowns is
       if Item.Enabled and then not Item.Values.Is_Empty then
          Item.Opened := True;
          Item.Highlighted := Item.Selected;
+         Item.Armed_Row := 0;
       end if;
    end Open;
 
@@ -120,10 +122,18 @@ package body Flyology_TUI.Components.Dropdowns is
       return Flyology_TUI.Components.Interactions.Update_Result
    is
       Was_Open : constant Boolean := Item.Opened;
+      Was_Capturing : constant Boolean := Item.Capturing;
    begin
       Close (Item);
+      Item.Capturing := False;
       return
-        (Handled => Was_Open, Changed => Was_Open, others => <>);
+        (Handled => Was_Open or else Was_Capturing,
+         Changed => Was_Open,
+         Capture =>
+           (if Was_Capturing
+            then Flyology_TUI.Components.Interactions.Release_Capture
+            else Flyology_TUI.Components.Interactions.No_Capture_Change),
+         others => <>);
    end Dismiss;
 
    procedure Set_Enabled (Item : in out Model; Enabled : Boolean) is
@@ -136,11 +146,11 @@ package body Flyology_TUI.Components.Dropdowns is
    function Is_Enabled (Item : Model) return Boolean is (Item.Enabled);
 
    function Width (Item : Model) return Natural is
-      Result : Natural := 4;
+      Result : Natural := 5;
    begin
       for Value of Item.Values loop
          Result := Natural'Max
-           (Result, Flyology_TUI.Glyphs.Width_Of (Label (Value)) + 4);
+           (Result, Flyology_TUI.Glyphs.Width_Of (Label (Value)) + 5);
       end loop;
       return Result;
    end Width;
@@ -158,8 +168,21 @@ package body Flyology_TUI.Components.Dropdowns is
       Last : constant Integer := Integer (Item.Values.Length);
       Before : constant Natural := Position;
    begin
-      Position := Natural
-        (Integer'Max (1, Integer'Min (Last, Integer (Position) + Amount)));
+      if Amount < 0 then
+         if Amount = Integer'First
+           or else Natural (-Amount) >= Position - 1
+         then
+            Position := 1;
+         else
+            Position := Position - Natural (-Amount);
+         end if;
+      elsif Amount > 0 then
+         if Natural (Amount) >= Natural (Last) - Position then
+            Position := Natural (Last);
+         else
+            Position := Position + Natural (Amount);
+         end if;
+      end if;
       if Item.Opened then
          Item.Highlighted := Position;
       else
@@ -268,7 +291,11 @@ package body Flyology_TUI.Components.Dropdowns is
         and then Item.Enabled and then not Item.Values.Is_Empty
         and then Hit > 0 and then Event.Wheel_Y /= 0
       then
-         Move (Item, -Event.Wheel_Y, Changed);
+         if Event.Wheel_Y = Integer'First then
+            Move (Item, Integer'Last, Changed);
+         else
+            Move (Item, -Event.Wheel_Y, Changed);
+         end if;
          return
            (Handled => True,
             Activated => Changed and then not Item.Opened,
@@ -281,6 +308,7 @@ package body Flyology_TUI.Components.Dropdowns is
             return Dismiss (Item);
          elsif Item.Enabled and then Hit > 0 then
             Item.Armed_Row := Hit;
+            Item.Capturing := True;
             return
               (Handled         => True,
                Focus_Requested => True,
@@ -289,12 +317,15 @@ package body Flyology_TUI.Components.Dropdowns is
                others          => <>);
          end if;
       elsif Event.Action = Flyology_TUI.Events.Mouse_Release
-        and then Item.Armed_Row > 0
+        and then Item.Capturing
       then
          Result.Handled := True;
          Result.Capture :=
            Flyology_TUI.Components.Interactions.Release_Capture;
-         if Item.Enabled and then Hit = Item.Armed_Row then
+         if Item.Enabled
+           and then Item.Armed_Row > 0
+           and then Hit = Item.Armed_Row
+         then
             if Hit = 1 then
                if Item.Opened then
                   Close (Item);
@@ -315,6 +346,7 @@ package body Flyology_TUI.Components.Dropdowns is
             end if;
          end if;
          Item.Armed_Row := 0;
+         Item.Capturing := False;
          return Result;
       end if;
       return Result;
@@ -353,9 +385,14 @@ package body Flyology_TUI.Components.Dropdowns is
       Header_Label : constant Wide_Wide_String :=
         (if Item.Values.Is_Empty then ""
          else Label (Item.Values.Element (Item.Selected - 1)));
+      Header_Padding : constant Natural :=
+        Width (Item) - Flyology_TUI.Glyphs.Width_Of (Header_Label) - 5;
    begin
       Result.Write
-        (0, 0, "[ " & Header_Label & (if Item.Opened then " ^]" else " v]"),
+        (0, 0,
+         "[ " & Header_Label
+           & Wide_Wide_String'(1 .. Header_Padding => ' ')
+           & (if Item.Opened then " ^]" else " v]"),
          Header_Style);
       if Item.Opened then
          for Index in 1 .. Length (Item) loop

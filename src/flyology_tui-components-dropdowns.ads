@@ -92,6 +92,7 @@ private
       Selected    : Natural := 0;
       Highlighted : Natural := 0;
       Armed_Row   : Natural := 0;
+      Capturing   : Boolean := False;
       Opened      : Boolean := False;
       Enabled     : Boolean := True;
    end record;

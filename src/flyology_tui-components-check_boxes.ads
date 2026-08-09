@@ -71,5 +71,6 @@ private
       Value   : Check_State := Unchecked;
       Enabled : Boolean := True;
       Armed   : Boolean := False;
+      Capturing : Boolean := False;
    end record;
 end Flyology_TUI.Components.Check_Boxes;

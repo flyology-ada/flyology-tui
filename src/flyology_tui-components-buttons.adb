@@ -18,11 +18,13 @@ package body Flyology_TUI.Components.Buttons is
       Enabled : Boolean := True) return Model is
      (Caption => Text.To_Unbounded_Wide_Wide_String (Label),
       Enabled => Enabled,
-      Armed   => False);
+      Armed   => False,
+      Capturing => False);
 
    procedure Set_Label (Item : in out Model; Label : Wide_Wide_String) is
    begin
       Item.Caption := Text.To_Unbounded_Wide_Wide_String (Label);
+      Item.Armed := False;
    end Set_Label;
 
    function Label (Item : Model) return Wide_Wide_String is
@@ -88,6 +90,7 @@ package body Flyology_TUI.Components.Buttons is
       elsif Event.Action = Flyology_TUI.Events.Mouse_Click then
          if Item.Enabled and then Inside (Item, Event) then
             Item.Armed := True;
+            Item.Capturing := True;
             return
               (Handled         => True,
                Changed         => True,
@@ -97,14 +100,16 @@ package body Flyology_TUI.Components.Buttons is
                others          => <>);
          end if;
       elsif Event.Action = Flyology_TUI.Events.Mouse_Release
-        and then Item.Armed
+        and then Item.Capturing
       then
+         Result.Activated :=
+           Item.Enabled and then Item.Armed and then Inside (Item, Event);
+         Result.Changed := Item.Armed;
          Item.Armed := False;
+         Item.Capturing := False;
          Result.Handled := True;
-         Result.Changed := True;
          Result.Capture :=
            Flyology_TUI.Components.Interactions.Release_Capture;
-         Result.Activated := Item.Enabled and then Inside (Item, Event);
          return Result;
       end if;
       return Result;

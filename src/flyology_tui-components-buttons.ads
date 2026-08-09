@@ -67,5 +67,6 @@ private
       Caption : Text.Unbounded_Wide_Wide_String;
       Enabled : Boolean := True;
       Armed   : Boolean := False;
+      Capturing : Boolean := False;
    end record;
 end Flyology_TUI.Components.Buttons;

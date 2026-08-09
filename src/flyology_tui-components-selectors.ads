@@ -95,6 +95,7 @@ private
         Flyology_TUI.Components.Single_Selection;
       Focused  : Natural := 0;
       Armed    : Natural := 0;
+      Capturing : Boolean := False;
       Enabled  : Boolean := True;
    end record;
 end Flyology_TUI.Components.Selectors;

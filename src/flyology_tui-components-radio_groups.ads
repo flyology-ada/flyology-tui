@@ -84,6 +84,7 @@ private
       Selected : Natural := 0;
       Focused  : Natural := 0;
       Armed    : Natural := 0;
+      Capturing : Boolean := False;
       Enabled  : Boolean := True;
    end record;
 end Flyology_TUI.Components.Radio_Groups;

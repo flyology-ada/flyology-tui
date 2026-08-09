@@ -106,6 +106,7 @@ package body Flyology_TUI.Components.Radio_Groups is
       end if;
       Item.Selected := Index;
       Item.Focused := Index;
+      Item.Armed := 0;
    end Select_Id;
 
    function Selected_Id (Item : Model) return Id_Type is
@@ -162,6 +163,7 @@ package body Flyology_TUI.Components.Radio_Groups is
       Event : Flyology_TUI.Events.Terminal_Event)
       return Flyology_TUI.Components.Interactions.Update_Result
    is
+      Before : Natural;
    begin
       if not Item.Enabled or else Item.Values.Is_Empty
         or else Event.Kind /= Flyology_TUI.Events.Key_Press
@@ -172,17 +174,33 @@ package body Flyology_TUI.Components.Radio_Groups is
       case Event.Key.Kind is
          when Flyology_TUI.Events.Arrow_Up_Key
             | Flyology_TUI.Events.Arrow_Left_Key =>
+            Before := Item.Focused;
             Move_Focus (Item, -1);
+            if Item.Focused = Before then
+               return (Handled => True, others => <>);
+            end if;
             return Choose_Focused (Item);
          when Flyology_TUI.Events.Arrow_Down_Key
             | Flyology_TUI.Events.Arrow_Right_Key =>
+            Before := Item.Focused;
             Move_Focus (Item, 1);
+            if Item.Focused = Before then
+               return (Handled => True, others => <>);
+            end if;
             return Choose_Focused (Item);
          when Flyology_TUI.Events.Home_Key =>
+            Before := Item.Focused;
             Item.Focused := 1;
+            if Item.Focused = Before then
+               return (Handled => True, others => <>);
+            end if;
             return Choose_Focused (Item);
          when Flyology_TUI.Events.End_Key =>
+            Before := Item.Focused;
             Item.Focused := Natural (Item.Values.Length);
+            if Item.Focused = Before then
+               return (Handled => True, others => <>);
+            end if;
             return Choose_Focused (Item);
          when others =>
             if Is_Activation_Key (Event) then
@@ -223,6 +241,7 @@ package body Flyology_TUI.Components.Radio_Groups is
       elsif Event.Action = Flyology_TUI.Events.Mouse_Click then
          if Item.Enabled and then Hit > 0 then
             Item.Armed := Hit;
+            Item.Capturing := True;
             Item.Focused := Hit;
             return
               (Handled         => True,
@@ -233,18 +252,19 @@ package body Flyology_TUI.Components.Radio_Groups is
                others          => <>);
          end if;
       elsif Event.Action = Flyology_TUI.Events.Mouse_Release
-        and then Item.Armed > 0
+        and then Item.Capturing
       then
          Result.Handled := True;
          Result.Capture :=
            Flyology_TUI.Components.Interactions.Release_Capture;
-         if Item.Enabled and then Hit = Item.Armed then
+         if Item.Enabled and then Item.Armed > 0 and then Hit = Item.Armed then
             Result.Changed := Item.Selected /= Hit;
             Item.Selected := Hit;
             Item.Focused := Hit;
             Result.Activated := True;
          end if;
          Item.Armed := 0;
+         Item.Capturing := False;
          return Result;
       end if;
       return Result;

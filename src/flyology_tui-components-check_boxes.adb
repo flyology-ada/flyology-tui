@@ -21,11 +21,13 @@ package body Flyology_TUI.Components.Check_Boxes is
      (Caption => Text.To_Unbounded_Wide_Wide_String (Label),
       Value   => State,
       Enabled => Enabled,
-      Armed   => False);
+      Armed   => False,
+      Capturing => False);
 
    procedure Set_State (Item : in out Model; State : Check_State) is
    begin
       Item.Value := State;
+      Item.Armed := False;
    end Set_State;
 
    function State (Item : Model) return Check_State is (Item.Value);
@@ -100,6 +102,7 @@ package body Flyology_TUI.Components.Check_Boxes is
       elsif Event.Action = Flyology_TUI.Events.Mouse_Click then
          if Item.Enabled and then Inside (Item, Event) then
             Item.Armed := True;
+            Item.Capturing := True;
             return
               (Handled         => True,
                Changed         => True,
@@ -109,19 +112,25 @@ package body Flyology_TUI.Components.Check_Boxes is
                others          => <>);
          end if;
       elsif Event.Action = Flyology_TUI.Events.Mouse_Release
-        and then Item.Armed
+        and then Item.Capturing
       then
-         Item.Armed := False;
-         Result.Handled := True;
-         Result.Changed := True;
-         Result.Capture :=
-           Flyology_TUI.Components.Interactions.Release_Capture;
-         if Item.Enabled and then Inside (Item, Event) then
-            Toggle (Item);
-            Result.Activated := True;
+         declare
+            Activate : constant Boolean :=
+              Item.Enabled and then Item.Armed and then Inside (Item, Event);
+         begin
+            Item.Armed := False;
+            Item.Capturing := False;
+            Result.Handled := True;
             Result.Changed := True;
-         end if;
-         return Result;
+            Result.Capture :=
+              Flyology_TUI.Components.Interactions.Release_Capture;
+            if Activate then
+               Toggle (Item);
+               Result.Activated := True;
+               Result.Changed := True;
+            end if;
+            return Result;
+         end;
       end if;
       return Result;
    end Handle;
