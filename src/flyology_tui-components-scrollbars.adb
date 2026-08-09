@@ -11,7 +11,8 @@ package body Flyology_TUI.Components.Scrollbars is
      (Track         => Theme.Muted,
       Thumb         => Theme.Border,
       Focused_Thumb => Theme.Focused,
-      Buttons       => Theme.Primary);
+      Buttons       => Theme.Primary,
+      Disabled      => Theme.Muted);
 
    function Create
      (Flow   : Orientation;
@@ -29,9 +30,7 @@ package body Flyology_TUI.Components.Scrollbars is
    procedure Resize (Item : in out Model; Length : Natural) is
    begin
       Item.Length := Length;
-      if Length < 3 then
-         Item.Dragging := False;
-      end if;
+      Item.Dragging := False;
    end Resize;
 
    procedure Configure
@@ -45,9 +44,7 @@ package body Flyology_TUI.Components.Scrollbars is
       Item.Page := Page_Size;
       Item.First_Item := First;
       Clamp (Item);
-      if Maximum_First (Item) = 0 then
-         Item.Dragging := False;
-      end if;
+      Item.Dragging := False;
    end Configure;
 
    function First (Item : Model) return Natural is (Item.First_Item);
@@ -124,6 +121,16 @@ package body Flyology_TUI.Components.Scrollbars is
 
    function Focused (Item : Model) return Boolean is (Item.Has_Focus);
 
+   procedure Set_Enabled (Item : in out Model; Enabled : Boolean) is
+   begin
+      Item.Enabled := Enabled;
+      if not Enabled then
+         Item.Dragging := False;
+      end if;
+   end Set_Enabled;
+
+   function Is_Enabled (Item : Model) return Boolean is (Item.Enabled);
+
    procedure Move_By (Item : in out Model; Amount : Integer) is
       Maximum : constant Natural := Maximum_First (Item);
    begin
@@ -166,7 +173,18 @@ package body Flyology_TUI.Components.Scrollbars is
         (if Item.Flow_Value = Flyology_TUI.Layouts.Boxes.Horizontal
          then Thumb.X else Thumb.Y);
    begin
-      if Event.Action = Flyology_TUI.Events.Mouse_Wheel
+      if Event.Action = Flyology_TUI.Events.Mouse_Release
+        and then Event.Button = Flyology_TUI.Events.Left_Button
+        and then Item.Capturing
+      then
+         Item.Dragging := False;
+         Item.Capturing := False;
+         Result.Handled := True;
+         Result.Capture :=
+           Flyology_TUI.Components.Interactions.Release_Capture;
+      elsif not Item.Enabled then
+         null;
+      elsif Event.Action = Flyology_TUI.Events.Mouse_Wheel
         and then Flyology_TUI.Geometry.Contains (Region (Item), Point)
       then
          if Item.Flow_Value = Flyology_TUI.Layouts.Boxes.Horizontal then
@@ -190,6 +208,7 @@ package body Flyology_TUI.Components.Scrollbars is
            and then Maximum_First (Item) > 0
          then
             Item.Dragging := True;
+            Item.Capturing := True;
             Item.Drag_Offset := Natural (Position - Thumb_Pos);
             Result.Capture :=
               Flyology_TUI.Components.Interactions.Acquire_Capture;
@@ -225,13 +244,6 @@ package body Flyology_TUI.Components.Scrollbars is
             end if;
          end;
          Result.Handled := True;
-      elsif Event.Action = Flyology_TUI.Events.Mouse_Release
-        and then Item.Dragging
-      then
-         Item.Dragging := False;
-         Result.Handled := True;
-         Result.Capture :=
-           Flyology_TUI.Components.Interactions.Release_Capture;
       end if;
       Result.Changed := Item.First_Item /= Before;
       return Result;
@@ -246,7 +258,9 @@ package body Flyology_TUI.Components.Scrollbars is
       Before : constant Natural := Item.First_Item;
       Page_Delta : constant Natural := Natural'Max (1, Item.Page);
    begin
-      if Event.Kind /= Flyology_TUI.Events.Key_Press then
+      if not Item.Enabled
+        or else Event.Kind /= Flyology_TUI.Events.Key_Press
+      then
          return Result;
       end if;
       case Event.Key.Kind is
@@ -309,21 +323,27 @@ package body Flyology_TUI.Components.Scrollbars is
       Appearance : Scrollbars.Appearance)
       return Flyology_TUI.Surfaces.Surface
    is
+      Track_Style : constant Flyology_TUI.Styles.Style :=
+        (if Item.Enabled then Appearance.Track else Appearance.Disabled);
       Result : Flyology_TUI.Surfaces.Surface :=
         (if Item.Flow_Value = Flyology_TUI.Layouts.Boxes.Horizontal
          then Flyology_TUI.Surfaces.Create
            (Item.Length,
             (if Item.Length = 0 then 0 else 1),
-            Appearance.Track)
+            Track_Style)
          else Flyology_TUI.Surfaces.Create
            ((if Item.Length = 0 then 0 else 1),
             Item.Length,
-            Appearance.Track));
+            Track_Style));
       Thumb : constant Flyology_TUI.Geometry.Rectangle := Thumb_Region (Item);
       Thumb_Style : constant Flyology_TUI.Styles.Style :=
-        (if Item.Has_Focus
+        (if not Item.Enabled
+         then Appearance.Disabled
+         elsif Item.Has_Focus
          then Appearance.Focused_Thumb
          else Appearance.Thumb);
+      Button_Style : constant Flyology_TUI.Styles.Style :=
+        (if Item.Enabled then Appearance.Buttons else Appearance.Disabled);
    begin
       if Item.Length = 0 then
          return Result;
@@ -339,10 +359,10 @@ package body Flyology_TUI.Components.Scrollbars is
                 then "█"
                 else "░"),
                (if Position = 0 or else Position + 1 = Item.Length
-                then Appearance.Buttons
+                then Button_Style
                 elsif Flyology_TUI.Geometry.Contains
                   (Thumb, Integer (Position), 0)
-                then Thumb_Style else Appearance.Track));
+                then Thumb_Style else Track_Style));
          else
             Result.Put
               (0, Position,
@@ -353,10 +373,10 @@ package body Flyology_TUI.Components.Scrollbars is
                 then "█"
                 else "░"),
                (if Position = 0 or else Position + 1 = Item.Length
-                then Appearance.Buttons
+                then Button_Style
                 elsif Flyology_TUI.Geometry.Contains
                   (Thumb, 0, Integer (Position))
-                then Thumb_Style else Appearance.Track));
+                then Thumb_Style else Track_Style));
          end if;
       end loop;
       return Result;

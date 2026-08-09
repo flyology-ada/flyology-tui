@@ -14,6 +14,7 @@ package Flyology_TUI.Components.Windows is
       Focused_Title : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Close         : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Content       : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Disabled      : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
    end record;
 
    function From_Theme
@@ -39,6 +40,11 @@ package Flyology_TUI.Components.Windows is
    procedure Focus (Item : in out Model);
    procedure Blur (Item : in out Model);
    function Focused (Item : Model) return Boolean;
+   --  Disabling cancels movement, resize, or close activation. If the window
+   --  already acquired mouse capture, the next left release still reports
+   --  Release_Capture.
+   procedure Set_Enabled (Item : in out Model; Enabled : Boolean);
+   function Is_Enabled (Item : Model) return Boolean;
 
    --  Mouse coordinates are relative to Workspace, not to the moving window.
    --  Captured drag and release events may therefore remain signed and outside
@@ -103,8 +109,10 @@ private
       Can_Close      : Boolean := True;
       Can_Move       : Boolean := True;
       Can_Resize     : Boolean := True;
+      Enabled        : Boolean := True;
       Has_Focus      : Boolean := False;
       Active         : Operation := Idle;
+      Capturing      : Boolean := False;
       Press_Point    : Flyology_TUI.Geometry.Point;
       Press_Area     : Flyology_TUI.Geometry.Rectangle;
    end record;

@@ -17,6 +17,8 @@ package Flyology_TUI.Components.Split_Panes is
         Flyology_TUI.Styles.Default;
       Focused_Divider : Flyology_TUI.Styles.Style :=
         Flyology_TUI.Styles.Default;
+      Disabled : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
    end record;
 
    function From_Theme
@@ -31,6 +33,8 @@ package Flyology_TUI.Components.Split_Panes is
       First_Minimum  : Natural := 0;
       Second_Minimum : Natural := 0) return Model;
 
+   --  Resize cancels active divider movement but preserves capture ownership
+   --  until the next left release.
    procedure Resize
      (Item : in out Model;
       Width, Height : Natural);
@@ -46,6 +50,10 @@ package Flyology_TUI.Components.Split_Panes is
    procedure Focus (Item : in out Model);
    procedure Blur (Item : in out Model);
    function Focused (Item : Model) return Boolean;
+   --  Disabling cancels divider movement but preserves the pending release of
+   --  an already-acquired mouse capture.
+   procedure Set_Enabled (Item : in out Model; Enabled : Boolean);
+   function Is_Enabled (Item : Model) return Boolean;
 
    --  Coordinates are local to the complete split pane. During a captured
    --  divider drag they may be outside it. If both minimums cannot fit, the
@@ -92,7 +100,9 @@ private
       First_Value    : Natural := 0;
       First_Minimum  : Natural := 0;
       Second_Minimum : Natural := 0;
+      Enabled        : Boolean := True;
       Has_Focus      : Boolean := False;
       Dragging       : Boolean := False;
+      Capturing      : Boolean := False;
    end record;
 end Flyology_TUI.Components.Split_Panes;

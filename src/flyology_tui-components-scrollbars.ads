@@ -15,6 +15,7 @@ package Flyology_TUI.Components.Scrollbars is
       Thumb         : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Focused_Thumb : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Buttons       : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Disabled      : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
    end record;
 
    function From_Theme
@@ -26,6 +27,8 @@ package Flyology_TUI.Components.Scrollbars is
      (Flow   : Orientation;
       Length : Natural) return Model;
 
+   --  Resize and Configure cancel thumb movement but preserve capture
+   --  ownership until the next left release.
    procedure Resize (Item : in out Model; Length : Natural);
    procedure Configure
      (Item      : in out Model;
@@ -42,6 +45,10 @@ package Flyology_TUI.Components.Scrollbars is
    procedure Focus (Item : in out Model);
    procedure Blur (Item : in out Model);
    function Focused (Item : Model) return Boolean;
+   --  Disabling cancels thumb movement but preserves the pending release of
+   --  an already-acquired mouse capture.
+   procedure Set_Enabled (Item : in out Model; Enabled : Boolean);
+   function Is_Enabled (Item : Model) return Boolean;
 
    --  Local mouse input supports arrow and track clicks, wheel movement, and
    --  captured thumb dragging. A release ends a captured drag even outside.
@@ -82,8 +89,10 @@ private
       Total      : Natural := 0;
       Page       : Natural := 0;
       First_Item : Natural := 0;
+      Enabled    : Boolean := True;
       Has_Focus  : Boolean := False;
       Dragging   : Boolean := False;
+      Capturing  : Boolean := False;
       Drag_Offset : Natural := 0;
    end record;
 end Flyology_TUI.Components.Scrollbars;

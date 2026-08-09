@@ -10,7 +10,8 @@ package body Flyology_TUI.Components.Split_Panes is
    is
      (Background      => Theme.Primary,
       Divider         => Theme.Border,
-      Focused_Divider => Theme.Focused);
+      Focused_Divider => Theme.Focused,
+      Disabled        => Theme.Muted);
 
    function Major_Length (Item : Model) return Natural is
      (if Item.Flow_Value = Flyology_TUI.Layouts.Boxes.Horizontal
@@ -66,6 +67,9 @@ package body Flyology_TUI.Components.Split_Panes is
       Item.Columns := Width;
       Item.Rows := Height;
       Normalize (Item, Desired);
+      --  Geometry changes cancel divider movement without relinquishing an
+      --  already-acquired application capture.
+      Item.Dragging := False;
    end Resize;
 
    function First_Region
@@ -123,6 +127,16 @@ package body Flyology_TUI.Components.Split_Panes is
 
    function Focused (Item : Model) return Boolean is (Item.Has_Focus);
 
+   procedure Set_Enabled (Item : in out Model; Enabled : Boolean) is
+   begin
+      Item.Enabled := Enabled;
+      if not Enabled then
+         Item.Dragging := False;
+      end if;
+   end Set_Enabled;
+
+   function Is_Enabled (Item : Model) return Boolean is (Item.Enabled);
+
    function Pointer_Span
      (Item  : Model;
       Event : Flyology_TUI.Mouse.Local_Event) return Natural
@@ -147,11 +161,23 @@ package body Flyology_TUI.Components.Split_Panes is
       Before : constant Natural := Item.First_Value;
       Point : constant Flyology_TUI.Geometry.Point := (Event.X, Event.Y);
    begin
-      if Event.Action = Flyology_TUI.Events.Mouse_Click
+      if Event.Action = Flyology_TUI.Events.Mouse_Release
+        and then Event.Button = Flyology_TUI.Events.Left_Button
+        and then Item.Capturing
+      then
+         Item.Dragging := False;
+         Item.Capturing := False;
+         Result.Handled := True;
+         Result.Capture :=
+           Flyology_TUI.Components.Interactions.Release_Capture;
+      elsif not Item.Enabled then
+         null;
+      elsif Event.Action = Flyology_TUI.Events.Mouse_Click
         and then Event.Button = Flyology_TUI.Events.Left_Button
         and then Flyology_TUI.Geometry.Contains (Divider_Region (Item), Point)
       then
          Item.Dragging := True;
+         Item.Capturing := True;
          Item.Has_Focus := True;
          Result.Handled := True;
          Result.Focus_Requested := True;
@@ -163,13 +189,6 @@ package body Flyology_TUI.Components.Split_Panes is
       then
          Normalize (Item, Pointer_Span (Item, Event));
          Result.Handled := True;
-      elsif Event.Action = Flyology_TUI.Events.Mouse_Release
-        and then Item.Dragging
-      then
-         Item.Dragging := False;
-         Result.Handled := True;
-         Result.Capture :=
-           Flyology_TUI.Components.Interactions.Release_Capture;
       end if;
       Result.Changed := Item.First_Value /= Before;
       return Result;
@@ -187,7 +206,9 @@ package body Flyology_TUI.Components.Split_Panes is
          and then Event.Key.Modified.Shift then 5 else 1);
       Desired : Natural := Item.First_Value;
    begin
-      if Event.Kind /= Flyology_TUI.Events.Key_Press then
+      if not Item.Enabled
+        or else Event.Kind /= Flyology_TUI.Events.Key_Press
+      then
          return Result;
       end if;
       if (Item.Flow_Value = Flyology_TUI.Layouts.Boxes.Horizontal
@@ -250,9 +271,13 @@ package body Flyology_TUI.Components.Split_Panes is
       Divider_Area : constant Flyology_TUI.Geometry.Rectangle :=
         Divider_Region (Item);
       Divider_Style : constant Flyology_TUI.Styles.Style :=
-        (if Item.Has_Focus
+        (if not Item.Enabled
+         then Appearance.Disabled
+         elsif Item.Has_Focus
          then Appearance.Focused_Divider
          else Appearance.Divider);
+      Background_Style : constant Flyology_TUI.Styles.Style :=
+        (if Item.Enabled then Appearance.Background else Appearance.Disabled);
       First_Layer : Flyology_TUI.Surfaces.Surface;
       Second_Layer : Flyology_TUI.Surfaces.Surface;
    begin
@@ -264,14 +289,14 @@ package body Flyology_TUI.Components.Split_Panes is
       end if;
       Result :=
         Flyology_TUI.Surfaces.Create
-          (Item.Columns, Item.Rows, Appearance.Background);
+          (Item.Columns, Item.Rows, Background_Style);
       First_Layer :=
         Flyology_TUI.Surfaces.Create
-          (First_Area.Width, First_Area.Height, Appearance.Background);
+          (First_Area.Width, First_Area.Height, Background_Style);
       First_Layer.Overlay_Clipped (First, 0, 0);
       Second_Layer :=
         Flyology_TUI.Surfaces.Create
-          (Second_Area.Width, Second_Area.Height, Appearance.Background);
+          (Second_Area.Width, Second_Area.Height, Background_Style);
       Second_Layer.Overlay_Clipped (Second, 0, 0);
       Result.Overlay_Clipped (First_Layer, First_Area.X, First_Area.Y);
       Result.Overlay_Clipped (Second_Layer, Second_Area.X, Second_Area.Y);

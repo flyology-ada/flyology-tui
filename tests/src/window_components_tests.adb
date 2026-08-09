@@ -8,6 +8,7 @@ with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Layouts.Boxes;
 with Flyology_TUI.Mouse;
+with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
 with Flyology_TUI.Themes;
 
@@ -17,6 +18,7 @@ procedure Window_Components_Tests is
    use type Flyology_TUI.Geometry.Point;
    use type Flyology_TUI.Geometry.Rectangle;
    use type Flyology_TUI.Layouts.Boxes.Direction;
+   use type Flyology_TUI.Styles.Style;
 
    procedure Assert (Condition : Boolean; Message : String) is
    begin
@@ -177,17 +179,67 @@ procedure Window_Components_Tests is
             Button => Flyology_TUI.Events.Right_Button),
          Workspace);
       Assert
-        (not Release_Result.Activated,
-         "window close activated for a mismatched release button");
-      Press_Result := Window.Handle
-        (Pointer (10, 2, Flyology_TUI.Events.Mouse_Click), Workspace);
+        (not Release_Result.Activated
+         and then Release_Result.Capture =
+           Flyology_TUI.Components.Interactions.No_Capture_Change,
+         "window close consumed a mismatched release button");
       Release_Result := Window.Handle
         (Pointer (10, 2, Flyology_TUI.Events.Mouse_Release), Workspace);
+      Assert
+        (Release_Result.Activated
+         and then Release_Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture,
+         "window close did not activate on matching release");
+
+      Window := Flyology_TUI.Components.Windows.Create
+        (X => 0, Y => 0, Width => 1, Height => 1,
+         Minimum_Width => 1, Minimum_Height => 1,
+         Movable => False, Resizable => False);
+      Press_Result := Window.Handle
+        (Pointer (0, 0, Flyology_TUI.Events.Mouse_Click), Workspace);
+      Release_Result := Window.Handle
+        (Pointer (0, 0, Flyology_TUI.Events.Mouse_Release), Workspace);
+      Assert
+        (Press_Result.Capture =
+           Flyology_TUI.Components.Interactions.No_Capture_Change
+         and then not Release_Result.Activated,
+         "width-one window activated an invisible close control");
+      declare
+         Rendered : constant Flyology_TUI.Surfaces.Surface :=
+           Window.Render
+             ("", Flyology_TUI.Surfaces.Create (0, 0),
+              (X => 0, Y => 0, Width => 1, Height => 1),
+              Flyology_TUI.Themes.Default);
+      begin
+         Assert
+           (Cell_Text (Rendered, 0, 0) /= "×",
+            "width-one window rendered an interactive close glyph");
+      end;
+
+      Window := Flyology_TUI.Components.Windows.Create
+        (X => 0, Y => 0, Width => 2, Height => 1,
+         Minimum_Width => 1, Minimum_Height => 1,
+         Movable => False, Resizable => False);
+      Press_Result := Window.Handle
+        (Pointer (0, 0, Flyology_TUI.Events.Mouse_Click), Workspace);
+      Release_Result := Window.Handle
+        (Pointer (0, 0, Flyology_TUI.Events.Mouse_Release), Workspace);
       Assert
         (Press_Result.Capture =
            Flyology_TUI.Components.Interactions.Acquire_Capture
          and then Release_Result.Activated,
-         "window close did not activate on matching release");
+         "visible width-two close control did not activate");
+      declare
+         Rendered : constant Flyology_TUI.Surfaces.Surface :=
+           Window.Render
+             ("", Flyology_TUI.Surfaces.Create (0, 0),
+              (X => 0, Y => 0, Width => 2, Height => 1),
+              Flyology_TUI.Themes.Default);
+      begin
+         Assert
+           (Cell_Text (Rendered, 0, 0) = "×",
+            "width-two window did not render its close hit target");
+      end;
    end Test_Window_Interaction;
 
    procedure Test_Window_Clamping_And_Keyboard is
@@ -472,6 +524,205 @@ procedure Window_Components_Tests is
          "zero-length scrollbar is not empty");
    end Test_Scrollbars;
 
+   procedure Test_Disabled_And_Interrupted_Capture is
+      Workspace : constant Flyology_TUI.Geometry.Rectangle :=
+        (X => 0, Y => 0, Width => 30, Height => 20);
+      Disabled_Style : constant Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Emphasized (Flyology_TUI.Styles.Default);
+      Window_Appearance : constant
+        Flyology_TUI.Components.Windows.Appearance :=
+          (Disabled => Disabled_Style, others => Flyology_TUI.Styles.Default);
+      Split_Appearance : constant
+        Flyology_TUI.Components.Split_Panes.Appearance :=
+          (Disabled => Disabled_Style, others => Flyology_TUI.Styles.Default);
+      Scroll_Appearance : constant
+        Flyology_TUI.Components.Scrollbars.Appearance :=
+          (Disabled => Disabled_Style, others => Flyology_TUI.Styles.Default);
+      Window : Flyology_TUI.Components.Windows.Model :=
+        Flyology_TUI.Components.Windows.Create
+          (X => 2, Y => 2, Width => 10, Height => 8);
+      Split : Flyology_TUI.Components.Split_Panes.Model :=
+        Flyology_TUI.Components.Split_Panes.Create
+          (Flyology_TUI.Layouts.Boxes.Horizontal,
+           Width => 10, Height => 3, First_Span => 4,
+           First_Minimum => 2, Second_Minimum => 2);
+      Bar : Flyology_TUI.Components.Scrollbars.Model :=
+        Flyology_TUI.Components.Scrollbars.Create
+          (Flyology_TUI.Layouts.Boxes.Vertical, Length => 10);
+      Result : Flyology_TUI.Components.Interactions.Update_Result;
+      Before : Flyology_TUI.Geometry.Rectangle;
+      First_Before : Natural;
+      Rendered : Flyology_TUI.Surfaces.Surface;
+   begin
+      --  Disabling a captured move cancels movement but retains the release.
+      Result := Window.Handle
+        (Pointer (5, 2, Flyology_TUI.Events.Mouse_Click), Workspace);
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Acquire_Capture,
+         "window move did not acquire capture before disable");
+      Before := Window.Bounds;
+      Window.Set_Enabled (False);
+      Result := Window.Handle
+        (Pointer (15, 10, Flyology_TUI.Events.Mouse_Drag), Workspace);
+      Assert
+        (not Result.Changed and then Window.Bounds = Before,
+         "disabled captured window continued moving");
+      Result := Window.Handle
+        (Pointer (15, 10, Flyology_TUI.Events.Mouse_Release), Workspace);
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture,
+         "disabled moved window leaked capture");
+
+      --  The same ownership rule applies to every resize handle.
+      Window := Flyology_TUI.Components.Windows.Create
+        (X => 2, Y => 2, Width => 10, Height => 8);
+      Result := Window.Handle
+        (Pointer (11, 5, Flyology_TUI.Events.Mouse_Click), Workspace);
+      Before := Window.Bounds;
+      Window.Set_Enabled (False);
+      Result := Window.Handle
+        (Pointer (20, 5, Flyology_TUI.Events.Mouse_Drag), Workspace);
+      Assert
+        (not Result.Changed and then Window.Bounds = Before,
+         "disabled captured window continued resizing");
+      Result := Window.Handle
+        (Pointer (20, 5, Flyology_TUI.Events.Mouse_Release), Workspace);
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture,
+         "disabled resized window leaked capture");
+
+      --  Close activation is cancelled, while capture still has to unwind.
+      Window := Flyology_TUI.Components.Windows.Create
+        (X => 2, Y => 2, Width => 10, Height => 8);
+      Result := Window.Handle
+        (Pointer (10, 2, Flyology_TUI.Events.Mouse_Click), Workspace);
+      Window.Set_Enabled (False);
+      Result := Window.Handle
+        (Pointer (10, 2, Flyology_TUI.Events.Mouse_Release), Workspace);
+      Assert
+        (not Result.Activated
+         and then Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture,
+         "disabled close activated or leaked capture");
+      Assert
+        (not Window.Is_Enabled,
+         "window enabled query disagrees with disabled state");
+      Result := Window.Handle
+        (Key (Flyology_TUI.Events.Arrow_Right_Key, Alt => True), Workspace);
+      Assert
+        (not Result.Handled,
+         "disabled window handled keyboard movement");
+      Rendered := Window.Render
+        ("disabled", Flyology_TUI.Surfaces.From_Text ("content"),
+         Workspace, Window_Appearance);
+      Assert
+        (Rendered.Element (2, 2).Appearance = Disabled_Style,
+         "explicit disabled window appearance was not rendered");
+      Rendered := Window.Render
+        ("disabled", Flyology_TUI.Surfaces.Create (0, 0),
+         Workspace, Flyology_TUI.Themes.Charm);
+      Assert
+        (Rendered.Element (2, 2).Appearance = Flyology_TUI.Themes.Charm.Muted
+         and then
+           Flyology_TUI.Components.Windows.From_Theme
+             (Flyology_TUI.Themes.Charm).Disabled =
+               Flyology_TUI.Themes.Charm.Muted,
+         "window theme did not map its disabled role");
+
+      --  Split Resize cancels dragging, but not application capture ownership.
+      Result := Split.Handle
+        (Pointer (4, 1, Flyology_TUI.Events.Mouse_Click));
+      Split.Resize (12, 3);
+      Split.Set_Enabled (False);
+      First_Before := Split.First_Span;
+      Result := Split.Handle
+        (Pointer (8, 1, Flyology_TUI.Events.Mouse_Drag));
+      Assert
+        (not Result.Changed and then Split.First_Span = First_Before,
+         "disabled resized split continued dragging");
+      Result := Split.Handle
+        (Pointer (8, 1, Flyology_TUI.Events.Mouse_Release));
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture
+         and then not Split.Is_Enabled,
+         "disabled resized split leaked capture");
+      Result := Split.Handle
+        (Key (Flyology_TUI.Events.Arrow_Right_Key));
+      Assert
+        (not Result.Handled and then Split.First_Span = First_Before,
+         "disabled split handled keyboard resizing");
+      Rendered := Split.Render
+        (Flyology_TUI.Surfaces.Create (0, 0),
+         Flyology_TUI.Surfaces.Create (0, 0), Split_Appearance);
+      Assert
+        (Rendered.Element
+           (Natural (Split.Divider_Region.X), 0).Appearance = Disabled_Style,
+         "explicit disabled split appearance was not rendered");
+      Assert
+        (Flyology_TUI.Components.Split_Panes.From_Theme
+           (Flyology_TUI.Themes.Charm).Disabled =
+             Flyology_TUI.Themes.Charm.Muted,
+         "split theme did not map its disabled role");
+      Rendered := Split.Render
+        (Flyology_TUI.Surfaces.Create (0, 0),
+         Flyology_TUI.Surfaces.Create (0, 0),
+         Flyology_TUI.Themes.Charm);
+      Assert
+        (Rendered.Element
+           (Natural (Split.Divider_Region.X), 0).Appearance =
+             Flyology_TUI.Themes.Charm.Muted,
+         "disabled split theme appearance was not rendered");
+
+      --  Configure and Resize can invalidate the thumb, but a later release
+      --  must still relinquish the capture acquired for it.
+      Bar.Configure (Total => 100, Page_Size => 20, First => 0);
+      Result := Bar.Handle
+        (Pointer (0, 1, Flyology_TUI.Events.Mouse_Click));
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Acquire_Capture,
+         "scrollbar thumb did not acquire capture before reconfigure");
+      Bar.Configure (Total => 10, Page_Size => 10, First => 0);
+      Bar.Resize (0);
+      Bar.Set_Enabled (False);
+      Result := Bar.Handle
+        (Pointer (-10, -10, Flyology_TUI.Events.Mouse_Release));
+      Assert
+        (Result.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture
+         and then not Bar.Is_Enabled,
+         "disabled reconfigured scrollbar leaked capture");
+      Bar.Resize (5);
+      Bar.Configure (Total => 20, Page_Size => 5, First => 0);
+      Result := Bar.Handle
+        (Pointer (0, 4, Flyology_TUI.Events.Mouse_Click));
+      Assert
+        (not Result.Handled and then Bar.First = 0,
+         "disabled scrollbar changed through mouse input");
+      Result := Bar.Handle (Key (Flyology_TUI.Events.Page_Down_Key));
+      Assert
+        (not Result.Handled and then Bar.First = 0,
+         "disabled scrollbar changed through keyboard input");
+      Rendered := Bar.Render (Scroll_Appearance);
+      Assert
+        (Rendered.Element (0, 0).Appearance = Disabled_Style,
+         "explicit disabled scrollbar appearance was not rendered");
+      Assert
+        (Flyology_TUI.Components.Scrollbars.From_Theme
+           (Flyology_TUI.Themes.Charm).Disabled =
+             Flyology_TUI.Themes.Charm.Muted,
+         "scrollbar theme did not map its disabled role");
+      Rendered := Bar.Render (Flyology_TUI.Themes.Charm);
+      Assert
+        (Rendered.Element (0, 0).Appearance =
+           Flyology_TUI.Themes.Charm.Muted,
+         "disabled scrollbar theme appearance was not rendered");
+   end Test_Disabled_And_Interrupted_Capture;
+
 begin
    Test_Window_Resize_Directions;
    Test_Window_Interaction;
@@ -479,5 +730,6 @@ begin
    Test_Window_Render;
    Test_Split_Panes;
    Test_Scrollbars;
+   Test_Disabled_And_Interrupted_Capture;
    Ada.Text_IO.Put_Line ("window component tests passed");
 end Window_Components_Tests;

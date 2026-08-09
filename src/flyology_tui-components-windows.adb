@@ -13,7 +13,8 @@ package body Flyology_TUI.Components.Windows is
       Title         => Theme.Primary,
       Focused_Title => Theme.Focused,
       Close         => Theme.Error,
-      Content       => Theme.Primary);
+      Content       => Theme.Primary,
+      Disabled      => Theme.Muted);
 
    function Safe_Add (Left, Right : Integer) return Integer is
    begin
@@ -106,6 +107,18 @@ package body Flyology_TUI.Components.Windows is
 
    function Focused (Item : Model) return Boolean is (Item.Has_Focus);
 
+   procedure Set_Enabled (Item : in out Model; Enabled : Boolean) is
+   begin
+      Item.Enabled := Enabled;
+      if not Enabled then
+         --  Cancel the semantic operation, but retain capture ownership until
+         --  the matching left release can be reported to the application.
+         Item.Active := Idle;
+      end if;
+   end Set_Enabled;
+
+   function Is_Enabled (Item : Model) return Boolean is (Item.Enabled);
+
    procedure Clamp
      (Area           : in out Flyology_TUI.Geometry.Rectangle;
       Minimum_Width  : Positive;
@@ -150,7 +163,9 @@ package body Flyology_TUI.Components.Windows is
           (Area.X,
            Integer (if Area.Width > 1 then Area.Width - 2 else 0));
    begin
-      return Point.Y = Area.Y and then Point.X = Close_X;
+      return Area.Width > 1
+        and then Point.Y = Area.Y
+        and then Point.X = Close_X;
    end Close_Hit;
 
    function Operation_At
@@ -257,7 +272,22 @@ package body Flyology_TUI.Components.Windows is
       Point : constant Flyology_TUI.Geometry.Point := (Event.X, Event.Y);
       Before : constant Flyology_TUI.Geometry.Rectangle := Item.Area;
    begin
-      if Event.Action = Flyology_TUI.Events.Mouse_Click
+      if Event.Action = Flyology_TUI.Events.Mouse_Release
+        and then Event.Button = Flyology_TUI.Events.Left_Button
+        and then Item.Capturing
+      then
+         Result.Handled := True;
+         Result.Capture :=
+           Flyology_TUI.Components.Interactions.Release_Capture;
+         Result.Activated :=
+           Item.Enabled
+           and then Item.Active = Closing
+           and then Close_Hit (Item.Area, Point);
+         Item.Capturing := False;
+         Item.Active := Idle;
+      elsif not Item.Enabled then
+         null;
+      elsif Event.Action = Flyology_TUI.Events.Mouse_Click
         and then Event.Button = Flyology_TUI.Events.Left_Button
         and then Flyology_TUI.Geometry.Contains (Item.Area, Point)
       then
@@ -268,6 +298,7 @@ package body Flyology_TUI.Components.Windows is
          Result.Handled := True;
          Result.Focus_Requested := True;
          if Item.Active /= Idle then
+            Item.Capturing := True;
             Result.Capture :=
               Flyology_TUI.Components.Interactions.Acquire_Capture;
          end if;
@@ -279,17 +310,6 @@ package body Flyology_TUI.Components.Windows is
          if Item.Active /= Closing then
             Apply_Drag (Item, Point, Workspace);
          end if;
-      elsif Event.Action = Flyology_TUI.Events.Mouse_Release
-        and then Item.Active /= Idle
-      then
-         Result.Handled := True;
-         Result.Capture :=
-           Flyology_TUI.Components.Interactions.Release_Capture;
-         Result.Activated :=
-           Item.Active = Closing
-           and then Event.Button = Flyology_TUI.Events.Left_Button
-           and then Close_Hit (Item.Area, Point);
-         Item.Active := Idle;
       end if;
       Result.Changed := Item.Area /= Before;
       return Result;
@@ -306,7 +326,9 @@ package body Flyology_TUI.Components.Windows is
       Step : Integer := 1;
       Delta_X, Delta_Y : Integer := 0;
    begin
-      if Event.Kind /= Flyology_TUI.Events.Key_Press then
+      if not Item.Enabled
+        or else Event.Kind /= Flyology_TUI.Events.Key_Press
+      then
          return Result;
       end if;
       if Event.Key.Modified.Shift then
@@ -373,13 +395,21 @@ package body Flyology_TUI.Components.Windows is
       return Flyology_TUI.Surfaces.Surface
    is
       Frame_Style : constant Flyology_TUI.Styles.Style :=
-        (if Item.Has_Focus
+        (if not Item.Enabled
+         then Appearance.Disabled
+         elsif Item.Has_Focus
          then Appearance.Focused_Frame
          else Appearance.Frame);
       Title_Style : constant Flyology_TUI.Styles.Style :=
-        (if Item.Has_Focus
+        (if not Item.Enabled
+         then Appearance.Disabled
+         elsif Item.Has_Focus
          then Appearance.Focused_Title
          else Appearance.Title);
+      Content_Style : constant Flyology_TUI.Styles.Style :=
+        (if Item.Enabled then Appearance.Content else Appearance.Disabled);
+      Close_Style : constant Flyology_TUI.Styles.Style :=
+        (if Item.Enabled then Appearance.Close else Appearance.Disabled);
       Result : Flyology_TUI.Surfaces.Surface;
       Window : Flyology_TUI.Surfaces.Surface;
       Client_Layer : Flyology_TUI.Surfaces.Surface;
@@ -408,9 +438,9 @@ package body Flyology_TUI.Components.Windows is
            "window frame exceeds addressable cell capacity";
       end if;
       Result := Flyology_TUI.Surfaces.Create
-        (Workspace.Width, Workspace.Height, Appearance.Content);
+        (Workspace.Width, Workspace.Height, Content_Style);
       Window := Flyology_TUI.Surfaces.Create
-        (Item.Area.Width, Item.Area.Height, Appearance.Content);
+        (Item.Area.Width, Item.Area.Height, Content_Style);
 
       if Item.Area.Height > 0 then
          for X in 0 .. Item.Area.Width - 1 loop
@@ -448,12 +478,12 @@ package body Flyology_TUI.Components.Windows is
          Window.Overlay_Clipped (Title_Layer, 2, 0);
       end if;
       if Item.Can_Close and then Item.Area.Width > 1 then
-         Window.Put (Item.Area.Width - 2, 0, "×", Appearance.Close);
+         Window.Put (Item.Area.Width - 2, 0, "×", Close_Style);
       end if;
       if Client_Width > 0 and then Client_Height > 0 then
          Client_Layer :=
            Flyology_TUI.Surfaces.Create
-             (Client_Width, Client_Height, Appearance.Content);
+             (Client_Width, Client_Height, Content_Style);
          Client_Layer.Overlay_Clipped (Content, 0, 0);
          Window.Overlay_Clipped (Client_Layer, 1, 1);
       end if;
