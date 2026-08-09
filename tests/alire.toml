@@ -14,6 +14,7 @@ executables = [
   "foundation_layout_tests",
   "controls_tests",
   "visual_components_tests",
+  "window_components_tests",
 ]
 
 [[depends-on]]

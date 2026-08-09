@@ -12,6 +12,7 @@ alr build
 ./bin/foundation_layout_tests
 ./bin/controls_tests
 ./bin/visual_components_tests
+./bin/window_components_tests
 
 cd "$root_dir"
 alr exec -- gprbuild -P examples/examples.gpr -p
