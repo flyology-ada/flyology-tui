@@ -349,6 +349,8 @@ procedure Kitchen_Sink is
    end Initialize;
 
    procedure Next_Focus (Item : in out Model; Backwards : Boolean) is
+      Has_Visible_Window : constant Boolean :=
+        Item.Window_A_Visible or else Item.Window_B_Visible;
    begin
       case Current_Page (Item) is
       when Basics_Page =>
@@ -435,7 +437,10 @@ procedure Kitchen_Sink is
                (case Item.Focus is
                    when Page_Navigation        => Horizontal_Scroll_Field,
                    when Window_Field           => Page_Navigation,
-                   when Split_Field            => Window_Field,
+                   when Split_Field            =>
+                     (if Has_Visible_Window
+                      then Window_Field
+                      else Page_Navigation),
                    when Vertical_Scroll_Field  => Split_Field,
                    when Horizontal_Scroll_Field => Vertical_Scroll_Field,
                    when others                 => Window_Field));
@@ -443,7 +448,10 @@ procedure Kitchen_Sink is
             Activate
               (Item,
                (case Item.Focus is
-                   when Page_Navigation         => Window_Field,
+                   when Page_Navigation         =>
+                     (if Has_Visible_Window
+                      then Window_Field
+                      else Split_Field),
                    when Window_Field            => Split_Field,
                    when Split_Field             => Vertical_Scroll_Field,
                    when Vertical_Scroll_Field   => Horizontal_Scroll_Field,
