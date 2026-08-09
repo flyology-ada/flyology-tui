@@ -677,6 +677,16 @@ procedure Kitchen_Sink is
            (if Last_Y > First_Y then Natural (Last_Y - First_Y) else 0));
    end Intersect;
 
+   function Visible_Dropdown_Bounds
+     (Item     : Model;
+      Geometry : Layout_Snapshot) return Flyology_TUI.Geometry.Rectangle is
+     (Intersect
+        ((X      => Geometry.Dropdown_Origin.X,
+          Y      => Geometry.Dropdown_Origin.Y,
+          Width  => Item.Dropdown.Width,
+          Height => Item.Dropdown.Height),
+         Inset_Panel (Geometry.Fourth)));
+
    procedure Editor_Regions
      (Geometry : Layout_Snapshot;
       Text_Region, Syntax_Region : out Flyology_TUI.Geometry.Rectangle) is
@@ -1823,8 +1833,6 @@ procedure Kitchen_Sink is
         Inset_Panel (Geometry.Second);
       Third_Content : constant Flyology_TUI.Geometry.Rectangle :=
         Inset_Panel (Geometry.Third);
-      Fourth_Content : constant Flyology_TUI.Geometry.Rectangle :=
-        Inset_Panel (Geometry.Fourth);
       Button_Bounds : constant Flyology_TUI.Geometry.Rectangle := Intersect
         ((X => Geometry.Button_Origin.X,
           Y => Geometry.Button_Origin.Y,
@@ -1855,12 +1863,7 @@ procedure Kitchen_Sink is
           Height => Flyology_TUI.Surfaces.Height (Selector_View)),
          Third_Content);
       Dropdown_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        Intersect
-          ((X => Geometry.Dropdown_Origin.X,
-            Y => Geometry.Dropdown_Origin.Y,
-            Width => Item.Dropdown.Width,
-            Height => Item.Dropdown.Height),
-           Fourth_Content);
+        Visible_Dropdown_Bounds (Item, Geometry);
       Point : constant Flyology_TUI.Geometry.Point :=
         (X => Integer (Event.X), Y => Integer (Event.Y));
       Result : Update_Result;
@@ -2214,10 +2217,7 @@ procedure Kitchen_Sink is
       then
          declare
             Dropdown_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-              (X => Geometry.Dropdown_Origin.X,
-               Y => Geometry.Dropdown_Origin.Y,
-               Width => Item.Dropdown.Width,
-               Height => Item.Dropdown.Height);
+              Visible_Dropdown_Bounds (Item, Geometry);
          begin
             if not Flyology_TUI.Geometry.Contains (Dropdown_Bounds, Point) then
                Result := Item.Dropdown.Dismiss;
@@ -3228,8 +3228,33 @@ procedure Kitchen_Sink is
         (Frame.Frame.Width = 56 and then Frame.Frame.Height = 15,
          "56-column frame did not match the terminal");
 
+      Set_Terminal_Size (Item, 80, 24);
+      Item.Pages.Activate (Controls_Page);
+      Activate (Item, Dropdown_Field);
+      Item.Dropdown.Open;
+      Assert (Item.Dropdown.Is_Open, "dropdown did not open before resize");
+
       Set_Terminal_Size (Item, 20, 6);
       Geometry := Layout (Item);
+      Assert
+        (Visible_Dropdown_Bounds (Item, Geometry).Height = 0
+         and then Geometry.Dropdown_Origin.Y = Geometry.Help.Y,
+         "small layout did not fully clip the retained dropdown");
+      Handle_Mouse
+        (Item,
+         (Kind  => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Pointer
+            (Natural (Geometry.Dropdown_Origin.X),
+             Natural (Geometry.Dropdown_Origin.Y))));
+      Assert
+        (not Item.Dropdown.Is_Open,
+         "click on a clipped dropdown cell did not dismiss it");
+      Transitions.Reset (Next);
+      Update (Item, Key, Next);
+      Assert
+        (Item.Focus = Page_Navigation,
+         "dismissed clipped dropdown still blocked focus traversal");
+
       Assert
         (Fits (Geometry.Window_Workspace, Item.Window_A_Model.Bounds)
          and then Fits
