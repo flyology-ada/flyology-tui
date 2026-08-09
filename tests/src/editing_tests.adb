@@ -193,6 +193,12 @@ procedure Editing_Tests is
       Assert
         (Result.Rejected and then Item.Value = "abcdef",
          "oversized full replacement was not rejected atomically");
+      Result := Item.Handle
+        (Character_Key ("0123456789012"));
+      Assert
+        (Result.Handled and then Result.Rejected
+         and then not Result.Changed and then Item.Value = "abcdef",
+         "oversized text-key payload was not rejected atomically");
       Item.Set_Read_Only (True);
       Result := Item.Handle (Character_Key ("x"));
       Assert (not Result.Changed, "read-only area accepted text");

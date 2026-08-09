@@ -94,6 +94,56 @@ package body Flyology_TUI.Components.Text_Areas is
       end loop;
    end Normalize_Bounded;
 
+   procedure Normalize_Bounded
+     (Value           : Text.Unbounded_Wide_Wide_String;
+      Max_Code_Points : Natural;
+      Max_Lines       : Positive;
+      Result          : out Text.Unbounded_Wide_Wide_String;
+      Success         : out Boolean)
+   is
+      Index : Positive := 1;
+      Length : constant Natural := Text.Length (Value);
+      Count : Natural := 0;
+      Lines : Positive := 1;
+      Char : Wide_Wide_Character;
+   begin
+      Result := Text.Null_Unbounded_Wide_Wide_String;
+      Success := True;
+      while Index <= Length loop
+         if Count >= Max_Code_Points then
+            Success := False;
+            return;
+         end if;
+         Char := Text.Element (Value, Index);
+         if Char = Wide_Wide_Character'Val (13) then
+            if Lines >= Max_Lines then
+               Success := False;
+               return;
+            end if;
+            Text.Append (Result, Wide_Wide_Character'Val (10));
+            Lines := Lines + 1;
+            if Index < Length
+              and then Text.Element (Value, Index + 1) =
+                Wide_Wide_Character'Val (10)
+            then
+               Index := Index + 1;
+            end if;
+         else
+            if Char = Wide_Wide_Character'Val (10) then
+               if Lines >= Max_Lines then
+                  Success := False;
+                  return;
+               end if;
+               Lines := Lines + 1;
+            end if;
+            Text.Append (Result, Char);
+         end if;
+         Count := Count + 1;
+         exit when Index = Length;
+         Index := Index + 1;
+      end loop;
+   end Normalize_Bounded;
+
    function Count_Lines (Value : Wide_Wide_String) return Positive is
       Result : Positive := 1;
    begin
@@ -545,7 +595,7 @@ package body Flyology_TUI.Components.Text_Areas is
    function Try_Replace
      (Item : in out Model;
       First, Last : Natural;
-      Inserted : Wide_Wide_String) return Boolean
+      Inserted : Text.Unbounded_Wide_Wide_String) return Boolean
    is
       Current : constant Wide_Wide_String := Value (Item);
       function Newline_Count (Value : Wide_Wide_String) return Natural is
@@ -612,7 +662,8 @@ package body Flyology_TUI.Components.Text_Areas is
    end Try_Replace;
 
    function Insert_Text
-     (Item : in out Model; Inserted : Wide_Wide_String) return Boolean
+     (Item : in out Model;
+      Inserted : Text.Unbounded_Wide_Wide_String) return Boolean
    is
       First, Last : Natural;
    begin
@@ -801,7 +852,7 @@ package body Flyology_TUI.Components.Text_Areas is
             return Result;
          end if;
          Changed := Insert_Text
-           (Item, Text.To_Wide_Wide_String (Event.Pasted_Text));
+           (Item, Event.Pasted_Text);
          Result.Changed := Changed;
          Result.Rejected := not Changed;
          Ensure_Visible (Item);
@@ -816,12 +867,21 @@ package body Flyology_TUI.Components.Text_Areas is
          when Flyology_TUI.Events.Text_Key =>
             if Event.Key.Modified.Control then
                declare
-                  Key_Value : constant Wide_Wide_String :=
-                    Text.To_Wide_Wide_String (Event.Key.Value);
+                  Key_Length : constant Natural :=
+                    Text.Length (Event.Key.Value);
+                  Key_Value : Wide_Wide_Character :=
+                    Wide_Wide_Character'Val (0);
                begin
-                  if Key_Value = "a" or else Key_Value = "A" then
+                  if Key_Length = 1 then
+                     Key_Value := Text.Element (Event.Key.Value, 1);
+                  end if;
+                  if Key_Length = 1
+                    and then (Key_Value = 'a' or else Key_Value = 'A')
+                  then
                      Select_All (Item);
-                  elsif Key_Value = "z" or else Key_Value = "Z" then
+                  elsif Key_Length = 1
+                    and then (Key_Value = 'z' or else Key_Value = 'Z')
+                  then
                      if not Item.Read_Only then
                         if Event.Key.Modified.Shift then
                            Changed := Can_Redo (Item);
@@ -832,7 +892,9 @@ package body Flyology_TUI.Components.Text_Areas is
                         end if;
                         Result.Changed := Changed;
                      end if;
-                  elsif Key_Value = "y" or else Key_Value = "Y" then
+                  elsif Key_Length = 1
+                    and then (Key_Value = 'y' or else Key_Value = 'Y')
+                  then
                      if not Item.Read_Only then
                         Changed := Can_Redo (Item);
                         Redo (Item);
@@ -845,7 +907,7 @@ package body Flyology_TUI.Components.Text_Areas is
             elsif not Event.Key.Modified.Super then
                if not Item.Read_Only then
                   Changed := Insert_Text
-                    (Item, Text.To_Wide_Wide_String (Event.Key.Value));
+                    (Item, Event.Key.Value);
                   Result.Changed := Changed;
                   Result.Rejected := not Changed;
                end if;
@@ -855,14 +917,18 @@ package body Flyology_TUI.Components.Text_Areas is
          when Flyology_TUI.Events.Enter_Key =>
             if not Item.Read_Only then
                Changed := Insert_Text
-                 (Item, (1 => Wide_Wide_Character'Val (10)));
+                 (Item,
+                  Text.To_Unbounded_Wide_Wide_String
+                    ((1 => Wide_Wide_Character'Val (10))));
                Result.Changed := Changed;
                Result.Rejected := not Changed;
             end if;
          when Flyology_TUI.Events.Tab_Key =>
             if not Item.Read_Only then
                Changed := Insert_Text
-                 (Item, (1 => Wide_Wide_Character'Val (9)));
+                 (Item,
+                  Text.To_Unbounded_Wide_Wide_String
+                    ((1 => Wide_Wide_Character'Val (9))));
                Result.Changed := Changed;
                Result.Rejected := not Changed;
             end if;
@@ -873,7 +939,8 @@ package body Flyology_TUI.Components.Text_Areas is
                   First := Previous_Boundary (Current, First);
                end if;
                if First < Last then
-                  Result.Changed := Try_Replace (Item, First, Last, "");
+                  Result.Changed := Try_Replace
+                    (Item, First, Last, Text.Null_Unbounded_Wide_Wide_String);
                end if;
             end if;
          when Flyology_TUI.Events.Delete_Key =>
@@ -883,7 +950,8 @@ package body Flyology_TUI.Components.Text_Areas is
                   Last := Next_Boundary (Current, Last);
                end if;
                if First < Last then
-                  Result.Changed := Try_Replace (Item, First, Last, "");
+                  Result.Changed := Try_Replace
+                    (Item, First, Last, Text.Null_Unbounded_Wide_Wide_String);
                end if;
             end if;
          when Flyology_TUI.Events.Arrow_Left_Key =>
