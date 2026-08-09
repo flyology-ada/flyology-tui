@@ -10,7 +10,9 @@ project Flyology_Tui_Tests is
       "foundation_layout_tests.adb",
       "controls_tests.adb",
       "visual_components_tests.adb",
-      "window_components_tests.adb");
+      "window_components_tests.adb",
+      "accordion_tests.adb",
+      "data_navigation_tests.adb");
 
    package Compiler is
       for Default_Switches ("Ada") use

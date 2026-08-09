@@ -4,6 +4,8 @@ with Ada.Text_IO;
 with Flyology_TUI.Application_Events;
 with Flyology_TUI.Backends;
 with Flyology_TUI.Backends.POSIX;
+with Flyology_TUI.Components.Accordions;
+with Flyology_TUI.Components.Breadcrumbs;
 with Flyology_TUI.Components.Buttons;
 with Flyology_TUI.Components.Check_Boxes;
 with Flyology_TUI.Components.Dropdowns;
@@ -20,8 +22,10 @@ with Flyology_TUI.Components.Selectors;
 with Flyology_TUI.Components.Sparklines;
 with Flyology_TUI.Components.Spinners;
 with Flyology_TUI.Components.Split_Panes;
+with Flyology_TUI.Components.Tables;
 with Flyology_TUI.Components.Tabs;
 with Flyology_TUI.Components.Text_Inputs;
+with Flyology_TUI.Components.Trees;
 with Flyology_TUI.Components.Viewports;
 with Flyology_TUI.Components.Windows;
 with Flyology_TUI.Events;
@@ -54,7 +58,11 @@ procedure Kitchen_Sink is
       Label     => Text_Label);
 
    type Page_Id is
-     (Basics_Page, Controls_Page, Telemetry_Page, Windows_Page);
+     (Basics_Page,
+      Controls_Page,
+      Navigation_Page,
+      Telemetry_Page,
+      Windows_Page);
 
    function Page_Identity (Item : Page_Id) return Page_Id is (Item);
 
@@ -62,6 +70,7 @@ procedure Kitchen_Sink is
      (case Item is
          when Basics_Page   => "Basics",
          when Controls_Page => "Controls",
+         when Navigation_Page => "Navigation",
          when Telemetry_Page => "Telemetry",
          when Windows_Page   => "Windows");
 
@@ -103,6 +112,145 @@ procedure Kitchen_Sink is
       Label     => Choice_Label,
       Capacity  => 8);
 
+   type Path_Id is
+     (Workspace_Path, Project_Path, Examples_Path, Kitchen_Sink_Path);
+
+   function Path_Identity (Item : Path_Id) return Path_Id is (Item);
+
+   function Path_Label (Item : Path_Id) return Wide_Wide_String is
+     (case Item is
+         when Workspace_Path    => "flyology",
+         when Project_Path      => "flyology-tui",
+         when Examples_Path     => "examples",
+         when Kitchen_Sink_Path => "kitchen sink");
+
+   package Breadcrumbs is new Flyology_TUI.Components.Breadcrumbs
+     (Item_Type => Path_Id,
+      Id_Type   => Path_Id,
+      Id_Of     => Path_Identity,
+      Label     => Path_Label,
+      Capacity  => 8);
+
+   type Component_Id is
+     (Runtime_Component,
+      Backend_Component,
+      Views_Component,
+      Tests_Component);
+   type Component_Column is (Name_Column, Status_Column);
+   type Component_Row is record
+      Id       : Component_Id;
+      Priority : Natural;
+   end record;
+
+   function Component_Identity
+     (Item : Component_Row) return Component_Id is (Item.Id);
+
+   function Component_Name
+     (Item : Component_Id) return Wide_Wide_String is
+     (case Item is
+         when Runtime_Component => "runtime",
+         when Backend_Component => "POSIX backend",
+         when Views_Component   => "views",
+         when Tests_Component   => "headless tests");
+
+   function Component_Cell
+     (Item : Component_Row; Column : Component_Column)
+      return Wide_Wide_String is
+     (case Column is
+         when Name_Column => Component_Name (Item.Id),
+         when Status_Column =>
+           (if Item.Priority = 1 then "ready"
+            elsif Item.Priority = 2 then "active"
+            else "bounded"));
+
+   function Component_Less
+     (Left, Right : Component_Row; Column : Component_Column)
+      return Boolean is
+     (case Column is
+         when Name_Column => Left.Id < Right.Id,
+         when Status_Column => Left.Priority < Right.Priority);
+
+   package Tables is new Flyology_TUI.Components.Tables
+     (Item_Type => Component_Row,
+      Id_Type   => Component_Id,
+      Column_Id => Component_Column,
+      Id_Of     => Component_Identity,
+      Cell      => Component_Cell,
+      Less      => Component_Less,
+      Capacity  => 8);
+
+   Navigation_Columns : constant Tables.Column_Definitions :=
+     [Name_Column =>
+        (Heading       => U ("Component"),
+         Width         => 14,
+         Minimum_Width => 8,
+         Align         => Tables.Align_Left,
+         Sortable      => True),
+      Status_Column =>
+        (Heading       => U ("Status"),
+         Width         => 9,
+         Minimum_Width => 6,
+         Align         => Tables.Align_Left,
+         Sortable      => True)];
+
+   type Tree_Id is
+     (Root_Node,
+      Source_Node,
+      Components_Node,
+      Table_Node,
+      Tree_Node,
+      Examples_Node);
+   type Tree_Entry is record
+      Id    : Tree_Id;
+      Depth : Natural;
+   end record;
+
+   function Tree_Identity (Item : Tree_Entry) return Tree_Id is (Item.Id);
+
+   function Tree_Label (Item : Tree_Entry) return Wide_Wide_String is
+     (case Item.Id is
+         when Root_Node       => "flyology-tui",
+         when Source_Node     => "src",
+         when Components_Node => "components",
+         when Table_Node      => "tables",
+         when Tree_Node       => "trees",
+         when Examples_Node   => "examples");
+
+   function Tree_Depth (Item : Tree_Entry) return Natural is (Item.Depth);
+
+   package Trees is new Flyology_TUI.Components.Trees
+     (Item_Type => Tree_Entry,
+      Id_Type   => Tree_Id,
+      Id_Of     => Tree_Identity,
+      Label     => Tree_Label,
+      Depth_Of  => Tree_Depth,
+      Capacity  => 8);
+
+   type Accordion_Id is
+     (Overview_Section, Identity_Section, Composition_Section);
+
+   function Accordion_Identity
+     (Item : Accordion_Id) return Accordion_Id is (Item);
+
+   function Accordion_Label
+     (Item : Accordion_Id) return Wide_Wide_String is
+     (case Item is
+         when Overview_Section    => "Overview",
+         when Identity_Section    => "Stable identity",
+         when Composition_Section => "Composition");
+
+   package Accordions is new Flyology_TUI.Components.Accordions
+     (Section_Type => Accordion_Id,
+      Id_Type      => Accordion_Id,
+      Id_Of        => Accordion_Identity,
+      Label        => Accordion_Label,
+      Capacity     => 6);
+
+   No_Accordion_Bodies : constant Accordions.Body_Array (1 .. 0) :=
+     [others =>
+        (Id      => Overview_Section,
+         Content => Flyology_TUI.Surfaces.Create (0, 0))];
+
    package Samples is new Flyology_TUI.Numeric_Series
      (Sample_Type      => Integer,
       Maximum_Capacity => 64);
@@ -133,6 +281,10 @@ procedure Kitchen_Sink is
       Radio_Field,
       Selector_Field,
       Dropdown_Field,
+      Breadcrumb_Field,
+      Table_Field,
+      Tree_Field,
+      Accordion_Field,
       Telemetry_Field,
       Window_Field,
       Split_Field,
@@ -147,6 +299,7 @@ procedure Kitchen_Sink is
       Radio_Capture,
       Selector_Capture,
       Dropdown_Capture,
+      Accordion_Capture,
       First_Window_Capture,
       Second_Window_Capture,
       Split_Capture,
@@ -180,6 +333,14 @@ procedure Kitchen_Sink is
      (X => 38, Y => 17);
    Telemetry_Origin : constant Flyology_TUI.Geometry.Point :=
      (X => 2, Y => 8);
+   Breadcrumb_Origin : constant Flyology_TUI.Geometry.Point :=
+     (X => 2, Y => 8);
+   Table_Origin : constant Flyology_TUI.Geometry.Point :=
+     (X => 2, Y => 15);
+   Tree_Origin : constant Flyology_TUI.Geometry.Point :=
+     (X => 38, Y => 8);
+   Accordion_Origin : constant Flyology_TUI.Geometry.Point :=
+     (X => 38, Y => 18);
    Windows_Page_Origin : constant Flyology_TUI.Geometry.Point :=
      (X => 0, Y => 4);
    Window_Workspace : constant Flyology_TUI.Geometry.Rectangle :=
@@ -198,7 +359,11 @@ procedure Kitchen_Sink is
         Flyology_TUI.Components.Progress.Create (32, False);
       Pages    : Kitchen_Sink.Pages.Model :=
         Kitchen_Sink.Pages.Create
-          ([Basics_Page, Controls_Page, Telemetry_Page, Windows_Page]);
+          ([Basics_Page,
+            Controls_Page,
+            Navigation_Page,
+            Telemetry_Page,
+            Windows_Page]);
       Input    : Flyology_TUI.Components.Text_Inputs.Model :=
         Flyology_TUI.Components.Text_Inputs.Create
           (24, "Type here; Unicode works");
@@ -217,6 +382,30 @@ procedure Kitchen_Sink is
           ([Alpha, Beta, Gamma], Flyology_TUI.Components.Multiple_Selection);
       Dropdown : Kitchen_Sink.Dropdowns.Model :=
         Kitchen_Sink.Dropdowns.Create ([Alpha, Beta, Gamma]);
+      Breadcrumb : Kitchen_Sink.Breadcrumbs.Model :=
+        Kitchen_Sink.Breadcrumbs.Create
+          ([Workspace_Path, Project_Path, Examples_Path, Kitchen_Sink_Path],
+           Maximum_Width => 30);
+      Table : Kitchen_Sink.Tables.Model :=
+        Kitchen_Sink.Tables.Create
+          ([(Id => Runtime_Component, Priority => 2),
+            (Id => Backend_Component, Priority => 1),
+            (Id => Views_Component, Priority => 3),
+            (Id => Tests_Component, Priority => 1)],
+           Navigation_Columns,
+           Viewport_Rows => 4);
+      Tree : Kitchen_Sink.Trees.Model :=
+        Kitchen_Sink.Trees.Create
+          ([(Id => Root_Node, Depth => 0),
+            (Id => Source_Node, Depth => 1),
+            (Id => Components_Node, Depth => 2),
+            (Id => Table_Node, Depth => 3),
+            (Id => Tree_Node, Depth => 3),
+            (Id => Examples_Node, Depth => 1)],
+           Viewport_Rows => 4);
+      Accordion : Kitchen_Sink.Accordions.Model :=
+        Kitchen_Sink.Accordions.Create
+          ([Overview_Section, Identity_Section, Composition_Section]);
       Samples  : Kitchen_Sink.Samples.Series :=
         Kitchen_Sink.Samples.Create (32);
       Work     : Kitchen_Sink.Work_Progress.Model :=
@@ -258,6 +447,41 @@ procedure Kitchen_Sink is
 
    function Current_Page (Item : Model) return Page_Id is
      (Item.Pages.Active_Id);
+
+   function Accordion_Presentation
+     (Item : Model) return Accordions.Presentation
+   is
+      package Indicators renames Flyology_TUI.Components.Indicators;
+      Overview_Body : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Join_Horizontally
+          (Indicators.Badge ("borrowed", Indicators.Success_Tone, Visual),
+           Flyology_TUI.Surfaces.From_Text ("render-time surface"),
+           Gap => 1);
+      Identity_Body : constant Flyology_TUI.Surfaces.Surface :=
+        Indicators.Key_Value ("selection", "stable IDs", 28, Visual);
+      Composition_Body : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Join_Vertically
+          (Indicators.Divider (28, "external body", Visual),
+           Flyology_TUI.Surfaces.From_Text ("events stay with the app"));
+   begin
+      if Item.Accordion.Is_Expanded (Overview_Section) then
+         return Item.Accordion.Present
+           ([1 => (Id => Overview_Section, Content => Overview_Body)],
+            28, Visual, Item.Focus = Accordion_Field);
+      elsif Item.Accordion.Is_Expanded (Identity_Section) then
+         return Item.Accordion.Present
+           ([1 => (Id => Identity_Section, Content => Identity_Body)],
+            28, Visual, Item.Focus = Accordion_Field);
+      elsif Item.Accordion.Is_Expanded (Composition_Section) then
+         return Item.Accordion.Present
+           ([1 => (Id => Composition_Section, Content => Composition_Body)],
+            28, Visual, Item.Focus = Accordion_Field);
+      else
+         return Item.Accordion.Present
+           (No_Accordion_Bodies, 28, Visual,
+            Item.Focus = Accordion_Field);
+      end if;
+   end Accordion_Presentation;
 
    procedure Activate (Item : in out Model; Target : Focus_Target) is
    begin
@@ -331,6 +555,10 @@ procedure Kitchen_Sink is
          Input_Width => 20);
       Item.Selector.Set_Selected (Beta);
       Item.Selector.Set_Selected (Gamma);
+      Item.Tree.Set_Expanded (Root_Node);
+      Item.Tree.Set_Expanded (Source_Node);
+      Item.Tree.Set_Expanded (Components_Node);
+      Item.Accordion.Set_Expanded (Overview_Section);
       for Value in -8 .. 8 loop
          Item.Samples.Append (Value * Value mod 13 - 6);
       end loop;
@@ -424,6 +652,34 @@ procedure Kitchen_Sink is
                 then Telemetry_Field
                 else Page_Navigation));
          end if;
+      when Navigation_Page =>
+         if Item.Focus not in
+           Page_Navigation | Breadcrumb_Field .. Accordion_Field
+         then
+            Activate (Item, Breadcrumb_Field);
+            return;
+         end if;
+         if Backwards then
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation  => Accordion_Field,
+                   when Breadcrumb_Field => Page_Navigation,
+                   when Table_Field      => Breadcrumb_Field,
+                   when Tree_Field       => Table_Field,
+                   when Accordion_Field  => Tree_Field,
+                   when others           => Breadcrumb_Field));
+         else
+            Activate
+              (Item,
+               (case Item.Focus is
+                   when Page_Navigation  => Breadcrumb_Field,
+                   when Breadcrumb_Field => Table_Field,
+                   when Table_Field      => Tree_Field,
+                   when Tree_Field       => Accordion_Field,
+                   when Accordion_Field  => Page_Navigation,
+                   when others           => Breadcrumb_Field));
+         end if;
       when Windows_Page =>
          if Item.Focus not in
            Page_Navigation | Window_Field .. Horizontal_Scroll_Field
@@ -477,6 +733,12 @@ procedure Kitchen_Sink is
          when Telemetry_Page =>
             if Item.Focus not in Page_Navigation | Telemetry_Field then
                Activate (Item, Telemetry_Field);
+            end if;
+         when Navigation_Page =>
+            if Item.Focus not in
+              Page_Navigation | Breadcrumb_Field .. Accordion_Field
+            then
+               Activate (Item, Breadcrumb_Field);
             end if;
          when Windows_Page =>
             if Item.Focus not in
@@ -588,6 +850,17 @@ procedure Kitchen_Sink is
             Result := Item.Dropdown.Handle
               (Flyology_TUI.Mouse.Relative (Event, Dropdown_Origin));
             Apply_Result (Item, Dropdown_Field, Dropdown_Capture, Result);
+         when Accordion_Capture =>
+            declare
+               Layout : constant Accordions.Presentation :=
+                 Accordion_Presentation (Item);
+            begin
+               Result := Item.Accordion.Handle
+                 (Flyology_TUI.Mouse.Relative (Event, Accordion_Origin),
+                  Layout);
+               Apply_Result
+                 (Item, Accordion_Field, Accordion_Capture, Result);
+            end;
          when First_Window_Capture =>
             Page_Event :=
               Flyology_TUI.Mouse.Relative (Event, Windows_Page_Origin);
@@ -707,6 +980,61 @@ procedure Kitchen_Sink is
          Apply_Result (Item, Telemetry_Field, No_Capture, Result);
       end if;
    end Handle_Telemetry_Mouse;
+
+   procedure Handle_Navigation_Mouse
+     (Item  : in out Model;
+      Event : Flyology_TUI.Events.Mouse_Event) is
+      use Flyology_TUI.Components.Interactions;
+      Point : constant Flyology_TUI.Geometry.Point :=
+        (X => Integer (Event.X), Y => Integer (Event.Y));
+      Breadcrumb_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        (X      => Breadcrumb_Origin.X,
+         Y      => Breadcrumb_Origin.Y,
+         Width  => Item.Breadcrumb.Width,
+         Height => (if Item.Breadcrumb.Is_Empty then 0 else 1));
+      Table_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        (X      => Table_Origin.X,
+         Y      => Table_Origin.Y,
+         Width  => Item.Table.Width,
+         Height => Item.Table.Height);
+      Tree_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        (X      => Tree_Origin.X,
+         Y      => Tree_Origin.Y,
+         Width  => Item.Tree.Width,
+         Height => Item.Tree.Height);
+      Layout : constant Accordions.Presentation :=
+        Accordion_Presentation (Item);
+      Accordion_Frame : constant Flyology_TUI.Surfaces.Surface :=
+        Accordions.Frame (Layout);
+      Accordion_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
+        (X      => Accordion_Origin.X,
+         Y      => Accordion_Origin.Y,
+         Width  => Accordion_Frame.Width,
+         Height => Accordion_Frame.Height);
+      Result : Update_Result;
+   begin
+      if Flyology_TUI.Geometry.Contains (Breadcrumb_Bounds, Point) then
+         Result := Item.Breadcrumb.Handle
+           (Flyology_TUI.Mouse.Relative (Event, Breadcrumb_Origin));
+         Apply_Result
+           (Item, Breadcrumb_Field, No_Capture, Result);
+      elsif Flyology_TUI.Geometry.Contains (Table_Bounds, Point) then
+         Result := Item.Table.Handle
+           (Flyology_TUI.Mouse.Relative (Event, Table_Origin));
+         Apply_Result (Item, Table_Field, No_Capture, Result);
+      elsif Flyology_TUI.Geometry.Contains (Tree_Bounds, Point) then
+         Result := Item.Tree.Handle
+           (Flyology_TUI.Mouse.Relative (Event, Tree_Origin));
+         Apply_Result (Item, Tree_Field, No_Capture, Result);
+      elsif Flyology_TUI.Geometry.Contains (Accordion_Bounds, Point) then
+         --  Accordion consumes only its header regions. Events in the
+         --  externally owned body surfaces remain unhandled by the model.
+         Result := Item.Accordion.Handle
+           (Flyology_TUI.Mouse.Relative (Event, Accordion_Origin), Layout);
+         Apply_Result
+           (Item, Accordion_Field, Accordion_Capture, Result);
+      end if;
+   end Handle_Navigation_Mouse;
 
    procedure Handle_Windows_Mouse
      (Item  : in out Model;
@@ -863,6 +1191,8 @@ procedure Kitchen_Sink is
          Handle_Controls_Mouse (Item, Event.Mouse);
       when Telemetry_Page =>
          Handle_Telemetry_Mouse (Item, Event.Mouse);
+      when Navigation_Page =>
+         Handle_Navigation_Mouse (Item, Event.Mouse);
       when Windows_Page =>
          Handle_Windows_Mouse (Item, Event.Mouse);
       end case;
@@ -897,6 +1227,19 @@ procedure Kitchen_Sink is
          when Dropdown_Field =>
             Result := Item.Dropdown.Handle (Event);
             Apply_Result (Item, Dropdown_Field, Dropdown_Capture, Result);
+         when Breadcrumb_Field =>
+            Result := Item.Breadcrumb.Handle (Event);
+            Apply_Result (Item, Breadcrumb_Field, No_Capture, Result);
+         when Table_Field =>
+            Result := Item.Table.Handle (Event);
+            Apply_Result (Item, Table_Field, No_Capture, Result);
+         when Tree_Field =>
+            Result := Item.Tree.Handle (Event);
+            Apply_Result (Item, Tree_Field, No_Capture, Result);
+         when Accordion_Field =>
+            Result := Item.Accordion.Handle (Event);
+            Apply_Result
+              (Item, Accordion_Field, Accordion_Capture, Result);
          when Telemetry_Field =>
             Result := Item.Work.Handle (Event);
             Apply_Result (Item, Telemetry_Field, No_Capture, Result);
@@ -1145,6 +1488,42 @@ procedure Kitchen_Sink is
       return Canvas;
    end Telemetry_View;
 
+   function Navigation_View
+     (Item : Model) return Flyology_TUI.Surfaces.Surface
+   is
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (68, 20);
+      Breadcrumb_View : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Breadcrumbs",
+           Item.Breadcrumb.Render
+             (Visual, Item.Focus = Breadcrumb_Field),
+           Item.Focus = Breadcrumb_Field, Visual.Border, Visual.Muted);
+      Table_View : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Sortable typed table",
+           Item.Table.Render (Visual, Item.Focus = Table_Field),
+           Item.Focus = Table_Field, Visual.Border, Visual.Muted);
+      Tree_View : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("Collapsible tree",
+           Item.Tree.Render (Visual, Item.Focus = Tree_Field),
+           Item.Focus = Tree_Field, Visual.Border, Visual.Muted);
+      Accordion_Layout : constant Accordions.Presentation :=
+        Accordion_Presentation (Item);
+      Accordion_View : constant Flyology_TUI.Surfaces.Surface :=
+        Panel
+          ("External accordion bodies",
+           Accordions.Frame (Accordion_Layout),
+           Item.Focus = Accordion_Field, Visual.Border, Visual.Muted);
+   begin
+      Canvas.Overlay_Clipped (Breadcrumb_View, 0, 0);
+      Canvas.Overlay_Clipped (Table_View, 0, 7);
+      Canvas.Overlay_Clipped (Tree_View, 36, 0);
+      Canvas.Overlay_Clipped (Accordion_View, 36, 10);
+      return Canvas;
+   end Navigation_View;
+
    function Windows_View
      (Item : Model) return Flyology_TUI.Surfaces.Surface
    is
@@ -1234,6 +1613,7 @@ procedure Kitchen_Sink is
         (case Current_Page (Item) is
             when Basics_Page   => Basics_View (Item),
             when Controls_Page => Controls_View (Item),
+            when Navigation_Page => Navigation_View (Item),
             when Telemetry_Page => Telemetry_View (Item),
             when Windows_Page   => Windows_View (Item));
       Help : constant Flyology_TUI.Surfaces.Surface :=

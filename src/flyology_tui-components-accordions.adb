@@ -391,7 +391,8 @@ package body Flyology_TUI.Components.Accordions is
                  (Header, 0, Integer (Y));
                Result.Ids.Append (Id);
                Result.Header_Regions.Append
-                 ((X => 0, Y => Integer (Y), Width => Width, Height => 1));
+                 (Flyology_TUI.Geometry.Rectangle'
+                    (X => 0, Y => Integer (Y), Width => Width, Height => 1));
                Y := Y + 1;
 
                if Expanded then
@@ -407,15 +408,17 @@ package body Flyology_TUI.Components.Accordions is
                      Result.Frame_Value.Overlay_Clipped
                        (Body_Canvas, 0, Integer (Y));
                      Result.Body_Regions.Append
-                       ((X      => 0,
-                         Y      => Integer (Y),
-                         Width  => Width,
-                         Height => Content.Height));
+                       (Flyology_TUI.Geometry.Rectangle'
+                          (X      => 0,
+                           Y      => Integer (Y),
+                           Width  => Width,
+                           Height => Content.Height));
                      Result.Body_Visible.Append (True);
                      Y := Y + Content.Height;
                   end;
                else
-                  Result.Body_Regions.Append ((others => <>));
+                  Result.Body_Regions.Append
+                    (Flyology_TUI.Geometry.Rectangle'(others => <>));
                   Result.Body_Visible.Append (False);
                end if;
             end;
