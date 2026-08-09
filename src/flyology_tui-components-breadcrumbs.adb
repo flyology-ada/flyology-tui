@@ -8,6 +8,9 @@ package body Flyology_TUI.Components.Breadcrumbs is
 
    Separator_Width : constant Natural := 3;
 
+   function Symbol (Code : Natural) return Wide_Wide_String is
+     (Wide_Wide_String'(1 => Wide_Wide_Character'Val (Code)));
+
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance is
      (Normal    => Theme.Primary,
@@ -348,7 +351,7 @@ package body Flyology_TUI.Components.Breadcrumbs is
          return Result;
       end if;
       if First > 1 then
-         Result.Write (0, 0, "… ", Look.Separator);
+         Result.Write (0, 0, Symbol (16#2026#) & " ", Look.Separator);
          X := 2;
       end if;
       for Position in First .. Last loop
@@ -370,7 +373,8 @@ package body Flyology_TUI.Components.Breadcrumbs is
          end;
       end loop;
       if Last < Length (Item) and then Width (Item) >= 2 then
-         Result.Write (Width (Item) - 2, 0, " …", Look.Separator);
+         Result.Write
+           (Width (Item) - 2, 0, " " & Symbol (16#2026#), Look.Separator);
       end if;
       return Result;
    end Render;

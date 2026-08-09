@@ -6,6 +6,9 @@ package body Flyology_TUI.Components.Trees is
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
 
+   function Symbol (Code : Natural) return Wide_Wide_String is
+     (Wide_Wide_String'(1 => Wide_Wide_Character'Val (Code)));
+
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance is
      (Normal     => Theme.Primary,
@@ -557,7 +560,9 @@ package body Flyology_TUI.Components.Trees is
                elsif Chosen then Look.Selected else Look.Normal);
             Marker : constant Wide_Wide_String :=
               (if not Has_Child (Item, Source) then "  "
-               elsif Item.Expanded.Element (Source) then "▾ " else "▸ ");
+               elsif Item.Expanded.Element (Source)
+               then Symbol (16#25BE#) & " "
+               else Symbol (16#25B8#) & " ");
          begin
             Result.Write (Depth * 2, Slot - 1, Marker, Look.Disclosure);
             Result.Write

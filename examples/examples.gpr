@@ -9,6 +9,6 @@ project Examples is
 
    package Compiler is
       for Default_Switches ("Ada") use
-        ("-gnat2022", "-O2", "-gnatwa", "-gnatyM79");
+        ("-gnat2022", "-O2", "-gnatwa", "-gnatW8", "-gnatyM79");
    end Compiler;
 end Examples;

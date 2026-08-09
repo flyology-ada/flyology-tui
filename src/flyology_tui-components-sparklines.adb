@@ -3,6 +3,9 @@ package body Flyology_TUI.Components.Sparklines is
    --  report Structure_Error consistently even in validation builds.
    pragma Suppress (Validity_Check);
 
+   function Symbol (Code : Natural) return Wide_Wide_String is
+     (Wide_Wide_String'(1 => Wide_Wide_Character'Val (Code)));
+
    function Is_Finite (Value : Long_Float) return Boolean is
      (Value = Value
       and then Value >= -Long_Float'Last
@@ -60,14 +63,14 @@ package body Flyology_TUI.Components.Sparklines is
    function Bar (Index : Natural) return Wide_Wide_String is
    begin
       case Index is
-         when 0 => return "▁";
-         when 1 => return "▂";
-         when 2 => return "▃";
-         when 3 => return "▄";
-         when 4 => return "▅";
-         when 5 => return "▆";
-         when 6 => return "▇";
-         when others => return "█";
+         when 0 => return Symbol (16#2581#);
+         when 1 => return Symbol (16#2582#);
+         when 2 => return Symbol (16#2583#);
+         when 3 => return Symbol (16#2584#);
+         when 4 => return Symbol (16#2585#);
+         when 5 => return Symbol (16#2586#);
+         when 6 => return Symbol (16#2587#);
+         when others => return Symbol (16#2588#);
       end case;
    end Bar;
 

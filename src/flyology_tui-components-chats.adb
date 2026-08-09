@@ -4,6 +4,9 @@ package body Flyology_TUI.Components.Chats is
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
 
+   function Symbol (Code : Natural) return Wide_Wide_String is
+     (Wide_Wide_String'(1 => Wide_Wide_Character'Val (Code)));
+
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance is
      (Transcript => Theme.Primary,
@@ -627,9 +630,11 @@ package body Flyology_TUI.Components.Chats is
          begin
             Header.Write
               (0, 0,
-               "▍ " & Author_Label (Value.Author)
-                 & " · " & Role_Label (Value.Role)
-                 & (if State'Length = 0 then "" else " · " & State),
+               Symbol (16#258D#) & " " & Author_Label (Value.Author)
+                 & " " & Symbol (16#00B7#) & " " & Role_Label (Value.Role)
+                 & (if State'Length = 0
+                    then ""
+                    else " " & Symbol (16#00B7#) & " " & State),
                Chosen);
             Result.Frame_Value.Overlay_Clipped
               (Header,

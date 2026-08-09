@@ -7,6 +7,9 @@ package body Flyology_TUI.Components.Tables is
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
 
+   function Symbol (Code : Natural) return Wide_Wide_String is
+     (Wide_Wide_String'(1 => Wide_Wide_Character'Val (Code)));
+
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance is
      (Header   => Theme.Border,
@@ -693,9 +696,11 @@ package body Flyology_TUI.Components.Tables is
             Marker : constant Wide_Wide_String :=
               (if W = 0 then ""
                elsif Item.Sorting.Direction = Ascending
-                 and then Item.Sorting.Column = Column then "▲"
+                 and then Item.Sorting.Column = Column
+               then Symbol (16#25B2#)
                elsif Item.Sorting.Direction = Descending
-                 and then Item.Sorting.Column = Column then "▼"
+                 and then Item.Sorting.Column = Column
+               then Symbol (16#25BC#)
                else "");
          begin
             declare
@@ -713,7 +718,7 @@ package body Flyology_TUI.Components.Tables is
             end;
             if Column /= Column_Id'Last and then X + W < Width (Item) then
                Result.Write
-                 (X + W, 0, "│",
+                 (X + W, 0, Symbol (16#2502#),
                   (if Item.Enabled then Look.Divider else Look.Muted));
             end if;
          end;
@@ -735,7 +740,9 @@ package body Flyology_TUI.Components.Tables is
                else Look.Normal);
          begin
             Result.Write
-              (0, Visible, (if Selected then "› " else "  "), Style);
+              (0, Visible,
+               (if Selected then Symbol (16#203A#) & " " else "  "),
+               Style);
             for Column in Column_Id loop
                declare
                   X : constant Natural := Column_X (Item, Column);
@@ -751,7 +758,8 @@ package body Flyology_TUI.Components.Tables is
                   if Column /= Column_Id'Last
                     and then X + W < Width (Item)
                   then
-                     Result.Write (X + W, Visible, "│", Look.Divider);
+                     Result.Write
+                       (X + W, Visible, Symbol (16#2502#), Look.Divider);
                   end if;
                end;
             end loop;

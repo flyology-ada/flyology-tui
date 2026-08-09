@@ -6,6 +6,9 @@ package body Flyology_TUI.Components.Progress_Groups is
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
 
+   function Symbol (Code : Natural) return Wide_Wide_String is
+     (Wide_Wide_String'(1 => Wide_Wide_Character'Val (Code)));
+
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance
    is (Label         => Theme.Muted,
@@ -446,12 +449,12 @@ package body Flyology_TUI.Components.Progress_Groups is
 
    function Work_Glyph (Work : Work_State) return Wide_Wide_String is
      (case Work is
-         when Pending   => "○",
-         when Running   => "▶",
-         when Paused    => "‖",
-         when Succeeded => "✓",
-         when Failed    => "✕",
-         when Cancelled => "⊘");
+         when Pending   => Symbol (16#25CB#),
+         when Running   => Symbol (16#25B6#),
+         when Paused    => Symbol (16#2016#),
+         when Succeeded => Symbol (16#2713#),
+         when Failed    => Symbol (16#2715#),
+         when Cancelled => Symbol (16#2298#));
 
    function Work_Appearance
      (Work  : Work_State;
@@ -489,7 +492,9 @@ package body Flyology_TUI.Components.Progress_Groups is
             Result.Put
               (0,
                Row,
-               (if Index = Item.Selected then "›" else " "),
+               (if Index = Item.Selected
+                then Symbol (16#203A#)
+                else " "),
                Label_Style);
             Result.Put
               (1,
@@ -517,13 +522,13 @@ package body Flyology_TUI.Components.Progress_Groups is
                            Result.Put
                              (Bar_Start + Offset,
                               Row,
-                              "█",
+                              Symbol (16#2588#),
                               Appearance.Complete);
                         else
                            Result.Put
                              (Bar_Start + Offset,
                               Row,
-                              "░",
+                              Symbol (16#2591#),
                               Appearance.Remaining);
                         end if;
                      end loop;
@@ -534,7 +539,8 @@ package body Flyology_TUI.Components.Progress_Groups is
                        (Bar_Start + Offset,
                         Row,
                         (if Offset = Item.Entries (Index).Phase mod Bar_Width
-                         then "▓" else "░"),
+                         then Symbol (16#2593#)
+                         else Symbol (16#2591#)),
                         (if Offset = Item.Entries (Index).Phase mod Bar_Width
                          then Appearance.Indeterminate
                          else Appearance.Remaining));
@@ -657,7 +663,9 @@ package body Flyology_TUI.Components.Progress_Groups is
                               Result.Put
                                 (Column + Offset,
                                  0,
-                                 (if Offset < Filled then "█" else "░"),
+                                 (if Offset < Filled
+                                  then Symbol (16#2588#)
+                                  else Symbol (16#2591#)),
                                  (if Offset < Filled
                                   then Appearance.Complete
                                   else Appearance.Remaining));
@@ -673,7 +681,9 @@ package body Flyology_TUI.Components.Progress_Groups is
                               Result.Put
                                 (Column + Offset,
                                  0,
-                                 (if Is_Marker then "▓" else "░"),
+                                 (if Is_Marker
+                                  then Symbol (16#2593#)
+                                  else Symbol (16#2591#)),
                                  (if Is_Marker
                                   then Appearance.Indeterminate
                                   else Appearance.Remaining));
