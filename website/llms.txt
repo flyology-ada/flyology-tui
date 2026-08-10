@@ -25,5 +25,5 @@ Important boundaries:
 
 Every public Flyology_TUI.Components child package has one generated page under
 https://tui.flyology.org/components/. Each page links to its exact GNATdoc
-compilation unit and includes build-generated Ada gallery captures for all
-maintained skins.
+compilation unit and includes build-generated captures from a dedicated Ada
+example of that exact component in every maintained skin.

@@ -84,9 +84,9 @@
   changes. The script builds the library, runs the nested suite, and compiles
   both interactive examples.
 - Run `./scripts/build-site.sh` for website, public API, component catalog, or
-  website build changes. It must produce 34 component pages, 48 real Ada
-  gallery captures, and exact GNATdoc links. Follow `website/AGENTS.md` for
-  authored site content.
+  website build changes. It must produce 34 component pages, 136 real Ada
+  captures from dedicated component examples, and exact GNATdoc links. Follow
+  `website/AGENTS.md` for authored site content.
 - Tests live in the nested `tests` crate and depend on the parent through a path
   pin.
 - Do not commit generated `alire`, `config`, `obj`, `lib`, or test binaries.

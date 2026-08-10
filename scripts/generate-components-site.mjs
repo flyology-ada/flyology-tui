@@ -6,22 +6,7 @@ import { components, groups, skins } from "./component-catalog.mjs";
 const projectRoot = resolve(new URL("..", import.meta.url).pathname);
 const siteRoot = resolve(process.argv[2] || join(projectRoot, "build/site"));
 const apiIndex = join(projectRoot, "docs/api/search-index.js");
-const captureProgram = join(projectRoot, "examples/bin/kitchen_sink");
-
-const capturePage = new Map(Object.entries({
-  accordions: "navigation", breadcrumbs: "navigation", buttons: "controls",
-  chats: "chat", "check-boxes": "controls", "dock-workspaces": "docking",
-  dropdowns: "controls", forms: "basics", gradients: "color", help: "basics",
-  indicators: "telemetry", interactions: "controls", lists: "basics",
-  "markdown-editors": "markdown", "markdown-viewers": "markdown",
-  menubars: "menus", "panel-groups": "panels", progress: "telemetry",
-  "progress-groups": "telemetry", "radio-groups": "controls",
-  scrollbars: "basics", selectors: "controls", sparklines: "telemetry",
-  spinners: "basics", "split-panes": "panels", "streaming-texts": "chat",
-  "syntax-editors": "editors", tables: "navigation", tabs: "basics",
-  "text-areas": "editors", "text-inputs": "basics", trees: "navigation",
-  viewports: "basics", windows: "windows"
-}));
+const captureProgram = join(projectRoot, "examples/bin/component_examples");
 
 const escapeHtml = (value) => String(value)
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -60,16 +45,6 @@ async function verifyCatalog() {
       !publicComponents.includes(name));
     throw new Error(
       `component catalog mismatch; missing=[${missing}], extra=[${extra}]`
-    );
-  }
-  const missingCaptures = components
-    .filter((item) => !capturePage.has(item.slug))
-    .map((item) => item.slug);
-  const extraCaptures = [...capturePage.keys()]
-    .filter((slug) => !components.some((item) => item.slug === slug));
-  if (missingCaptures.length || extraCaptures.length) {
-    throw new Error(
-      `capture catalog mismatch; missing=[${missingCaptures}], extra=[${extraCaptures}]`
     );
   }
 }
@@ -133,10 +108,8 @@ function sideNavigation(activeSlug) {
 }
 
 function skinSwitcher(item) {
-  const page = capturePage.get(item.slug);
-  if (!page) throw new Error(`missing capture page for ${item.slug}`);
   const attrs = skins.map((skin) =>
-    `data-src-${skin.id}="../../assets/captures/${page}/${skin.id}.svg"`).join(" ");
+    `data-src-${skin.id}="../../assets/captures/${item.slug}/${skin.id}.svg"`).join(" ");
   return `<div class="skin-preview" data-skin-preview>
     <div class="skin-preview-toolbar">
       <div><span class="eyebrow">Generated preview</span><strong data-skin-current>${skins[0].label}</strong></div>
@@ -144,8 +117,8 @@ function skinSwitcher(item) {
         ${skins.map((skin, index) => `<button type="button" data-skin-choice="${skin.id}" aria-pressed="${index === 0}">${skin.label}</button>`).join("")}
       </div>
     </div>
-    <img src="../../assets/captures/${page}/${skins[0].id}.svg" ${attrs} data-skin-image data-preview-name="${escapeHtml(item.title)}" alt="${escapeHtml(item.title)} demonstrated in the ${skins[0].label} kitchen sink">
-    <p class="preview-note">The site build runs the Ada kitchen sink and exports its real styled cell surface. This page is the gallery view that contains ${escapeHtml(item.title)}.</p>
+    <img src="../../assets/captures/${item.slug}/${skins[0].id}.svg" ${attrs} data-skin-image data-preview-name="${escapeHtml(item.title)}" alt="Dedicated ${escapeHtml(item.title)} example rendered in the ${skins[0].label} skin">
+    <p class="preview-note">The site build compiles the dedicated Ada component example, constructs ${escapeHtml(item.title)} through its public API, and exports that exact styled surface. <a href="https://github.com/flyology-ada/flyology-tui/blob/main/examples/src/component_examples.adb">Read the capture source.</a></p>
   </div>`;
 }
 
@@ -221,7 +194,7 @@ function componentsIndex() {
     <script src="../assets/scripts/ada-highlight.js"></script><script src="../assets/scripts/site.js"></script><script src="../assets/scripts/tui-site.js" defer></script>
   </head><body><a class="skip-link" href="#main">Skip to content</a>${navigation("../", "components")}
     <main id="main" class="page-shell component-index">
-      <header class="doc-hero"><div><ol class="breadcrumb" aria-label="Breadcrumb"><li><a href="../">Flyology TUI</a></li><li aria-current="page">Components</li></ol><h1>Every bounded component.</h1></div><p class="doc-hero-copy">Each page explains ownership, input, responsive geometry, and the exact generated API package. Four build-generated captures show the real kitchen sink page that contains the component in every bundled skin.</p></header>
+      <header class="doc-hero"><div><ol class="breadcrumb" aria-label="Breadcrumb"><li><a href="../">Flyology TUI</a></li><li aria-current="page">Components</li></ol><h1>Every bounded component.</h1></div><p class="doc-hero-copy">Each page explains ownership, input, responsive geometry, and the exact generated API package. Four build-generated captures run a dedicated example of that component in every bundled skin.</p></header>
       <div class="component-filter"><label for="component-search">Filter components</label><input id="component-search" type="search" placeholder="Try editor, layout, table…" data-component-search><span role="status" aria-live="polite" data-component-count>${components.length} components</span></div>
       <div data-component-list>${groups.map((group) => `<section class="catalog-group" data-component-group><div class="catalog-group-heading"><p>${group}</p><span>${components.filter((item) => item.group === group).length}</span></div><ul>${components.filter((item) => item.group === group).map((item) => `<li data-component-item data-search="${escapeHtml(`${item.title} ${item.summary} ${item.group}`.toLowerCase())}"><a href="${item.slug}/"><span><strong>${item.title}</strong><small>${escapeHtml(item.summary)}</small></span><svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor"><path d="M4 10h11M11 6l4 4-4 4"/></svg></a></li>`).join("")}</ul></section>`).join("")}</div>
       <p class="component-empty" role="status" data-component-empty hidden>No component matches that filter.</p>
@@ -239,27 +212,27 @@ await mkdir(componentsRoot, { recursive: true });
 await writeFile(join(componentsRoot, "index.html"), componentsIndex());
 
 const captureRoot = join(siteRoot, "assets/captures");
-for (const page of new Set(capturePage.values())) {
-  const pageRoot = join(captureRoot, page);
-  const pageCaptures = [];
-  await mkdir(pageRoot, { recursive: true });
+for (const item of components) {
+  const componentRoot = join(captureRoot, item.slug);
+  const componentCaptures = [];
+  await mkdir(componentRoot, { recursive: true });
   for (const skin of skins) {
-    const output = join(pageRoot, `${skin.id}.svg`);
+    const output = join(componentRoot, `${skin.id}.svg`);
     execFileSync(captureProgram, [
-      `--docs-capture=${page}`,
-      `--docs-skin=${skin.id}`,
-      `--docs-output=${output}`
+      `--component=${item.slug}`,
+      `--skin=${skin.id}`,
+      `--output=${output}`
     ], { stdio: "inherit" });
     const capture = await readFile(output, "utf8");
     if (!capture.startsWith("<svg") ||
         !capture.includes("<rect") ||
         !capture.includes("<text")) {
-      throw new Error(`invalid ${skin.id} Ada capture for ${page}`);
+      throw new Error(`invalid ${skin.id} Ada capture for ${item.slug}`);
     }
-    pageCaptures.push(capture);
+    componentCaptures.push(capture);
   }
-  if (new Set(pageCaptures).size !== skins.length) {
-    throw new Error(`skin captures are not distinct for ${page}`);
+  if (new Set(componentCaptures).size !== skins.length) {
+    throw new Error(`skin captures are not distinct for ${item.slug}`);
   }
 }
 
@@ -267,8 +240,8 @@ const charmWindow = await readFile(
   join(captureRoot, "windows/charm-default.svg"), "utf8");
 const turboWindow = await readFile(
   join(captureRoot, "windows/turbo-vision.svg"), "utf8");
-if (!charmWindow.includes("─") || !turboWindow.includes("─")) {
-  throw new Error("window captures do not preserve Unicode frame glyphs");
+if (!charmWindow.includes("─") || !turboWindow.includes("═")) {
+  throw new Error("window captures do not preserve skin-specific Unicode frame glyphs");
 }
 
 for (const item of components) {
@@ -280,4 +253,4 @@ for (const item of components) {
   await writeFile(join(pageRoot, "index.html"), componentPage(item, apiHref));
 }
 
-console.log(`Generated ${components.length} component pages and ${capturePage.size * skins.length} real skin references from ${new Set(capturePage.values()).size * skins.length} Ada captures.`);
+console.log(`Generated ${components.length} component pages and ${components.length * skins.length} dedicated Ada component captures.`);

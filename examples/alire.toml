@@ -12,6 +12,7 @@ project-files = ["examples.gpr"]
 
 executables = [
   "counter",
+  "component_examples",
   "kitchen_sink",
 ]
 

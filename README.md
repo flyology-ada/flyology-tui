@@ -225,7 +225,8 @@ Child surfaces and their input remain application-owned.
 The project guide, component catalog, and GNATdoc API are published at
 [tui.flyology.org](https://tui.flyology.org/). The catalog contains one page
 for every public component package. Each page includes build-generated captures
-of the real Ada kitchen sink in all maintained skins.
+from a dedicated executable that constructs that exact component through its
+public API in every maintained skin.
 
 Build the complete static site locally:
 
@@ -236,9 +237,11 @@ alr install gnatdoc_bin
 ```
 
 The result is written to `build/site`. The build resolves authored API links
-against GNATdoc's generated search index. It also compiles the examples and
-exports 48 real gallery captures: 12 pages in four skins. The build fails when
-a component page, GNATdoc target, or required capture is missing.
+against GNATdoc's generated search index. It also compiles
+`examples/src/component_examples.adb` and exports 136 real captures: one exact
+component scenario in four skins for each of 34 packages. The build fails when
+a component page, GNATdoc target, dedicated example, or required capture is
+missing.
 
 ## Platform boundary
 
