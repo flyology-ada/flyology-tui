@@ -484,6 +484,45 @@ procedure Menubar_Tests is
         (Item, Layout, "Set_Item_Enabled retained stale routing");
       Item.Set_Item_Enabled (New_Item, True);
 
+      Item.Open_Menu (File_Menu);
+      Result := Item.Handle (Key (Flyology_TUI.Events.End_Key));
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Right_Key));
+      Assert
+        (Item.Open_Depth = 2,
+         "submenu-disable descendant setup did not open its child");
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      declare
+         Region : constant Flyology_TUI.Geometry.Rectangle :=
+           Menus.Item_Region (Layout, Recent_Submenu_Item);
+         Point : constant Flyology_TUI.Geometry.Point := Center (Region);
+      begin
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Click),
+            Layout);
+         Assert
+           (Menus.Interaction (Result).Capture =
+              Flyology_TUI.Components.Interactions.Acquire_Capture,
+            "submenu-disable capture setup failed");
+         Item.Set_Item_Enabled (Recent_Submenu_Item, False);
+         Assert
+           (Item.Open_Depth = 1
+            and then Item.Highlighted_Item = New_Item,
+            "disabled highlighted submenu retained descendant state");
+         Assert_Stale
+           (Item, Layout,
+            "submenu disable retained its pre-truncation presentation");
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Release),
+            Layout);
+         Assert
+           (Menus.Interaction (Result).Capture =
+              Flyology_TUI.Components.Interactions.Release_Capture
+            and then Result.Kind = Menus.No_Result
+            and then Item.Open_Depth = 1,
+            "submenu disable did not preserve release-only capture");
+      end;
+      Item.Set_Item_Enabled (Recent_Submenu_Item, True);
+
       Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
       Item.Set_Checked (Auto_Save_Item, True);
       Assert_Stale (Item, Layout, "Set_Checked retained stale marker routing");

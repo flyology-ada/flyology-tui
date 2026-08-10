@@ -572,6 +572,11 @@ package body Flyology_TUI.Components.Menubars is
                  (Depth,
                   First_Item
                     (Item, Item.Open_Menus.Element (Depth), True));
+               while Natural (Item.Open_Menus.Length) > Depth + 1 loop
+                  Item.Open_Menus.Delete_Last;
+                  Item.Highlights.Delete_Last;
+               end loop;
+               exit;
             end if;
          end loop;
       end if;
