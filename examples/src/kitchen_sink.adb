@@ -4565,26 +4565,29 @@ procedure Kitchen_Sink is
 
       function Wheel
         (X, Y : Natural;
-         Wheel_X, Wheel_Y : Integer)
+         Wheel_X, Wheel_Y : Integer;
+         Shift : Boolean := False)
          return Flyology_TUI.Events.Mouse_Event
       is
         (X        => X,
          Y        => Y,
          Button   => Flyology_TUI.Events.No_Button,
          Action   => Flyology_TUI.Events.Mouse_Wheel,
-         Modified => (others => False),
+         Modified =>
+           (Shift => Shift, Control | Alt | Super => False),
          Wheel_X  => Wheel_X,
          Wheel_Y  => Wheel_Y);
 
       function Key
-        (Control : Boolean := False)
+        (Control : Boolean := False;
+         Shift   : Boolean := False)
          return Events.Event
       is
          Value : Flyology_TUI.Events.Key_Event
            (Flyology_TUI.Events.Tab_Key);
       begin
          Value.Modified :=
-           (Shift => False, Control => Control,
+           (Shift => Shift, Control => Control,
             Alt => False, Super => False);
          return Events.From_Terminal (Flyology_TUI.Events.Pressed (Value));
       end Key;
@@ -4888,6 +4891,17 @@ procedure Kitchen_Sink is
         (Item.Viewport.Y_Offset = 4
          and then Item.Vertical_Scroll.First = 4,
          "viewport wheel movement did not update the vertical thumb");
+      Handle_Mouse
+        (Item,
+         (Kind => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Wheel
+            (Natural (Geometry.Viewport_Content.X),
+             Natural (Geometry.Viewport_Content.Y), 0, -1,
+             Shift => True)));
+      Assert
+        (Item.Viewport.X_Offset = 4
+         and then Item.Horizontal_Scroll.First = 4,
+         "viewport Shift-wheel movement did not update the horizontal thumb");
 
       declare
          Before_X : constant Natural := Item.Viewport.X_Offset;
@@ -4919,6 +4933,23 @@ procedure Kitchen_Sink is
       end;
 
       Activate (Item, Vertical_Scroll_Field);
+      Handle_Focused_Key
+        (Item, Terminal_Key (Flyology_TUI.Events.Home_Key), Geometry);
+      Handle_Mouse
+        (Item,
+         (Kind => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Pointer
+            (Natural (Geometry.Vertical_Scroll_Region.X),
+             Natural
+               (Geometry.Vertical_Scroll_Region.Y
+                + Integer (Geometry.Vertical_Scroll_Region.Height - 2)))));
+      Assert
+        (Item.Vertical_Scroll.First
+           = Natural'Min
+               (Geometry.Viewport_Content.Height,
+                Item.Vertical_Scroll.Maximum_First)
+         and then Item.Viewport.Y_Offset = Item.Vertical_Scroll.First,
+         "vertical track paging did not update the shared viewport");
       Handle_Focused_Key
         (Item, Terminal_Key (Flyology_TUI.Events.Home_Key), Geometry);
       declare
@@ -4973,6 +5004,73 @@ procedure Kitchen_Sink is
          and then Item.Horizontal_Scroll.First = Item.Viewport.X_Offset,
          "horizontal scrollbar keyboard and wheel input diverged "
          & "from content");
+      Handle_Focused_Key
+        (Item, Terminal_Key (Flyology_TUI.Events.Home_Key), Geometry);
+      declare
+         Thumb : constant Flyology_TUI.Geometry.Rectangle :=
+           Item.Horizontal_Scroll.Thumb_Region;
+         Thumb_X : constant Natural :=
+           Natural (Geometry.Horizontal_Scroll_Origin.X + Thumb.X);
+         Thumb_Y : constant Natural :=
+           Natural (Geometry.Horizontal_Scroll_Origin.Y + Thumb.Y);
+         Drag_X : constant Natural :=
+           Natural
+             (Geometry.Horizontal_Scroll_Region.X
+              + Integer (Geometry.Horizontal_Scroll_Region.Width - 2));
+      begin
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer (Thumb_X, Thumb_Y)));
+         Assert
+           (Item.Capture = Horizontal_Scroll_Capture,
+            "horizontal thumb did not acquire application capture");
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (Drag_X, Thumb_Y, Flyology_TUI.Events.Mouse_Drag)));
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (Drag_X, Thumb_Y, Flyology_TUI.Events.Mouse_Release)));
+         Assert
+           (Item.Capture = No_Capture
+            and then Item.Viewport.X_Offset
+              = Item.Horizontal_Scroll.Maximum_First
+            and then Item.Horizontal_Scroll.First = Item.Viewport.X_Offset,
+            "captured horizontal thumb drag did not update the viewport");
+      end;
+
+      Activate (Item, Viewport_Field);
+      Update (Item, Key, Next);
+      Assert
+        (Item.Focus = Vertical_Scroll_Field,
+         "Basics Tab skipped the visible vertical scrollbar");
+      Update (Item, Key, Next);
+      Assert
+        (Item.Focus = Horizontal_Scroll_Field,
+         "Basics Tab skipped the visible horizontal scrollbar");
+      Update (Item, Key, Next);
+      Assert
+        (Item.Focus = Form_Field,
+         "Basics Tab did not leave the bound viewport group");
+      Update (Item, Key (Shift => True), Next);
+      Assert
+        (Item.Focus = Horizontal_Scroll_Field,
+         "Basics Shift-Tab skipped the visible horizontal scrollbar");
+      Update
+        (Item,
+         Events.From_Terminal (Flyology_TUI.Events.Resized (1, 1)),
+         Next);
+      Geometry := Layout (Item);
+      Assert
+        (Geometry.Vertical_Scroll_Region.Width = 0
+         and then Geometry.Horizontal_Scroll_Region.Height = 0
+         and then Item.Focus not in
+           Vertical_Scroll_Field | Horizontal_Scroll_Field,
+         "tiny resize retained hidden scrollbar focus");
 
       Activate_Page (Item, Chat_Page);
       Set_Terminal_Size (Item, 190, 55);
