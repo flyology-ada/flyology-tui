@@ -115,20 +115,155 @@ package body Flyology_TUI.Components.Tabs is
    function Is_Enabled (Item : Model) return Boolean is (Item.Enabled);
 
    function Tab_Width (Item : Model; Index : Positive) return Natural is
-     (Flyology_TUI.Glyphs.Width_Of
-        (Label (Item.Values.Element (Index - 1))) + 2);
+      Label_Columns : constant Natural :=
+        Flyology_TUI.Glyphs.Width_Of
+          (Label (Item.Values.Element (Index - 1)));
+   begin
+      if Label_Columns > Natural'Last - 2 then
+         raise Flyology_TUI.Components.Capacity_Error with
+           "tab label exceeds addressable width";
+      end if;
+      return Label_Columns + 2;
+   end Tab_Width;
 
    function Width (Item : Model) return Natural is
       Result : Natural := 0;
    begin
       for Index in 1 .. Length (Item) loop
          if Index > 1 then
+            if Result = Natural'Last then
+               raise Flyology_TUI.Components.Capacity_Error with
+                 "tab bar exceeds addressable width";
+            end if;
             Result := Result + 1;
          end if;
-         Result := Result + Tab_Width (Item, Index);
+         declare
+            Columns : constant Natural := Tab_Width (Item, Index);
+         begin
+            if Columns > Natural'Last - Result then
+               raise Flyology_TUI.Components.Capacity_Error with
+                 "tab bar exceeds addressable width";
+            end if;
+            Result := Result + Columns;
+         end;
       end loop;
       return Result;
    end Width;
+
+   function Presentation_Index
+     (Item : Presentation; Id : Id_Type) return Natural
+   is
+   begin
+      if Item.Ids.Is_Empty then
+         return 0;
+      end if;
+      for Index in Item.Ids.First_Index .. Item.Ids.Last_Index loop
+         if Item.Ids.Element (Index) = Id then
+            return Index + 1;
+         end if;
+      end loop;
+      return 0;
+   end Presentation_Index;
+
+   function Present
+     (Item      : Model;
+      Width     : Natural;
+      Look      : Appearance;
+      Has_Focus : Boolean := False) return Presentation
+   is
+      Result : Presentation;
+      Total : constant Natural := Tabs.Width (Item);
+      Active_Start : Natural := 0;
+      Active_Width : Natural := 0;
+      View_Start : Natural := 0;
+      View_End : Natural := 0;
+      Start : Natural := 0;
+   begin
+      Result.Frame_Value := Flyology_TUI.Surfaces.Create (Width, 1);
+      if Item.Values.Is_Empty or else Width = 0 then
+         return Result;
+      end if;
+
+      for Index in 1 .. Length (Item) loop
+         if Index = Item.Active then
+            Active_Start := Start;
+            Active_Width := Tab_Width (Item, Index);
+            exit;
+         end if;
+         Start := Start + Tab_Width (Item, Index) + 1;
+      end loop;
+      if Active_Width > Width then
+         View_Start := Active_Start;
+      elsif Active_Start + Active_Width > Width then
+         View_Start := Active_Start + Active_Width - Width;
+      end if;
+      View_End := View_Start + Natural'Min (Width, Total - View_Start);
+
+      Start := 0;
+      for Index in 1 .. Length (Item) loop
+         declare
+            Columns : constant Natural := Tab_Width (Item, Index);
+            Finish : constant Natural := Start + Columns;
+            Visible_First : constant Natural :=
+              Natural'Max (Start, View_Start);
+            Visible_Last : constant Natural := Natural'Min (Finish, View_End);
+            Style : constant Flyology_TUI.Styles.Style :=
+              (if not Item.Enabled then Look.Disabled
+               elsif Item.Active = Index then Look.Active
+               elsif Has_Focus and then Item.Focused = Index
+               then Look.Focused
+               else Look.Normal);
+            Tab : Flyology_TUI.Surfaces.Surface :=
+              Flyology_TUI.Surfaces.Create (Columns, 1);
+         begin
+            Tab.Write
+              (0, 0,
+               " " & Label (Item.Values.Element (Index - 1)) & " ",
+               Style);
+            Result.Frame_Value.Overlay_Clipped
+              (Tab, Integer (Start) - Integer (View_Start), 0);
+            if Visible_First < Visible_Last then
+               Result.Ids.Append (Id_Of (Item.Values.Element (Index - 1)));
+               Result.Regions.Append
+                 (Flyology_TUI.Geometry.Rectangle'
+                    (X      => Integer (Visible_First - View_Start),
+                     Y      => 0,
+                     Width  => Visible_Last - Visible_First,
+                     Height => 1));
+            end if;
+            if Index < Length (Item)
+              and then Finish >= View_Start
+              and then Finish < View_End
+            then
+               Result.Frame_Value.Put
+                 (Finish - View_Start, 0, " ", Look.Normal);
+            end if;
+            Start :=
+              (if Index < Length (Item) then Finish + 1 else Finish);
+         end;
+      end loop;
+      return Result;
+   end Present;
+
+   function Present
+     (Item      : Model;
+      Width     : Natural;
+      Theme     : Flyology_TUI.Themes.Theme;
+      Has_Focus : Boolean := False) return Presentation
+   is (Present (Item, Width, From_Theme (Theme), Has_Focus));
+
+   function Frame
+     (Item : Presentation) return Flyology_TUI.Surfaces.Surface
+   is (Item.Frame_Value);
+
+   function Has_Tab
+     (Item : Presentation; Id : Id_Type) return Boolean
+   is (Presentation_Index (Item, Id) > 0);
+
+   function Tab_Region
+     (Item : Presentation;
+      Id   : Id_Type) return Flyology_TUI.Geometry.Rectangle
+   is (Item.Regions.Element (Presentation_Index (Item, Id) - 1));
 
    procedure Move_Focus (Item : in out Model; Amount : Integer) is
       Last : constant Integer := Integer (Item.Values.Length);
@@ -219,6 +354,8 @@ package body Flyology_TUI.Components.Tabs is
    function Hit_Tab
      (Item : Model; Event : Flyology_TUI.Mouse.Local_Event) return Natural
    is
+      Full_Width : constant Natural := Width (Item);
+      pragma Unreferenced (Full_Width);
       Start : Natural := 0;
    begin
       if Event.X < 0 or else Event.Y /= 0 then
@@ -230,10 +367,19 @@ package body Flyology_TUI.Components.Tabs is
          then
             return Index;
          end if;
-         Start := Start + Tab_Width (Item, Index) + 1;
+         Start := Start + Tab_Width (Item, Index);
+         if Index < Length (Item) then
+            Start := Start + 1;
+         end if;
       end loop;
       return 0;
    end Hit_Tab;
+
+   function Handle_Hit
+     (Item  : in out Model;
+      Event : Flyology_TUI.Mouse.Local_Event;
+      Hit   : Natural)
+      return Flyology_TUI.Components.Interactions.Update_Result;
 
    function Handle
      (Item  : in out Model;
@@ -241,6 +387,16 @@ package body Flyology_TUI.Components.Tabs is
       return Flyology_TUI.Components.Interactions.Update_Result
    is
       Hit    : constant Natural := Hit_Tab (Item, Event);
+   begin
+      return Handle_Hit (Item, Event, Hit);
+   end Handle;
+
+   function Handle_Hit
+     (Item  : in out Model;
+      Event : Flyology_TUI.Mouse.Local_Event;
+      Hit   : Natural)
+      return Flyology_TUI.Components.Interactions.Update_Result
+   is
       Focus_Changed : constant Boolean := Item.Focused /= Hit;
       Result : Flyology_TUI.Components.Interactions.Update_Result;
    begin
@@ -276,6 +432,39 @@ package body Flyology_TUI.Components.Tabs is
          return Result;
       end if;
       return Result;
+   end Handle_Hit;
+
+   function Hit_Tab
+     (Layout : Presentation;
+      Event  : Flyology_TUI.Mouse.Local_Event) return Natural
+   is
+      Point : constant Flyology_TUI.Geometry.Point := (Event.X, Event.Y);
+   begin
+      if Layout.Regions.Is_Empty then
+         return 0;
+      end if;
+      for Index in Layout.Regions.First_Index .. Layout.Regions.Last_Index loop
+         if Flyology_TUI.Geometry.Contains
+           (Layout.Regions.Element (Index), Point)
+         then
+            return Index + 1;
+         end if;
+      end loop;
+      return 0;
+   end Hit_Tab;
+
+   function Handle
+     (Item   : in out Model;
+      Event  : Flyology_TUI.Mouse.Local_Event;
+      Layout : Presentation)
+      return Flyology_TUI.Components.Interactions.Update_Result
+   is
+      Layout_Index : constant Natural := Hit_Tab (Layout, Event);
+      Current_Index : constant Natural :=
+        (if Layout_Index = 0 then 0
+         else Find (Item.Values, Layout.Ids.Element (Layout_Index - 1)));
+   begin
+      return Handle_Hit (Item, Event, Current_Index);
    end Handle;
 
    procedure Update
@@ -293,6 +482,16 @@ package body Flyology_TUI.Components.Tabs is
    is
       Discard : constant Flyology_TUI.Components.Interactions.Update_Result :=
         Handle (Item, Event);
+      pragma Unreferenced (Discard);
+   begin null; end Update;
+
+   procedure Update
+     (Item   : in out Model;
+      Event  : Flyology_TUI.Mouse.Local_Event;
+      Layout : Presentation)
+   is
+      Discard : constant Flyology_TUI.Components.Interactions.Update_Result :=
+        Handle (Item, Event, Layout);
       pragma Unreferenced (Discard);
    begin null; end Update;
 

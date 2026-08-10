@@ -2,11 +2,15 @@ with Ada.Strings.Wide_Wide_Unbounded;
 with Ada.Text_IO;
 with Flyology_TUI.Components;
 with Flyology_TUI.Components.Forms;
+with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Components.Lists;
 with Flyology_TUI.Components.Progress;
 with Flyology_TUI.Components.Progress_Groups;
+with Flyology_TUI.Components.Tabs;
 with Flyology_TUI.Components.Text_Inputs;
 with Flyology_TUI.Events;
+with Flyology_TUI.Geometry;
+with Flyology_TUI.Mouse;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
 
@@ -24,7 +28,27 @@ procedure Responsive_Geometry_Tests is
    package Work_Groups is new Flyology_TUI.Components.Progress_Groups
      (Item_Id => Integer, Maximum_Items => 4);
 
+   type Tab_Id is (Alpha, Beta, Gamma, Delta_Tab);
+
+   function Tab_Label (Item : Tab_Id) return Wide_Wide_String is
+     (case Item is
+         when Alpha => "alpha",
+         when Beta  => "beta",
+         when Gamma => "gamma",
+         when Delta_Tab => "delta");
+
+   function Tab_Id_Of (Item : Tab_Id) return Tab_Id is (Item);
+
+   package Tabs is new Flyology_TUI.Components.Tabs
+     (Item_Type => Tab_Id,
+      Id_Type   => Tab_Id,
+      Id_Of     => Tab_Id_Of,
+      Label     => Tab_Label,
+      Capacity  => 8);
+
    use type Flyology_TUI.Styles.Style;
+   use type Flyology_TUI.Components.Interactions.Capture_Action;
+   use type Flyology_TUI.Geometry.Rectangle;
 
    procedure Assert (Condition : Boolean; Message : String) is
    begin
@@ -54,6 +78,19 @@ procedure Responsive_Geometry_Tests is
          Modified => (others => False),
          Wheel_X  => 0,
          Wheel_Y  => 0));
+
+   function Pointer
+     (X, Y   : Integer;
+      Action : Flyology_TUI.Events.Mouse_Action)
+      return Flyology_TUI.Mouse.Local_Event
+   is
+     (X        => X,
+      Y        => Y,
+      Button   => Flyology_TUI.Events.Left_Button,
+      Action   => Action,
+      Modified => (others => False),
+      Wheel_X  => 0,
+      Wheel_Y  => 0);
 
    procedure Test_Text_Input is
       Item : Flyology_TUI.Components.Text_Inputs.Model :=
@@ -205,10 +242,116 @@ procedure Responsive_Geometry_Tests is
          "large progress group width changed entries");
    end Test_Progress;
 
+   procedure Test_Tabs is
+      Values : constant Tabs.Item_Array (5 .. 8) :=
+        [5 => Alpha, 6 => Beta, 7 => Gamma, 8 => Delta_Tab];
+      Item : Tabs.Model := Tabs.Create (Values);
+      Mouse_Item : Tabs.Model := Tabs.Create (Values);
+      Legacy_Item : Tabs.Model := Tabs.Create (Values);
+      Look : Tabs.Appearance := (others => Flyology_TUI.Styles.Default);
+      Layout : Tabs.Presentation;
+      Zero : Tabs.Presentation;
+      Narrow : Tabs.Presentation;
+      Wide : Tabs.Presentation;
+      Region : Flyology_TUI.Geometry.Rectangle;
+      Press, Release : Flyology_TUI.Components.Interactions.Update_Result;
+      Keyboard : Flyology_TUI.Components.Interactions.Update_Result;
+      Frozen : Flyology_TUI.Surfaces.Surface;
+   begin
+      Look.Active.Bold := True;
+      Assert
+        (Item.Width = 30 and then Item.Render (Look).Width = 30,
+         "legacy tab width or render compatibility changed");
+
+      Item.Activate (Delta_Tab);
+      Layout := Item.Present (8, Look);
+      Region := Tabs.Tab_Region (Layout, Delta_Tab);
+      Assert
+        (Tabs.Frame (Layout).Width = 8
+         and then Tabs.Frame (Layout).Height = 1
+         and then Tabs.Has_Tab (Layout, Delta_Tab)
+         and then not Tabs.Has_Tab (Layout, Gamma)
+         and then Region = (1, 0, 7, 1)
+         and then
+           Tabs.Frame (Layout).Element
+             (Natural (Region.X), 0).Appearance = Look.Active,
+         "narrow tabs did not keep the complete active tab visible");
+      Frozen := Tabs.Frame (Layout);
+
+      Narrow := Item.Present (3, Look);
+      Assert
+        (Tabs.Frame (Narrow).Width = 3
+         and then Tabs.Tab_Region (Narrow, Delta_Tab) = (0, 0, 3, 1),
+         "overwide active tab did not retain its leading clipped cells");
+      Zero := Item.Present (0, Look);
+      Assert
+        (Tabs.Frame (Zero).Width = 0 and then Tabs.Frame (Zero).Height = 1
+         and then not Tabs.Has_Tab (Zero, Delta_Tab),
+         "zero-width tab presentation retained a hit region");
+
+      for Id in Tab_Id loop
+         Item.Activate (Id);
+         Narrow := Item.Present (7, Look);
+         Assert
+           (Tabs.Has_Tab (Narrow, Id)
+            and then Tabs.Tab_Region (Narrow, Id).Width > 0
+            and then Tabs.Tab_Region (Narrow, Id).Width <= 7,
+            "active tab disappeared from a narrow presentation");
+      end loop;
+      Assert
+        (Tabs.Has_Tab (Layout, Delta_Tab)
+         and then Tabs.Tab_Region (Layout, Delta_Tab) = (1, 0, 7, 1)
+         and then Frozen.Width = 8
+         and then Frozen.Element (1, 0).Appearance = Look.Active,
+         "presentation changed after later model activation");
+
+      Wide := Mouse_Item.Present (40, Look);
+      Region := Tabs.Tab_Region (Wide, Delta_Tab);
+      Press := Mouse_Item.Handle
+        (Pointer
+           (Region.X, 0, Flyology_TUI.Events.Mouse_Click),
+         Wide);
+      Release := Mouse_Item.Handle
+        (Pointer
+           (Region.X, 0, Flyology_TUI.Events.Mouse_Release),
+         Wide);
+      Item.Activate (Alpha);
+      Keyboard := Item.Handle (Key (Flyology_TUI.Events.End_Key));
+      Assert
+        (Press.Capture =
+           Flyology_TUI.Components.Interactions.Acquire_Capture
+         and then Release.Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture
+         and then Release.Activated
+         and then Mouse_Item.Active_Id = Delta_Tab
+         and then Item.Active_Id = Delta_Tab
+         and then Keyboard.Handled,
+         "tab keyboard and presentation mouse navigation diverged");
+
+      Press := Mouse_Item.Handle
+        (Pointer (7, 0, Flyology_TUI.Events.Mouse_Click), Wide);
+      Assert
+        (not Press.Handled,
+         "tab presentation treated a separator as a tab hit");
+
+      Region := (X => 23, Y => 0, Width => 7, Height => 1);
+      Press := Legacy_Item.Handle
+        (Pointer
+           (Region.X, 0, Flyology_TUI.Events.Mouse_Click));
+      Release := Legacy_Item.Handle
+        (Pointer
+           (Region.X, 0, Flyology_TUI.Events.Mouse_Release));
+      Assert
+        (Press.Handled and then Release.Activated
+         and then Legacy_Item.Active_Id = Delta_Tab,
+         "legacy full-width tab mouse handling changed");
+   end Test_Tabs;
+
 begin
    Test_Text_Input;
    Test_List;
    Test_Form;
    Test_Progress;
+   Test_Tabs;
    Ada.Text_IO.Put_Line ("responsive geometry tests passed");
 end Responsive_Geometry_Tests;

@@ -1,6 +1,7 @@
 with Ada.Containers.Vectors;
 with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Events;
+with Flyology_TUI.Geometry;
 with Flyology_TUI.Mouse;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
@@ -43,6 +44,33 @@ package Flyology_TUI.Components.Tabs is
    function Is_Enabled (Item : Model) return Boolean;
    function Width (Item : Model) return Natural;
 
+   --  Presentation is an immutable clipped frame and its exact visible tab
+   --  hit regions. Present keeps the complete active tab visible whenever it
+   --  fits Width; when it does not fit, its leading Width cells remain
+   --  visible. A zero width has no hit regions.
+   type Presentation is private;
+
+   function Present
+     (Item      : Model;
+      Width     : Natural;
+      Look      : Appearance;
+      Has_Focus : Boolean := False) return Presentation;
+
+   function Present
+     (Item      : Model;
+      Width     : Natural;
+      Theme     : Flyology_TUI.Themes.Theme;
+      Has_Focus : Boolean := False) return Presentation;
+
+   function Frame
+     (Item : Presentation) return Flyology_TUI.Surfaces.Surface;
+   function Has_Tab
+     (Item : Presentation; Id : Id_Type) return Boolean;
+   function Tab_Region
+     (Item : Presentation;
+      Id   : Id_Type) return Flyology_TUI.Geometry.Rectangle
+     with Pre => Has_Tab (Item, Id);
+
    function Handle
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event)
@@ -53,6 +81,13 @@ package Flyology_TUI.Components.Tabs is
       Event : Flyology_TUI.Mouse.Local_Event)
       return Flyology_TUI.Components.Interactions.Update_Result;
 
+   --  Route mouse input against the exact clipped cells in Layout.
+   function Handle
+     (Item   : in out Model;
+      Event  : Flyology_TUI.Mouse.Local_Event;
+      Layout : Presentation)
+      return Flyology_TUI.Components.Interactions.Update_Result;
+
    procedure Update
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event);
@@ -60,6 +95,11 @@ package Flyology_TUI.Components.Tabs is
    procedure Update
      (Item  : in out Model;
       Event : Flyology_TUI.Mouse.Local_Event);
+
+   procedure Update
+     (Item   : in out Model;
+      Event  : Flyology_TUI.Mouse.Local_Event;
+      Layout : Presentation);
 
    function Render
      (Item      : Model;
@@ -76,6 +116,12 @@ package Flyology_TUI.Components.Tabs is
 private
    package Item_Vectors is new Ada.Containers.Vectors
      (Index_Type => Natural, Element_Type => Item_Type);
+   package Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Natural, Element_Type => Id_Type, "=" => "=");
+   package Region_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Natural,
+      Element_Type => Flyology_TUI.Geometry.Rectangle,
+      "="          => Flyology_TUI.Geometry."=");
 
    type Model is tagged record
       Values  : Item_Vectors.Vector;
@@ -84,5 +130,11 @@ private
       Armed   : Natural := 0;
       Capturing : Boolean := False;
       Enabled : Boolean := True;
+   end record;
+
+   type Presentation is record
+      Frame_Value : Flyology_TUI.Surfaces.Surface;
+      Ids         : Id_Vectors.Vector;
+      Regions     : Region_Vectors.Vector;
    end record;
 end Flyology_TUI.Components.Tabs;
