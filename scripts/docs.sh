@@ -5,6 +5,7 @@ project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 alr=$("$project_root/scripts/find-alr.sh")
 documentation_output="$project_root/docs/api"
 website_kit="$project_root/vendor/website-kit"
+warning_baseline_file="$project_root/docs/gnatdoc-warning-baseline.txt"
 
 if [ ! -f "$website_kit/scripts/render-gnatdoc-theme.mjs" ]; then
    printf '%s\n' \
@@ -38,13 +39,31 @@ rm -rf "$documentation_output"
 node "$website_kit/scripts/render-gnatdoc-theme.mjs" \
   "$project_root/docs/gnatdoc-theme.json" \
   "$project_root/docs/gnatdoc/html"
-"$alr" exec -- gnatdoc \
+gnatdoc_log=$(mktemp -t flyology-tui-gnatdoc.XXXXXX)
+trap 'rm -f "$gnatdoc_log"' EXIT HUP INT TERM
+if ! "$alr" exec -- gnatdoc \
   --backend=html \
   --generate=public \
   --warnings \
   --style=leading \
   -P flyology_tui.gpr \
-  -O docs/api
+  -O docs/api >"$gnatdoc_log" 2>&1
+then
+   cat "$gnatdoc_log" >&2
+   exit 1
+fi
+cat "$gnatdoc_log"
+warning_count=$(grep -c 'warning:' "$gnatdoc_log" || true)
+warning_baseline=$(cat "$warning_baseline_file")
+if [ "$warning_count" -gt "$warning_baseline" ]; then
+   printf '%s\n' \
+     "GNATdoc warning count increased: $warning_count > $warning_baseline" >&2
+   exit 1
+fi
+printf '%s\n' \
+  "GNATdoc warnings: $warning_count (must not exceed $warning_baseline)"
+rm -f "$gnatdoc_log"
+trap - EXIT HUP INT TERM
 
 node "$project_root/scripts/normalize-gnatdoc-html.mjs" docs/api
 

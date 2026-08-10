@@ -712,6 +712,16 @@
     display: none;
   }
 
+  .component-sidebar section:has([aria-current="page"]) {
+    display: block;
+  }
+
+  .component-sidebar section:has([aria-current="page"]) ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.8rem;
+  }
+
   .component-doc {
     padding-top: 0;
   }

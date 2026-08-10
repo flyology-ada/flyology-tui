@@ -42,6 +42,8 @@ jobs:
         run: alr install gnatdoc_bin
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+        with:
+          enablement: true
       - name: Build site
         run: ./scripts/build-site.sh
         working-directory: flyology-tui
