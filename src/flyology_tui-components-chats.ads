@@ -65,7 +65,9 @@ package Flyology_TUI.Components.Chats is
      (Theme : Flyology_TUI.Themes.Theme) return Appearance;
 
    subtype Message_Width_Percentage is Positive range 1 .. 100;
+   type Message_Layout_Mode is (Dense_Transcript, Message_Bubbles);
    type Layout_Options is record
+      Mode                  : Message_Layout_Mode := Dense_Transcript;
       Maximum_Message_Width : Natural := Natural'Last;
       Maximum_Percentage    : Message_Width_Percentage := 100;
       Horizontal_Padding    : Natural := 0;
@@ -73,12 +75,14 @@ package Flyology_TUI.Components.Chats is
    end record;
 
    Dense_Layout : constant Layout_Options :=
-     (Maximum_Message_Width => Natural'Last,
+     (Mode                  => Dense_Transcript,
+      Maximum_Message_Width => Natural'Last,
       Maximum_Percentage    => 100,
       Horizontal_Padding    => 0,
       Message_Gap           => 0);
    Conversational_Layout : constant Layout_Options :=
-     (Maximum_Message_Width => 72,
+     (Mode                  => Message_Bubbles,
+      Maximum_Message_Width => 72,
       Maximum_Percentage    => 72,
       Horizontal_Padding    => 1,
       Message_Gap           => 1);

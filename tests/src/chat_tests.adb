@@ -739,6 +739,105 @@ procedure Chat_Tests is
               < Assistant_Bubble.Y,
             "bubble padding, body containment, or message spacing was lost");
       end;
+
+      declare
+         Tiny : Chats.Model := Chats.Create
+           ((1 => Message (One, Alice, Chats.User)), 2);
+         Body_Surface : constant Flyology_TUI.Surfaces.Surface :=
+           Painted (4, 1, "body");
+         Actions : constant Flyology_TUI.Surfaces.Surface :=
+           Painted (3, 1, "act");
+      begin
+         Tiny.Set_Layout (Chats.Conversational_Layout);
+         Tiny.Reconcile_Measurements ((1 => (One, 1, 1)));
+         declare
+            View : constant Chats.Presentation := Tiny.Present
+              ((1 => (One, Body_Surface, Actions)),
+               1, Flyology_TUI.Themes.Charm);
+            Bubble : constant Flyology_TUI.Geometry.Rectangle :=
+              Chats.Bubble_Region (View, One);
+            Body_Box : constant Flyology_TUI.Geometry.Rectangle :=
+              Chats.Body_Region (View, One);
+            Action_Box : constant Flyology_TUI.Geometry.Rectangle :=
+              Chats.Action_Region (View, One);
+         begin
+            Assert
+              (Bubble.X = 0 and then Bubble.Width = 1
+               and then Body_Box.X >= Bubble.X
+               and then Body_Box.X + Integer (Body_Box.Width)
+                 <= Bubble.X + Integer (Bubble.Width)
+               and then Action_Box.X >= Bubble.X
+               and then Action_Box.X + Integer (Action_Box.Width)
+                 <= Bubble.X + Integer (Bubble.Width),
+               "tiny conversational children escaped their bubble");
+         end;
+      end;
+
+      declare
+         Dense : Chats.Model := Chats.Create
+           ((1 => Message (One, Alice, Chats.User)), 2);
+         Look : Chats.Appearance :=
+           Chats.From_Theme (Flyology_TUI.Themes.Charm);
+         Content : Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Surfaces.Create (4, 1);
+      begin
+         Look.User_Bubble := Flyology_TUI.Themes.Charm.Selected;
+         Content.Write (0, 0, "x", Flyology_TUI.Styles.Default);
+         Dense.Reconcile_Measurements ((1 => (One, 1, 0)));
+         declare
+            View : constant Chats.Presentation := Dense.Present
+              ((1 => (One, Content, No_Actions)), 4, Look);
+            Frame : constant Flyology_TUI.Surfaces.Surface :=
+              Chats.Frame (View);
+         begin
+            Assert
+              (Frame.Element (0, 1).Appearance = Flyology_TUI.Styles.Default
+               and then Frame.Element (1, 1).Appearance =
+                 Flyology_TUI.Styles.Default,
+               "dense compatibility applied bubble fill or transparency");
+         end;
+      end;
+
+      declare
+         Atomic : Chats.Model := Chats.Create
+           ((Message (One, Alice, Chats.User),
+             Message (Two, Ada_Bot, Chats.Assistant)), 3);
+         Bad : Chats.Layout_Options := Chats.Conversational_Layout;
+         Raised : Boolean := False;
+      begin
+         Bad.Message_Gap := Natural'Last;
+         begin
+            Atomic.Set_Layout (Bad);
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+         Assert
+           (Raised and then Atomic.Layout = Chats.Dense_Layout
+            and then Atomic.Content_Height = 4,
+            "rejected layout replacement poisoned the chat model");
+      end;
+
+      declare
+         Clipped : Chats.Model := Chats.Create
+           ((1 => Message (One, Alice, Chats.User)), 2);
+         Changed : Boolean;
+      begin
+         Clipped.Set_Layout (Chats.Conversational_Layout);
+         Clipped.Reconcile_Measurements ((1 => (One, 4, 0)));
+         Clipped.Set_Follow_Tail (False);
+         Clipped.Scroll_Cells (2, Changed);
+         declare
+            View : constant Chats.Presentation := Clipped.Present
+              ((1 => (One, Painted (8, 4, "body"), No_Actions)),
+               12, Flyology_TUI.Themes.Charm);
+            Header : constant Flyology_TUI.Geometry.Rectangle :=
+              Chats.Header_Region (View, One);
+         begin
+            Assert
+              (Header.Y = 0 and then Header.Height = 0,
+               "vertically clipped header published stale geometry");
+         end;
+      end;
    end Test_Conversational_Bubbles;
 
 begin

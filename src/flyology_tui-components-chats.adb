@@ -88,7 +88,8 @@ package body Flyology_TUI.Components.Chats is
      (Body_Height, Action_Height : Natural) return Natural is
      (Safe_Add (1, Safe_Add (Body_Height, Action_Height)));
 
-   function Content_Height_Of (Item : Model) return Natural is
+   function Content_Height_Of
+     (Item : Model; Options : Layout_Options) return Natural is
       Result : Natural := 0;
    begin
       if Item.Messages.Is_Empty then
@@ -96,7 +97,7 @@ package body Flyology_TUI.Components.Chats is
       end if;
       for Index in 0 .. Natural (Item.Messages.Length) - 1 loop
          if Index > 0 then
-            Result := Safe_Add (Result, Item.Options.Message_Gap);
+            Result := Safe_Add (Result, Options.Message_Gap);
          end if;
          Result := Safe_Add
            (Result,
@@ -106,6 +107,9 @@ package body Flyology_TUI.Components.Chats is
       end loop;
       return Result;
    end Content_Height_Of;
+
+   function Content_Height_Of (Item : Model) return Natural is
+     (Content_Height_Of (Item, Item.Options));
 
    function Maximum_First (Item : Model) return Natural is
       Total : constant Natural := Content_Height_Of (Item);
@@ -224,7 +228,10 @@ package body Flyology_TUI.Components.Chats is
    end Create;
 
    procedure Set_Layout
-     (Item : in out Model; Options : Layout_Options) is
+     (Item : in out Model; Options : Layout_Options)
+   is
+      Validated_Height : constant Natural := Content_Height_Of (Item, Options);
+      pragma Unreferenced (Validated_Height);
    begin
       Item.Options := Options;
       Normalize_Viewport (Item);
@@ -470,12 +477,12 @@ package body Flyology_TUI.Components.Chats is
                then
                   Result.Ids.Append (Item.Messages.Element (Index).Id);
                   Result.Header_Regions.Append
-                    (Flyology_TUI.Geometry.Rectangle'
-                       (X      => 0,
-                        Y      => Signed_Difference
-                          (Block_Start, Item.First_Cell),
-                        Width  => Width,
-                        Height => 1));
+                    (Clip_To_Viewport
+                       (Block_Start,
+                        Safe_Add (Block_Start, 1),
+                        Item.First_Cell,
+                        View_End,
+                        Width));
                   Result.Body_Origins.Append
                     (Signed_Difference (Body_Start, Item.First_Cell));
                   Result.Action_Origins.Append
@@ -728,19 +735,17 @@ package body Flyology_TUI.Components.Chats is
                then Natural'Last
                else Desired + 2 * Item.Options.Horizontal_Padding);
             Bubble_Width : constant Natural :=
-              (if Item.Options = Dense_Layout
+              (if Item.Options.Mode = Dense_Transcript
                then Width else Natural'Min (Limit, Padded));
             Inner_X : constant Natural := Natural'Min
-              (Item.Options.Horizontal_Padding, Bubble_Width);
+              (Item.Options.Horizontal_Padding, Bubble_Width / 2);
             Inner_Width : constant Natural :=
-              Bubble_Width - Natural'Min
-                (Bubble_Width, 2 * Natural'Min
-                   (Item.Options.Horizontal_Padding, Bubble_Width / 2));
+              Bubble_Width - 2 * Inner_X;
             Bubble_X : constant Natural :=
               (if Value.Role = User and then Width > Bubble_Width
                then Width - Bubble_Width else 0);
             Bubble_Y : constant Integer :=
-              Result.Layout_Value.Header_Regions.Element (Visible - 1).Y;
+              Result.Layout_Value.Bubble_Regions.Element (Visible - 1).Y;
             Bubble_Height : constant Natural := Block_Height
               (Item.Body_Heights.Element (Index - 1),
                Item.Action_Heights.Element (Index - 1));
@@ -757,10 +762,34 @@ package body Flyology_TUI.Components.Chats is
               Result.Layout_Value.Body_Regions.Element (Visible - 1);
             Action_Region : Flyology_TUI.Geometry.Rectangle :=
               Result.Layout_Value.Action_Regions.Element (Visible - 1);
+            Header_Region : Flyology_TUI.Geometry.Rectangle :=
+              Result.Layout_Value.Header_Regions.Element (Visible - 1);
             Visible_Bubble_Y : constant Integer := Integer'Max (0, Bubble_Y);
             Visible_Bubble_End : constant Integer := Integer'Min
               (Integer (Item.Rows), Bubble_Y + Integer (Bubble_Height));
          begin
+            if Item.Options.Mode = Dense_Transcript then
+               Header := Flyology_TUI.Surfaces.Create
+                 (Width, 1, Look.Header);
+               Header.Write (0, 0, Label, Chosen);
+               Result.Frame_Value.Overlay_Clipped
+                 (Header, 0, Bubble_Y);
+               Result.Frame_Value.Overlay_Clipped
+                 (Bodies (Positive (Body_Position)).Content,
+                  0,
+                  Result.Layout_Value.Body_Origins.Element (Visible - 1));
+               Result.Frame_Value.Overlay_Clipped
+                 (Bodies (Positive (Body_Position)).Actions,
+                  0,
+                  Result.Layout_Value.Action_Origins.Element (Visible - 1));
+               Result.Layout_Value.Bubble_Regions.Replace_Element
+                 (Visible - 1,
+                  (X => 0, Y => Visible_Bubble_Y, Width => Width,
+                   Height =>
+                     (if Visible_Bubble_End > Visible_Bubble_Y
+                      then Natural (Visible_Bubble_End - Visible_Bubble_Y)
+                      else 0)));
+            else
             Header.Write
               (0, 0, Label, Chosen);
             Bubble.Overlay_Clipped (Header, Integer (Inner_X), 0);
@@ -774,10 +803,10 @@ package body Flyology_TUI.Components.Chats is
                Transparent_Spaces => True);
             Result.Frame_Value.Overlay_Clipped
               (Bubble, Integer (Bubble_X), Bubble_Y);
+            Header_Region.X := Integer (Bubble_X);
+            Header_Region.Width := Bubble_Width;
             Result.Layout_Value.Header_Regions.Replace_Element
-              (Visible - 1,
-               (X => Integer (Bubble_X), Y => Bubble_Y,
-                Width => Bubble_Width, Height => 1));
+              (Visible - 1, Header_Region);
             Body_Region.X := Integer (Bubble_X + Inner_X);
             Body_Region.Width := Natural'Min
               (Inner_Width,
@@ -798,6 +827,7 @@ package body Flyology_TUI.Components.Chats is
                   (if Visible_Bubble_End > Visible_Bubble_Y
                    then Natural (Visible_Bubble_End - Visible_Bubble_Y)
                    else 0)));
+            end if;
          end;
       end loop;
 
