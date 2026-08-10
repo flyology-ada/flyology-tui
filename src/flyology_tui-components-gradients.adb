@@ -199,6 +199,7 @@ package body Flyology_TUI.Components.Gradients is
      (Item : Model;
       Value, Minimum, Maximum : Long_Float) return RGB_Color
    is
+      Scale   : Long_Float;
       Ratio   : Long_Float;
       Rounded : Long_Float;
    begin
@@ -207,7 +208,13 @@ package body Flyology_TUI.Components.Gradients is
       elsif Value >= Maximum then
          return Sample (Item, Stop_Offset'Last);
       end if;
-      Ratio := (Value - Minimum) / (Maximum - Minimum);
+      --  Normalize before subtracting.  For a domain spanning nearly the
+      --  complete finite Long_Float range, either unscaled subtraction can
+      --  overflow even though the mathematical ratio is in 0.0 .. 1.0.
+      Scale := Long_Float'Max (abs Minimum, abs Maximum);
+      Ratio :=
+        (Value / Scale - Minimum / Scale)
+        / (Maximum / Scale - Minimum / Scale);
       Rounded := Long_Float'Rounding (Ratio * Long_Float (Stop_Scale));
       return Sample
         (Item,

@@ -1,5 +1,4 @@
 with Ada.Characters.Latin_1;
-with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Ada.Strings.Wide_Wide_Unbounded;
 with Ada.Text_IO;
@@ -254,6 +253,7 @@ procedure Gradient_Tests is
    procedure Test_Heatmap is
       Item : Gradients.Model := Gradients.Create (2);
       Success : Boolean;
+      Last : constant Long_Float := Long_Float'Last;
    begin
       Item.Try_Set_Stops
         ([(0, RGB (0, 0, 255)),
@@ -267,46 +267,88 @@ procedure Gradient_Tests is
       Assert_RGB
         (Item.Heatmap (101.0, 0.0, 100.0), 255, 0, 0,
          "heatmap did not clamp above its domain");
+      Assert_RGB
+        (Item.Heatmap (Last / 2.0, 0.0, Last), 128, 0, 128,
+         "heatmap overflowed while normalizing Last / 2");
+      Assert_RGB
+        (Item.Heatmap (0.0, -Last, Last), 128, 0, 128,
+         "heatmap overflowed across the full finite range");
    end Test_Heatmap;
 
    procedure Test_Renderer_Profiles is
-      Item : constant Gradients.Model := Gradients.Create
-        (1, RGB (255, 0, 0), Application => Gradients.Apply_Foreground);
-      Base : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
-      Surface : Flyology_TUI.Surfaces.Surface;
+      Prefix : constant String :=
+        ESC & "[?1049l"
+        & ESC & "[?1000l"
+        & ESC & "[?1002l"
+        & ESC & "[?1003l"
+        & ESC & "[?1006l"
+        & ESC & "[?1004l"
+        & ESC & "[?2004h"
+        & ESC & "]2;" & Ada.Characters.Latin_1.BEL
+        & ESC & "[2J"
+        & ESC & "[H"
+        & ESC & "[1;1H";
+      Suffix : constant String := ESC & "[0m" & ESC & "[?25l";
 
       procedure Verify
         (Profile : Flyology_TUI.Color_Profiles.Profile;
-         Expected : String;
+         Application : Gradients.Color_Application;
+         Foreground, Background : String;
          Message : String)
       is
+         Item : constant Gradients.Model := Gradients.Create
+           (1, RGB (255, 0, 0), Application => Application);
+         Surface : Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Surfaces.From_Text
+             ("x", Flyology_TUI.Styles.Default);
          Renderer : Flyology_TUI.Renderers.Renderer;
          Output : Ada.Strings.Unbounded.Unbounded_String;
+         Expected : constant String :=
+           Prefix & ESC & "[0m" & Foreground & Background & "x" & Suffix;
       begin
+         Item.Apply (Surface, (0, 0, 1, 1));
          Renderer.Set_Color_Profile (Profile);
          Renderer.Render
            (Flyology_TUI.Views.From_Surface (Surface), Output);
          Assert
-           (Ada.Strings.Fixed.Index
-              (Ada.Strings.Unbounded.To_String (Output), Expected) /= 0,
+           (Ada.Strings.Unbounded.To_String (Output) = Expected,
             Message);
       end Verify;
+
+      procedure Verify_Profile
+        (Profile : Flyology_TUI.Color_Profiles.Profile;
+         Foreground, Background : String;
+         Name : String)
+      is
+         Default_Foreground : constant String := ESC & "[39m";
+         Default_Background : constant String := ESC & "[49m";
+      begin
+         Verify
+           (Profile, Gradients.Apply_Foreground,
+            Foreground, Default_Background,
+            Name & " foreground output contained missing or stray bytes");
+         Verify
+           (Profile, Gradients.Apply_Background,
+            Default_Foreground, Background,
+            Name & " background output contained missing or stray bytes");
+         Verify
+           (Profile, Gradients.Apply_Both, Foreground, Background,
+            Name & " combined output contained missing or stray bytes");
+      end Verify_Profile;
    begin
-      Base.Bold := True;
-      Surface := Flyology_TUI.Surfaces.Create (1, 1, Base);
-      Item.Apply (Surface, (0, 0, 1, 1));
-      Verify
+      Verify_Profile
         (Flyology_TUI.Color_Profiles.Truecolor,
-         ESC & "[38;2;255;0;0m", "truecolor renderer lost gradient RGB");
-      Verify
+         ESC & "[38;2;255;0;0m", ESC & "[48;2;255;0;0m",
+         "truecolor");
+      Verify_Profile
         (Flyology_TUI.Color_Profiles.ANSI_256,
-         ESC & "[38;5;9m", "ANSI-256 renderer did not degrade gradient RGB");
-      Verify
+         ESC & "[38;5;9m", ESC & "[48;5;9m", "ANSI-256");
+      Verify_Profile
         (Flyology_TUI.Color_Profiles.ANSI_16,
-         ESC & "[91m", "ANSI-16 renderer did not degrade gradient RGB");
-      Verify
+         ESC & "[91m", ESC & "[101m", "ANSI-16");
+      Verify_Profile
         (Flyology_TUI.Color_Profiles.Monochrome,
-         ESC & "[39m", "monochrome renderer did not remove gradient color");
+         ESC & "[39m", ESC & "[49m", "monochrome");
    end Test_Renderer_Profiles;
 
 begin

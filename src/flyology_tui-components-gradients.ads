@@ -55,9 +55,12 @@ package Flyology_TUI.Components.Gradients is
    function Interpolation (Item : Model) return Interpolation_Mode;
 
    --  Sample the normalized offset. SRGB_Channels linearly interpolates the
-   --  encoded 8-bit channels. Linear_Light decodes and encodes with the IEC
-   --  61966-2-1 sRGB transfer function. Coordinate, channel, and final 8-bit
-   --  rounding is nearest with an exact half choosing the larger value.
+   --  encoded 8-bit channels with integer arithmetic; its channel rounding is
+   --  nearest with an exact half choosing the larger value. Linear_Light
+   --  decodes and encodes with the IEC 61966-2-1 sRGB transfer function using
+   --  Long_Float logarithm and exponentiation. Its intermediate results can
+   --  therefore vary by one channel value with target precision and the
+   --  runtime math implementation; final conversion rounds to nearest.
    function Sample (Item : Model; Offset : Stop_Offset) return RGB_Color;
 
    --  Clamp Value to Minimum .. Maximum and sample that normalized position.
