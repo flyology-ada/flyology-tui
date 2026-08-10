@@ -692,14 +692,18 @@ package body Flyology_TUI.Components.Chats is
    function Body_Width_Limit
      (Item : Model; Frame_Width : Natural) return Natural
    is
-      Limit : constant Natural :=
-        Message_Width_Limit (Frame_Width, Item.Options);
-      Padding : constant Natural :=
-        (if Item.Options.Mode = Dense_Transcript
-         then 0
-         else Natural'Min (Item.Options.Horizontal_Padding, Limit / 2));
    begin
-      return Limit - 2 * Padding;
+      if Item.Options.Mode = Dense_Transcript then
+         return Frame_Width;
+      end if;
+      declare
+         Limit : constant Natural :=
+           Message_Width_Limit (Frame_Width, Item.Options);
+         Padding : constant Natural :=
+           Natural'Min (Item.Options.Horizontal_Padding, Limit / 2);
+      begin
+         return Limit - 2 * Padding;
+      end;
    end Body_Width_Limit;
 
    function Present_Core
@@ -750,8 +754,11 @@ package body Flyology_TUI.Components.Chats is
             Bubble_Width : constant Natural :=
               (if Item.Options.Mode = Dense_Transcript
                then Width else Natural'Min (Limit, Padded));
-            Inner_X : constant Natural := Natural'Min
-              (Item.Options.Horizontal_Padding, Bubble_Width / 2);
+            Inner_X : constant Natural :=
+              (if Item.Options.Mode = Dense_Transcript
+               then 0
+               else Natural'Min
+                 (Item.Options.Horizontal_Padding, Bubble_Width / 2));
             Inner_Width : constant Natural :=
               Bubble_Width - 2 * Inner_X;
             Bubble_X : constant Natural :=

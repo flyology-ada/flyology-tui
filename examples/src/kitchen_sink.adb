@@ -1407,6 +1407,7 @@ procedure Kitchen_Sink is
                        (Column, Row, Content (Position .. Last), Appearance);
                      Column := Column + Span;
                   else
+                     Result.Put (Column, Row, "?", Appearance);
                      Column := Width;
                   end if;
                   Position := Last + 1;
@@ -1965,9 +1966,14 @@ procedure Kitchen_Sink is
       Markdown_Preview_Visible : constant Boolean :=
         Flyology_TUI.Components.Markdown_Editors.Has_Preview
           (Item.Markdown.Layout);
-      Chat_Height : constant Natural := Layout (Item).Chat_Frame.Height;
-      Chat_Composer_Visible : constant Boolean := Chat_Height > 0;
-      Chat_Send_Visible : constant Boolean := Chat_Height > 4;
+      Chat_Frame : constant Flyology_TUI.Geometry.Rectangle :=
+        Layout (Item).Chat_Frame;
+      Chat_Transcript_Visible : constant Boolean :=
+        Chat_Frame.Width > 0 and then Item.Chat.Viewport_Rows > 0;
+      Chat_Composer_Visible : constant Boolean :=
+        Chat_Frame.Width > 0 and then Chat_Frame.Height > 0;
+      Chat_Send_Visible : constant Boolean :=
+        Chat_Frame.Width > 0 and then Chat_Frame.Height > 4;
    begin
       case Current_Page (Item) is
       when Basics_Page =>
@@ -2124,36 +2130,38 @@ procedure Kitchen_Sink is
            Page_Navigation | Chat_Field | Chat_Stream_Field
              | Chat_Composer_Field | Chat_Send_Field
          then
-            Activate (Item, Chat_Field);
+            Activate
+              (Item,
+               (if Chat_Transcript_Visible
+                then Chat_Field
+                elsif Chat_Composer_Visible
+                then Chat_Composer_Field
+                else Page_Navigation));
             return;
          end if;
-         if not Chat_Composer_Visible then
+         if not Chat_Transcript_Visible
+           and then not Chat_Composer_Visible
+         then
+            Activate (Item, Page_Navigation);
+         elsif not Chat_Transcript_Visible and then not Chat_Send_Visible then
+            Activate
+              (Item,
+               (if Item.Focus = Page_Navigation
+                then Chat_Composer_Field else Page_Navigation));
+         elsif not Chat_Transcript_Visible then
             Activate
               (Item,
                (if Backwards then
                   (case Item.Focus is
-                      when Page_Navigation => Chat_Stream_Field,
-                      when Chat_Field => Page_Navigation,
-                      when others => Chat_Field)
+                      when Page_Navigation => Chat_Send_Field,
+                      when Chat_Composer_Field => Page_Navigation,
+                      when Chat_Send_Field => Chat_Composer_Field,
+                      when others => Page_Navigation)
                 else
-                  (case Item.Focus is
-                      when Page_Navigation => Chat_Field,
-                      when Chat_Field => Chat_Stream_Field,
-                      when others => Page_Navigation)));
-         elsif not Chat_Send_Visible then
-            Activate
-              (Item,
-               (if Backwards then
                   (case Item.Focus is
                       when Page_Navigation => Chat_Composer_Field,
-                      when Chat_Field => Page_Navigation,
-                      when Chat_Stream_Field => Chat_Field,
-                      when others => Chat_Stream_Field)
-                else
-                  (case Item.Focus is
-                      when Page_Navigation => Chat_Field,
-                      when Chat_Field => Chat_Stream_Field,
-                      when Chat_Stream_Field => Chat_Composer_Field,
+                      when Chat_Composer_Field => Chat_Send_Field,
+                      when Chat_Send_Field => Page_Navigation,
                       when others => Page_Navigation)));
          elsif Backwards then
             Activate
@@ -2267,20 +2275,34 @@ procedure Kitchen_Sink is
             end if;
          when Chat_Page =>
             declare
-               Height : constant Natural := Layout (Item).Chat_Frame.Height;
+               Frame : constant Flyology_TUI.Geometry.Rectangle :=
+                 Layout (Item).Chat_Frame;
+               Transcript_Visible : constant Boolean :=
+                 Frame.Width > 0 and then Item.Chat.Viewport_Rows > 0;
+               Composer_Visible : constant Boolean :=
+                 Frame.Width > 0 and then Frame.Height > 0;
+               Send_Visible : constant Boolean :=
+                 Frame.Width > 0 and then Frame.Height > 4;
             begin
                if Item.Focus not in
                  Page_Navigation | Chat_Field | Chat_Stream_Field
                    | Chat_Composer_Field | Chat_Send_Field
                  or else
-                   (Item.Focus = Chat_Composer_Field and then Height = 0)
+                   (Item.Focus in Chat_Field | Chat_Stream_Field
+                    and then not Transcript_Visible)
                  or else
-                   (Item.Focus = Chat_Send_Field and then Height <= 4)
+                   (Item.Focus = Chat_Composer_Field
+                    and then not Composer_Visible)
+                 or else
+                   (Item.Focus = Chat_Send_Field and then not Send_Visible)
                then
                   Activate
                     (Item,
-                     (if Height > 0
-                      then Chat_Composer_Field else Chat_Field));
+                     (if Transcript_Visible
+                      then Chat_Field
+                      elsif Composer_Visible
+                      then Chat_Composer_Field
+                      else Page_Navigation));
                end if;
             end;
          when Menus_Page =>
@@ -4131,8 +4153,13 @@ procedure Kitchen_Sink is
          Presentation : constant Chats.Presentation :=
            Chat_Presentation (Item, Geometry);
          Plan : constant Chats.Layout_Plan := Chats.Layout (Presentation);
+         function Composer_Or_Empty
+           return Flyology_TUI.Geometry.Rectangle is
+           (if Chats.Has_Composer (Plan)
+            then Chats.Composer_Region (Plan)
+            else (0, 0, 0, 0));
          Composer_Area : constant Flyology_TUI.Geometry.Rectangle :=
-           Chats.Composer_Region (Plan);
+           Composer_Or_Empty;
          Here : constant Flyology_TUI.Components.Text_Areas.Position :=
            Item.Chat_Composer.Cursor_Position;
          Offset : constant Natural := Item.Chat_Composer.Cursor_Offset;
@@ -4436,6 +4463,22 @@ procedure Kitchen_Sink is
    begin
       Initialize (Item, Next);
 
+      declare
+         Wide_Glyphs : constant Wide_Wide_String :=
+           [Wide_Wide_Character'Val (16#754C#),
+            Wide_Wide_Character'Val (16#1F642#)];
+         Wrapped : constant Flyology_TUI.Surfaces.Surface :=
+           Wrapped_Text (Wide_Glyphs, 1);
+      begin
+         Assert
+           (Wrapped.Width = 1 and then Wrapped.Height = 2
+            and then Text.To_Wide_Wide_String
+              (Wrapped.Element (0, 0).Glyph) = "?"
+            and then Text.To_Wide_Wide_String
+              (Wrapped.Element (0, 1).Glyph) = "?",
+            "one-cell wrapping dropped CJK or emoji graphemes");
+      end;
+
       for Size of Responsive_Sizes loop
          for Page in Page_Id loop
             Activate_Page (Item, Page);
@@ -4721,6 +4764,41 @@ procedure Kitchen_Sink is
            (Item.Focus = Page_Navigation and then Item.Capture = No_Capture,
             "tiny invisible chat controls intercepted the help row");
       end;
+
+      Set_Terminal_Size (Item, 1, 1);
+      Geometry := Layout (Item);
+      Assert
+        (Geometry.Chat_Frame.Height = 0
+         and then Item.Chat.Viewport_Rows = 0,
+         "one-cell terminal retained hidden chat rows");
+      declare
+         Hidden_Targets : constant array (Positive range <>) of
+           Focus_Target :=
+             [Chat_Field, Chat_Stream_Field,
+              Chat_Composer_Field, Chat_Send_Field];
+      begin
+         for Hidden of Hidden_Targets loop
+            Activate (Item, Hidden);
+            if Hidden = Chat_Composer_Field then
+               Frame := Present (Item);
+               Assert
+                 (not Frame.Cursor.Visible,
+                  "zero composer region published a cursor");
+            end if;
+            Normalize_Focus (Item);
+            Assert
+              (Item.Focus = Page_Navigation,
+               "one-cell chat retained an invisible focus target");
+         end loop;
+      end;
+      Next_Focus (Item, Backwards => False);
+      Assert
+        (Item.Focus = Page_Navigation,
+         "one-cell forward traversal entered an invisible chat target");
+      Next_Focus (Item, Backwards => True);
+      Assert
+        (Item.Focus = Page_Navigation,
+         "one-cell reverse traversal entered an invisible chat target");
 
       Activate_Page (Item, Markdown_Page);
       Set_Terminal_Size (Item, 40, 12);

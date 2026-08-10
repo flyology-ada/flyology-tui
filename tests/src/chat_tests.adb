@@ -706,6 +706,30 @@ procedure Chat_Tests is
       Assert
         (Item.Layout = Chats.Dense_Layout,
          "chat did not preserve dense layout compatibility");
+      declare
+         Dense_One_Percent : Chats.Layout_Options := Chats.Dense_Layout;
+      begin
+         Dense_One_Percent.Maximum_Message_Width := 1;
+         Dense_One_Percent.Maximum_Percentage := 1;
+         Dense_One_Percent.Horizontal_Padding := 9;
+         Item.Set_Layout (Dense_One_Percent);
+         Item.Reconcile_Measurements (((One, 1, 0), (Two, 1, 0)));
+         Assert
+           (Item.Body_Width_Limit (40) = 40,
+            "dense body width query applied bubble caps or padding");
+         declare
+            View : constant Chats.Presentation := Item.Present
+              (((One, Painted (40, 1, "dense user"), No_Actions),
+                (Two, Painted (40, 1, "dense assistant"), No_Actions)),
+               40, Flyology_TUI.Themes.Charm);
+            Region : constant Flyology_TUI.Geometry.Rectangle :=
+              Chats.Body_Region (View, One);
+         begin
+            Assert
+              (Region.X = 0 and then Region.Width = 40,
+               "dense presentation applied bubble caps or padding");
+         end;
+      end;
       Item.Set_Layout (Chats.Conversational_Layout);
       Assert
         (Item.Body_Width_Limit (40) = 26
