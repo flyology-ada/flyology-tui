@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="Build a responsive Flyology TUI application in Ada."><title>Guide · Flyology TUI</title><link rel="canonical" href="https://tui.flyology.org/guide/"><link rel="icon" href="../assets/brand/flyology-primary-icon.svg" type="image/svg+xml"><link rel="stylesheet" href="../assets/styles/site.css"><link rel="stylesheet" href="../assets/styles/tui.css"><script src="../assets/scripts/ada-highlight.js"></script><script src="../assets/scripts/site.js"></script><script src="../assets/scripts/tui-site.js" defer></script></head><body>
+<a class="skip-link" href="#main">Skip to content</a><header class="site-header"><nav class="site-nav" aria-label="Primary navigation"><a class="brand" href="../"><img src="../assets/brand/flyology-mark-transparent.svg" alt=""><span>Flyology TUI</span></a><ul class="nav-links" data-nav-links><li><a href="../">Overview</a></li><li><a href="" aria-current="page">Guide</a></li><li><a href="../components/">Components</a></li><li><a href="../architecture/">Architecture</a></li><li><a href="../api/">API</a></li><li><a href="https://github.com/flyology-ada/flyology-tui">GitHub</a></li></ul><div class="nav-tools"><button class="icon-button" type="button" data-theme-toggle><span class="visually-hidden" data-theme-label>Change theme</span>◐</button><button class="menu-button" type="button" data-menu-toggle aria-expanded="false" aria-label="Toggle navigation">☰</button></div></nav></header>
+<main id="main" class="tui-section"><header class="doc-hero"><div><ol class="breadcrumb"><li><a href="../">Flyology TUI</a></li><li aria-current="page">Guide</li></ol><span class="eyebrow">Getting started</span><h1>Build the first interface.</h1></div><p class="doc-hero-copy">Create a typed application loop, return a complete view, and run it against the POSIX terminal backend. Then add responsive layout and bounded components.</p></header>
+<div class="docs-layout"><nav class="toc" aria-label="On this page"><span class="toc-title">On this page</span><ol><li><a href="#install">Install</a></li><li><a href="#model">Define state</a></li><li><a href="#update">Update</a></li><li><a href="#present">Present</a></li><li><a href="#run">Run</a></li><li><a href="#next">Continue</a></li></ol></nav><article class="prose">
+<section id="install"><span class="step-label">Step 01</span><h2>Add the crate.</h2><p>Flyology TUI requires Alire 2.1 or newer and GNAT 13 through 16. Add the crate to an Ada application.</p><figure class="code-panel"><figcaption>Terminal</figcaption><button class="copy-button" type="button" data-copy>Copy</button><pre><code>alr with flyology_tui</code></pre></figure><p>The public contract is platform-neutral. The POSIX backend currently supports macOS and Linux.</p></section>
+<section id="model"><span class="step-label">Step 02</span><h2>Define typed state and messages.</h2><p>Instantiate <a data-api="Flyology_TUI.Application_Events"><code>Flyology_TUI.Application_Events</code></a> with the application message type. Instantiate <a data-api="Flyology_TUI.Transitions"><code>Flyology_TUI.Transitions</code></a> with the command type.</p><figure class="code-panel"><figcaption>Application types</figcaption><button class="copy-button" type="button" data-copy>Copy</button><pre><code class="language-ada">type Message is (Loaded);
+type Command is (Load);
+
+type Model is limited record
+   Count  : Integer := 0;
+   Width  : Natural := 80;
+   Height : Natural := 24;
+end record;
+
+package Events is new Flyology_TUI.Application_Events (Message);
+package Transitions is new Flyology_TUI.Transitions (Command);</code></pre></figure><div class="callout"><p>The model has one serial owner. A command receives detached input and returns a typed message. It never receives a live model reference.</p></div></section>
+<section id="update"><span class="step-label">Step 03</span><h2>Handle one event at a time.</h2><p>Update the model for terminal input or application messages. Resize events should update the dimensions used by the next presentation.</p><figure class="code-panel"><figcaption>Update procedure</figcaption><button class="copy-button" type="button" data-copy>Copy</button><pre><code class="language-ada">procedure Update
+  (Item  : in out Model;
+   Event : Events.Event;
+   Next  : in out Transitions.Transition) is
+begin
+   case Event.Kind is
+      when Events.Application_Message => null;
+      when Events.Terminal_Input =>
+         case Event.Terminal.Kind is
+            when Flyology_TUI.Events.Resize =>
+               Item.Width := Event.Terminal.Width;
+               Item.Height := Event.Terminal.Height;
+            when Flyology_TUI.Events.Interrupt =>
+               Transitions.Quit (Next);
+            when others => null;
+         end case;
+   end case;
+end Update;</code></pre></figure></section>
+<section id="present"><span class="step-label">Step 04</span><h2>Return the complete desired view.</h2><p>Create styled cells with <a data-api="Flyology_TUI.Surfaces"><code>Flyology_TUI.Surfaces</code></a>. Compose them with <a data-api="Flyology_TUI.Layouts"><code>Flyology_TUI.Layouts</code></a>. Return terminal policy and the root surface through <a data-api="Flyology_TUI.Views"><code>Flyology_TUI.Views</code></a>.</p><p>Presentation does not write terminal bytes. The renderer compares the view with the previous frame and emits changed cells.</p></section>
+<section id="run"><span class="step-label">Step 05</span><h2>Instantiate and run the owner.</h2><p><a data-api="Flyology_TUI.Runners"><code>Flyology_TUI.Runners</code></a> supplies bounded input and command orchestration. <a data-api="Flyology_TUI.Backends.POSIX"><code>Flyology_TUI.Backends.POSIX</code></a> owns terminal mode and reports resize events.</p><figure class="code-panel"><figcaption>Runner instance</figcaption><button class="copy-button" type="button" data-copy>Copy</button><pre><code class="language-ada">package Runtime is new Flyology_TUI.Runners
+  (Events      => Events,
+   Transitions => Transitions,
+   Model_Type  => Model,
+   Initialize  => Initialize,
+   Update      => Update,
+   Present     => Present,
+   Execute     => Execute);
+
+State    : Model;
+Terminal : Flyology_TUI.Backends.POSIX.POSIX_Backend;
+
+Runtime.Run (State, Terminal);</code></pre></figure></section>
+<section id="next"><span class="step-label">Next</span><h2>Add layout, input, and skins.</h2><ul><li><a href="application-loop/">Application loop</a> explains commands and ownership.</li><li><a href="layout-and-input/">Layout and input</a> explains snapshots and mouse capture.</li><li><a href="themes-and-skins/">Themes and skins</a> explains render-time appearance.</li><li><a href="testing/">Testing</a> explains the headless backend.</li><li><a href="../components/">Components</a> documents every public component package.</li></ul></section>
+</article></div></main><footer class="site-footer"><div class="footer-inner"><span>Flyology TUI guide</span><div class="footer-links"><a href="../components/">Components</a><a href="../api/">API reference</a></div></div></footer></body></html>

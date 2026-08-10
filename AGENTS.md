@@ -83,6 +83,10 @@
 - Run `./scripts/test.sh`, `alr show`, and `git diff --check` for normal
   changes. The script builds the library, runs the nested suite, and compiles
   both interactive examples.
+- Run `./scripts/build-site.sh` for website, public API, component catalog, or
+  website build changes. It must produce 34 component pages, 136 generated
+  skin previews, and exact GNATdoc links. Follow `website/AGENTS.md` for
+  authored site content.
 - Tests live in the nested `tests` crate and depend on the parent through a path
   pin.
 - Do not commit generated `alire`, `config`, `obj`, `lib`, or test binaries.

@@ -2,5 +2,8 @@
 /lib/
 /alire/
 /config/
+/build/
+/docs/api/
+/docs/gnatdoc/html/
 /examples/bin/
 /examples/obj/

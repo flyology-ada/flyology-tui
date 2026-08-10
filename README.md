@@ -220,6 +220,25 @@ and resizable windows, and dock again by command or by releasing a header at a
 free edge.
 Child surfaces and their input remain application-owned.
 
+## Website and API documentation
+
+The project guide, component catalog, and GNATdoc API are published at
+[tui.flyology.org](https://tui.flyology.org/). The catalog contains one page
+for every public component package. Each page includes generated previews for
+all maintained skins.
+
+Build the complete static site locally:
+
+```sh
+git submodule update --init
+alr install gnatdoc_bin
+./scripts/build-site.sh
+```
+
+The result is written to `build/site`. The build resolves authored API links
+against GNATdoc's generated search index. It fails when a component page,
+GNATdoc target, or skin preview is missing.
+
 ## Platform boundary
 
 The released backend interface is deliberately expressed only in Flyology TUI
