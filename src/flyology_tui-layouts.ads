@@ -43,6 +43,9 @@ package Flyology_TUI.Layouts is
    --  border, padding, and frame shadow. Item.Width and Item.Height are exact
    --  outer extents for this query, including zero; intrinsic dimensions have
    --  no content slot until the caller supplies an explicit block extent.
+   --  @param Item Block whose explicit outer extent defines the local frame.
+   --  @param Chrome Frame structure used by the matching Render overload.
+   --  @return Exact local rectangle available to caller-owned content.
    function Content_Region
      (Item   : Block;
       Chrome : Flyology_TUI.Skins.Frame_Chrome)
@@ -51,6 +54,9 @@ package Flyology_TUI.Layouts is
    --  Return a panel's local content rectangle. Leading titles reserve their
    --  rendered heading and gap; centered titles occupy the border and reserve
    --  no content row. The result excludes the frame shadow.
+   --  @param Item Block whose explicit outer extent defines the local panel.
+   --  @param Chrome Panel structure used by the matching panel renderer.
+   --  @return Exact local rectangle available to caller-owned panel content.
    function Panel_Content_Region
      (Item   : Block;
       Chrome : Flyology_TUI.Skins.Panel_Chrome)
