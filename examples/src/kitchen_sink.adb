@@ -3750,6 +3750,48 @@ procedure Kitchen_Sink is
       return Canvas;
    end Controls_View;
 
+   function Is_Telemetry_Mark
+     (Glyph : Wide_Wide_String) return Boolean
+   is
+     (Glyph'Length = 1
+      and then Wide_Wide_Character'Pos (Glyph (Glyph'First))
+        in 16#2581# .. 16#2588# | 16#2593#);
+
+   function Gradient_Marks
+     (Source   : Flyology_TUI.Surfaces.Surface;
+      Gradient : Flyology_TUI.Components.Gradients.Model)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Result : Flyology_TUI.Surfaces.Surface := Source;
+      Painted : Flyology_TUI.Surfaces.Surface := Source;
+   begin
+      Gradient.Apply (Painted, (0, 0, Painted.Width, Painted.Height));
+      if Result.Width = 0 or else Result.Height = 0 then
+         return Result;
+      end if;
+      for Y in 0 .. Result.Height - 1 loop
+         for X in 0 .. Result.Width - 1 loop
+            declare
+               Cell : constant Flyology_TUI.Surfaces.Cell :=
+                 Result.Element (X, Y);
+               Glyph : constant Wide_Wide_String :=
+                 Text.To_Wide_Wide_String (Cell.Glyph);
+            begin
+               if not Cell.Continuation and then Is_Telemetry_Mark (Glyph) then
+                  declare
+                     Appearance : Flyology_TUI.Styles.Style := Cell.Appearance;
+                  begin
+                     Appearance.Foreground :=
+                       Painted.Element (X, Y).Appearance.Foreground;
+                     Result.Put (X, Y, Glyph, Appearance);
+                  end;
+               end if;
+            end;
+         end loop;
+      end loop;
+      return Result;
+   end Gradient_Marks;
+
    function Telemetry_View
      (Item : Model; Geometry : Layout_Snapshot)
       return Flyology_TUI.Surfaces.Surface
@@ -3760,27 +3802,33 @@ procedure Kitchen_Sink is
           (Geometry.Content.Width, Geometry.Content.Height);
       Work_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
-          ("Work progress", Item.Work.Render (Visual),
+          ("Work progress",
+           Gradient_Marks (Item.Work.Render (Visual), Item.Deep_Gradient),
            Item.Focus = Telemetry_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.First.Width, Geometry.First.Height);
       Spark_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Bounded series",
-           Sparklines.Render
-             (Item.Samples,
-              Inset_Panel (Geometry.Second).Width,
-              Sparklines.Automatic, Visual),
+           Gradient_Marks
+             (Sparklines.Render
+                (Item.Samples,
+                 Inset_Panel (Geometry.Second).Width,
+                 Sparklines.Automatic, Visual),
+              Item.Deep_Gradient),
            False, Charm_Visual.Title, Visual.Muted,
            Geometry.Second.Width, Geometry.Second.Height);
       Aggregate : constant Work_Progress.Fraction :=
         Item.Work.Weighted_Total;
+      Gauge : constant Flyology_TUI.Surfaces.Surface :=
+        Gradient_Marks
+          (Indicators.Gauge (Indicators.Ratio (Aggregate), 20, Visual),
+           Item.Deep_Gradient);
       Summary : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Horizontally
           (Indicators.Badge
              ("bounded", Indicators.Success_Tone, Visual),
            Flyology_TUI.Layouts.Join_Horizontally
-             (Indicators.Gauge
-                (Indicators.Ratio (Aggregate), 20, Visual),
+              (Gauge,
               Indicators.Key_Value
                 ("aggregate",
                  Integer'Wide_Wide_Image
@@ -3806,8 +3854,11 @@ procedure Kitchen_Sink is
            Flyology_TUI.Layouts.Join_Vertically
              (Summary,
               Flyology_TUI.Layouts.Join_Vertically
-                (Item.Work.Render_Segments
-                   (Inset_Panel (Geometry.Third).Width, Visual), Status),
+                (Gradient_Marks
+                   (Item.Work.Render_Segments
+                      (Inset_Panel (Geometry.Third).Width, Visual),
+                    Item.Deep_Gradient),
+                 Status),
               Gap => 1));
       Indicator_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
@@ -4554,6 +4605,7 @@ procedure Kitchen_Sink is
    end Execute;
 
    procedure Run_Responsive_Self_Test is
+      use type Flyology_TUI.Colors.Color_Kind;
       Item : Model;
       Next : Transitions.Transition;
 
@@ -4563,6 +4615,61 @@ procedure Kitchen_Sink is
             raise Program_Error with "responsive self-test: " & Message;
          end if;
       end Assert;
+
+      function Has_Truecolor_Mark
+        (Surface : Flyology_TUI.Surfaces.Surface) return Boolean
+      is
+      begin
+         if Surface.Width = 0 or else Surface.Height = 0 then
+            return False;
+         end if;
+         for Y in 0 .. Surface.Height - 1 loop
+            for X in 0 .. Surface.Width - 1 loop
+               declare
+                  Cell : constant Flyology_TUI.Surfaces.Cell :=
+                    Surface.Element (X, Y);
+               begin
+                  if not Cell.Continuation
+                    and then Is_Telemetry_Mark
+                      (Text.To_Wide_Wide_String (Cell.Glyph))
+                    and then
+                      Cell.Appearance.Foreground.Kind =
+                        Flyology_TUI.Colors.RGB
+                  then
+                     return True;
+                  end if;
+               end;
+            end loop;
+         end loop;
+         return False;
+      end Has_Truecolor_Mark;
+
+      function Has_Neutral_Track
+        (Surface : Flyology_TUI.Surfaces.Surface) return Boolean
+      is
+      begin
+         if Surface.Width = 0 or else Surface.Height = 0 then
+            return False;
+         end if;
+         for Y in 0 .. Surface.Height - 1 loop
+            for X in 0 .. Surface.Width - 1 loop
+               declare
+                  Cell : constant Flyology_TUI.Surfaces.Cell :=
+                    Surface.Element (X, Y);
+               begin
+                  if Text.To_Wide_Wide_String (Cell.Glyph) =
+                       [1 => Wide_Wide_Character'Val (16#2591#)]
+                    and then
+                      Cell.Appearance.Foreground.Kind /=
+                        Flyology_TUI.Colors.RGB
+                  then
+                     return True;
+                  end if;
+               end;
+            end loop;
+         end loop;
+         return False;
+      end Has_Neutral_Track;
 
       function Pointer
         (X, Y   : Natural;
@@ -4828,6 +4935,21 @@ procedure Kitchen_Sink is
             end case;
          end loop;
       end loop;
+
+      Activate_Page (Item, Telemetry_Page);
+      Set_Terminal_Size (Item, 112, 30);
+      Geometry := Layout (Item);
+      declare
+         Telemetry : constant Flyology_TUI.Surfaces.Surface :=
+           Telemetry_View (Item, Geometry);
+      begin
+         Assert
+           (Has_Truecolor_Mark (Telemetry),
+            "telemetry data marks did not retain semantic RGB gradients");
+         Assert
+           (Has_Neutral_Track (Telemetry),
+            "telemetry gradient recolored the neutral progress track");
+      end;
 
       Activate_Page (Item, Basics_Page);
       Set_Terminal_Size (Item, 190, 55);
