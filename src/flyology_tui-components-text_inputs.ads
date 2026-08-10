@@ -13,6 +13,11 @@ package Flyology_TUI.Components.Text_Inputs is
      (Width       : Positive := 30;
       Placeholder : Wide_Wide_String := "") return Model;
 
+   --  Change the retained render width. Zero produces an empty one-row
+   --  viewport while preserving content, cursor, placeholder, and focus.
+   procedure Set_Width (Item : in out Model; Width : Natural);
+   function Width (Item : Model) return Natural;
+
    procedure Set_Value (Item : in out Model; Value : Wide_Wide_String);
    function Value (Item : Model) return Wide_Wide_String;
    procedure Focus (Item : in out Model);
@@ -46,7 +51,7 @@ private
       Content     : Text.Unbounded_Wide_Wide_String;
       Placeholder : Text.Unbounded_Wide_Wide_String;
       Cursor      : Natural := 0;
-      Columns     : Positive := 30;
+      Columns     : Natural := 30;
       Has_Focus   : Boolean := False;
    end record;
 end Flyology_TUI.Components.Text_Inputs;

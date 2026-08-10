@@ -1,0 +1,17 @@
+with "../flyology_tui.gpr";
+project Responsive_Geometry_Tests is
+   for Source_Dirs use ("src");
+   for Object_Dir use "obj/responsive_geometry";
+   for Exec_Dir use "bin";
+   for Create_Missing_Dirs use "True";
+   for Main use ("responsive_geometry_tests.adb");
+
+   package Compiler is
+      for Default_Switches ("Ada") use
+        ("-gnat2022", "-O2", "-gnatwa", "-gnatyM79", "-gnatVa");
+   end Compiler;
+
+   package Binder is
+      for Switches ("Ada") use ("-Es");
+   end Binder;
+end Responsive_Geometry_Tests;

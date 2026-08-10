@@ -30,6 +30,13 @@ package body Flyology_TUI.Components.Progress_Groups is
       return Result;
    end Create;
 
+   procedure Set_Width (Item : in out Model; Width : Natural) is
+   begin
+      Item.Columns := Width;
+   end Set_Width;
+
+   function Width (Item : Model) return Natural is (Item.Columns);
+
    function Index_Of (Item : Model; Id : Item_Id) return Natural is
    begin
       for Index in 1 .. Item.Count loop

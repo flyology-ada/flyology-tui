@@ -3,21 +3,49 @@ package body Flyology_TUI.Components.Lists is
    use type Flyology_TUI.Events.Mouse_Action;
    use type Flyology_TUI.Events.Mouse_Button;
 
+   procedure Check_Size (Width, Height : Natural) is
+   begin
+      if Width /= 0 and then Height > Natural'Last / Width then
+         raise Flyology_TUI.Components.Capacity_Error with
+           "list dimensions exceed addressable cell capacity";
+      end if;
+   end Check_Size;
+
    function Create (Width, Height : Positive) return Model is
-     (Values   => Item_Vectors.Empty_Vector,
-      Selected => 0,
-      Offset   => 0,
-      Columns  => Width,
-      Rows     => Height);
+   begin
+      Check_Size (Width, Height);
+      return
+        (Values   => Item_Vectors.Empty_Vector,
+         Selected => 0,
+         Offset   => 0,
+         Columns  => Width,
+         Rows     => Height);
+   end Create;
 
    procedure Keep_Visible (Item : in out Model) is
    begin
-      if Item.Selected < Item.Offset then
+      if Item.Rows = 0 then
          Item.Offset := Item.Selected;
-      elsif Item.Selected >= Item.Offset + Item.Rows then
+      elsif Item.Selected < Item.Offset then
+         Item.Offset := Item.Selected;
+      elsif Item.Selected - Item.Offset >= Item.Rows then
          Item.Offset := Item.Selected - Item.Rows + 1;
       end if;
    end Keep_Visible;
+
+   procedure Set_Size
+     (Item : in out Model;
+      Width, Height : Natural)
+   is
+   begin
+      Check_Size (Width, Height);
+      Item.Columns := Width;
+      Item.Rows := Height;
+      Keep_Visible (Item);
+   end Set_Size;
+
+   function Width (Item : Model) return Natural is (Item.Columns);
+   function Height (Item : Model) return Natural is (Item.Rows);
 
    procedure Set_Items (Item : in out Model; Values : Item_Array) is
    begin
@@ -53,8 +81,12 @@ package body Flyology_TUI.Components.Lists is
            and then Event.Mouse.Button = Flyology_TUI.Events.Left_Button
          then
             declare
-               Index : constant Natural := Item.Offset + Event.Mouse.Y;
+               Index : Natural;
             begin
+               if Event.Mouse.Y > Natural'Last - Item.Offset then
+                  return;
+               end if;
+               Index := Item.Offset + Event.Mouse.Y;
                if Index < Natural (Item.Values.Length) then
                   Item.Selected := Index;
                   Keep_Visible (Item);
@@ -119,6 +151,9 @@ package body Flyology_TUI.Components.Lists is
       Result : Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Surfaces.Create (Item.Columns, Item.Rows);
    begin
+      if Item.Columns = 0 or else Item.Rows = 0 then
+         return Result;
+      end if;
       for Row in 0 .. Item.Rows - 1 loop
          declare
             Index : constant Natural := Item.Offset + Row;

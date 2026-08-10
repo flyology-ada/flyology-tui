@@ -40,6 +40,10 @@ package Flyology_TUI.Components.Progress_Groups is
 
    function Create (Width : Natural := 40) return Model;
 
+   --  Change the retained row width without changing entries or selection.
+   procedure Set_Width (Item : in out Model; Width : Natural);
+   function Width (Item : Model) return Natural;
+
    procedure Add_Determinate
      (Item          : in out Model;
       Id            : Item_Id;

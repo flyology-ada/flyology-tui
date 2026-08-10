@@ -14,6 +14,13 @@ package body Flyology_TUI.Components.Text_Inputs is
        Columns     => Width,
        Has_Focus   => False);
 
+   procedure Set_Width (Item : in out Model; Width : Natural) is
+   begin
+      Item.Columns := Width;
+   end Set_Width;
+
+   function Width (Item : Model) return Natural is (Item.Columns);
+
    procedure Set_Value (Item : in out Model; Value : Wide_Wide_String) is
    begin
       Item.Content := Text.To_Unbounded_Wide_Wide_String (Value);
@@ -254,6 +261,9 @@ package body Flyology_TUI.Components.Text_Inputs is
    function Cursor_Column (Item : Model) return Natural is
       First, Result : Natural;
    begin
+      if Item.Columns = 0 then
+         return 0;
+      end if;
       Visible_Range (Item, First, Result);
       return Natural'Min (Result, Item.Columns - 1);
    end Cursor_Column;

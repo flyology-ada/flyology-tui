@@ -8,6 +8,13 @@ package body Flyology_TUI.Components.Progress is
       Show_Value : Boolean := True) return Model
    is (Current => 0.0, Columns => Width, Show_Value => Show_Value);
 
+   procedure Set_Width (Item : in out Model; Width : Natural) is
+   begin
+      Item.Columns := Width;
+   end Set_Width;
+
+   function Width (Item : Model) return Natural is (Item.Columns);
+
    procedure Set (Item : in out Model; Value : Fraction) is
    begin
       Item.Current := Value;

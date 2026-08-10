@@ -22,6 +22,12 @@ package Flyology_TUI.Components.Forms is
      (Fields      : Field_Array;
       Input_Width : Positive := 30) return Model;
 
+   --  Resize every field input atomically. Zero is a valid clipped width.
+   procedure Set_Input_Width
+     (Item : in out Model;
+      Width : Natural);
+   function Input_Width (Item : Model) return Natural;
+
    --  Mouse coordinates are relative to Render. A local left-click selects a
    --  field and places its text cursor when the input cells are clicked.
    procedure Update
@@ -75,5 +81,6 @@ private
       Active       : Natural := 0;
       Was_Submitted : Boolean := False;
       Was_Cancelled : Boolean := False;
+      Input_Columns : Natural := 30;
    end record;
 end Flyology_TUI.Components.Forms;

@@ -17,6 +17,19 @@ package body Flyology_TUI.Components.Forms is
       return Result;
    end Label_Width;
 
+   procedure Check_Input_Width (Item : Model; Width : Natural) is
+      Labels : constant Natural := Label_Width (Item);
+   begin
+      if not Item.Fields.Is_Empty
+        and then
+          (Labels > Natural'Last - 2
+           or else Width > Natural'Last - Labels - 2)
+      then
+         raise Flyology_TUI.Components.Capacity_Error with
+           "form width exceeds addressable cell capacity";
+      end if;
+   end Check_Input_Width;
+
    function Create
      (Fields      : Field_Array;
       Input_Width : Positive := 30) return Model
@@ -38,8 +51,25 @@ package body Flyology_TUI.Components.Forms is
       if not Result.Fields.Is_Empty then
          Result.Fields.Reference (0).Input.Focus;
       end if;
+      Result.Input_Columns := Input_Width;
+      Check_Input_Width (Result, Input_Width);
       return Result;
    end Create;
+
+   procedure Set_Input_Width
+     (Item : in out Model;
+      Width : Natural)
+   is
+   begin
+      Check_Input_Width (Item, Width);
+      for Value of Item.Fields loop
+         Value.Input.Set_Width (Width);
+      end loop;
+      Item.Input_Columns := Width;
+   end Set_Input_Width;
+
+   function Input_Width (Item : Model) return Natural is
+     (Item.Input_Columns);
 
    procedure Set_Active (Item : in out Model; Index : Natural) is
    begin
@@ -69,7 +99,7 @@ package body Flyology_TUI.Components.Forms is
             declare
                Input_X : constant Natural := Label_Width (Item) + 2;
                Input_Width : constant Natural :=
-                 Item.Fields.Element (Item.Active).Input.Render.Width;
+                 Item.Fields.Element (Item.Active).Input.Width;
             begin
                if Event.Mouse.X >= Input_X
                  and then Event.Mouse.X - Input_X < Input_Width
@@ -161,7 +191,7 @@ package body Flyology_TUI.Components.Forms is
       end if;
       declare
          Input_Width : constant Natural :=
-           Item.Fields.First_Element.Input.Render.Width;
+           Item.Input_Columns;
          Result : Flyology_TUI.Surfaces.Surface :=
            Flyology_TUI.Surfaces.Create
              (Labels + 2 + Input_Width,

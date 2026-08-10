@@ -11,6 +11,10 @@ package Flyology_TUI.Components.Progress is
      (Width      : Positive := 40;
       Show_Value : Boolean := True) return Model;
 
+   --  Change the retained render width. Zero renders an empty one-row view.
+   procedure Set_Width (Item : in out Model; Width : Natural);
+   function Width (Item : Model) return Natural;
+
    procedure Set (Item : in out Model; Value : Fraction);
    function Value (Item : Model) return Fraction;
 
@@ -29,7 +33,7 @@ package Flyology_TUI.Components.Progress is
 private
    type Model is tagged record
       Current    : Fraction := 0.0;
-      Columns    : Positive := 40;
+      Columns    : Natural := 40;
       Show_Value : Boolean := True;
    end record;
 end Flyology_TUI.Components.Progress;

@@ -15,6 +15,14 @@ package Flyology_TUI.Components.Lists is
    type Model is tagged private;
 
    function Create (Width, Height : Positive) return Model;
+   --  Replace both retained dimensions atomically. Zero dimensions are valid.
+   --  A product which cannot be represented raises Capacity_Error and leaves
+   --  dimensions, selection, and scroll offset unchanged.
+   procedure Set_Size
+     (Item : in out Model;
+      Width, Height : Natural);
+   function Width (Item : Model) return Natural;
+   function Height (Item : Model) return Natural;
    procedure Set_Items (Item : in out Model; Values : Item_Array);
    --  Mouse coordinates are relative to the surface returned by Render.
    --  Left-click selects a visible row; the wheel moves the selection.
@@ -50,7 +58,7 @@ private
       Values   : Item_Vectors.Vector;
       Selected : Natural := 0;
       Offset   : Natural := 0;
-      Columns  : Positive := 1;
-      Rows     : Positive := 1;
+      Columns  : Natural := 1;
+      Rows     : Natural := 1;
    end record;
 end Flyology_TUI.Components.Lists;
