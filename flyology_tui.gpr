@@ -28,4 +28,8 @@ project Flyology_Tui is
       for Artifacts (".") use ("share");
    end Install;
 
+   package Documentation is
+      for Resources_Dir ("html") use "docs/gnatdoc/html";
+   end Documentation;
+
 end Flyology_Tui;
