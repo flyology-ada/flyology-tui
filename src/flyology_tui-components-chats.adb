@@ -1,3 +1,5 @@
+with Flyology_TUI.Glyphs;
+
 package body Flyology_TUI.Components.Chats is
    use type Flyology_TUI.Events.Key_Kind;
    use type Flyology_TUI.Events.Mouse_Action;
@@ -11,6 +13,11 @@ package body Flyology_TUI.Components.Chats is
      (Theme : Flyology_TUI.Themes.Theme) return Appearance is
      (Transcript => Theme.Primary,
       Header     => Theme.Muted,
+      User_Bubble => Theme.Input,
+      Assistant_Bubble => Theme.Primary,
+      System_Bubble => Theme.Muted,
+      Tool_Bubble => Theme.Success,
+      Notice_Bubble => Theme.Error,
       User       => Theme.Input,
       Assistant  => Theme.Primary,
       System     => Theme.Muted,
@@ -88,6 +95,9 @@ package body Flyology_TUI.Components.Chats is
          return 0;
       end if;
       for Index in 0 .. Natural (Item.Messages.Length) - 1 loop
+         if Index > 0 then
+            Result := Safe_Add (Result, Item.Options.Message_Gap);
+         end if;
          Result := Safe_Add
            (Result,
             Block_Height
@@ -171,6 +181,10 @@ package body Flyology_TUI.Components.Chats is
 
       if not New_Messages.Is_Empty then
          for Index in 0 .. Natural (New_Messages.Length) - 1 loop
+            if Index > 0 then
+               New_Total := Safe_Add
+                 (New_Total, Item.Options.Message_Gap);
+            end if;
             New_Total := Safe_Add
               (New_Total,
                Block_Height
@@ -209,6 +223,15 @@ package body Flyology_TUI.Components.Chats is
       return Result;
    end Create;
 
+   procedure Set_Layout
+     (Item : in out Model; Options : Layout_Options) is
+   begin
+      Item.Options := Options;
+      Normalize_Viewport (Item);
+   end Set_Layout;
+
+   function Layout (Item : Model) return Layout_Options is (Item.Options);
+
    procedure Reconcile_Measurements
      (Item         : in out Model;
       Measurements : Measurement_Array)
@@ -244,6 +267,9 @@ package body Flyology_TUI.Components.Chats is
               (Measurements (Positive (Position)).Body_Height);
             New_Actions.Append
               (Measurements (Positive (Position)).Action_Height);
+            if Index > 0 then
+               Total := Safe_Add (Total, Item.Options.Message_Gap);
+            end if;
             Total := Safe_Add
               (Total,
                Block_Height
@@ -468,8 +494,19 @@ package body Flyology_TUI.Components.Chats is
                         Item.First_Cell,
                         View_End,
                         Width));
+                  Result.Bubble_Regions.Append
+                    (Flyology_TUI.Geometry.Rectangle'
+                       (X      => 0,
+                        Y      => Signed_Difference
+                          (Block_Start, Item.First_Cell),
+                        Width  => Width,
+                        Height => Block_End - Block_Start));
                end if;
                Block_Start := Block_End;
+               if Index < Natural (Item.Messages.Length) - 1 then
+                  Block_Start := Safe_Add
+                    (Block_Start, Item.Options.Message_Gap);
+               end if;
             end;
          end loop;
       end if;
@@ -594,6 +631,57 @@ package body Flyology_TUI.Components.Chats is
       end case;
    end Header_Style;
 
+   function Bubble_Style
+     (Value     : Message;
+      Selected  : Boolean;
+      Focused   : Boolean;
+      Has_Focus : Boolean;
+      Look      : Appearance) return Flyology_TUI.Styles.Style is
+   begin
+      if Selected then
+         return Look.Selected;
+      elsif Focused and then Has_Focus then
+         return Look.Focused;
+      end if;
+      return
+        (case Value.Role is
+            when User      => Look.User_Bubble,
+            when Assistant => Look.Assistant_Bubble,
+            when System    => Look.System_Bubble,
+            when Tool      => Look.Tool_Bubble,
+            when Notice    => Look.Notice_Bubble);
+   end Bubble_Style;
+
+   function Header_Text
+     (Value : Message) return Wide_Wide_String
+   is
+      State : constant Wide_Wide_String := Delivery_Label (Value.Delivery);
+   begin
+      return Symbol (16#258D#) & " " & Author_Label (Value.Author)
+        & " " & Symbol (16#00B7#) & " " & Role_Label (Value.Role)
+        & (if State'Length = 0
+           then ""
+           else " " & Symbol (16#00B7#) & " " & State);
+   end Header_Text;
+
+   function Message_Width_Limit
+     (Width : Natural; Options : Layout_Options) return Natural
+   is
+      Percent_Width : Natural;
+   begin
+      if Width = 0 then
+         return 0;
+      end if;
+      Percent_Width :=
+        (Width / 100) * Options.Maximum_Percentage
+        + (Width mod 100) * Options.Maximum_Percentage / 100;
+      return Natural'Max
+        (1,
+         Natural'Min
+           (Width,
+            Natural'Min (Options.Maximum_Message_Width, Percent_Width)));
+   end Message_Width_Limit;
+
    function Present_Core
      (Item      : Model;
       Bodies    : Body_Array;
@@ -624,32 +712,92 @@ package body Flyology_TUI.Components.Chats is
                Focused   => Item.Focused = Index,
                Has_Focus => Has_Focus,
                Look      => Look);
+            Label : constant Wide_Wide_String := Header_Text (Value);
+            Limit : constant Natural :=
+              Message_Width_Limit (Width, Item.Options);
+            Desired : constant Natural := Natural'Max
+              (Flyology_TUI.Glyphs.Width_Of (Label),
+               Natural'Max
+                 (Bodies (Positive (Body_Position)).Content.Width,
+                  Bodies (Positive (Body_Position)).Actions.Width));
+            Padded : constant Natural :=
+              (if Item.Options.Horizontal_Padding
+                    > Natural'Last / 2
+               or else Desired
+                 > Natural'Last - 2 * Item.Options.Horizontal_Padding
+               then Natural'Last
+               else Desired + 2 * Item.Options.Horizontal_Padding);
+            Bubble_Width : constant Natural :=
+              (if Item.Options = Dense_Layout
+               then Width else Natural'Min (Limit, Padded));
+            Inner_X : constant Natural := Natural'Min
+              (Item.Options.Horizontal_Padding, Bubble_Width);
+            Inner_Width : constant Natural :=
+              Bubble_Width - Natural'Min
+                (Bubble_Width, 2 * Natural'Min
+                   (Item.Options.Horizontal_Padding, Bubble_Width / 2));
+            Bubble_X : constant Natural :=
+              (if Value.Role = User and then Width > Bubble_Width
+               then Width - Bubble_Width else 0);
+            Bubble_Y : constant Integer :=
+              Result.Layout_Value.Header_Regions.Element (Visible - 1).Y;
+            Bubble_Height : constant Natural := Block_Height
+              (Item.Body_Heights.Element (Index - 1),
+               Item.Action_Heights.Element (Index - 1));
+            Bubble : Flyology_TUI.Surfaces.Surface :=
+              Flyology_TUI.Surfaces.Create
+                (Bubble_Width, Bubble_Height,
+                 Bubble_Style
+                   (Value, Item.Selected = Index, Item.Focused = Index,
+                    Has_Focus, Look));
             Header : Flyology_TUI.Surfaces.Surface :=
-              Flyology_TUI.Surfaces.Create (Width, 1, Look.Header);
-            State : constant Wide_Wide_String :=
-              Delivery_Label (Value.Delivery);
+              Flyology_TUI.Surfaces.Create
+                (Inner_Width, 1, Look.Header);
+            Body_Region : Flyology_TUI.Geometry.Rectangle :=
+              Result.Layout_Value.Body_Regions.Element (Visible - 1);
+            Action_Region : Flyology_TUI.Geometry.Rectangle :=
+              Result.Layout_Value.Action_Regions.Element (Visible - 1);
+            Visible_Bubble_Y : constant Integer := Integer'Max (0, Bubble_Y);
+            Visible_Bubble_End : constant Integer := Integer'Min
+              (Integer (Item.Rows), Bubble_Y + Integer (Bubble_Height));
          begin
             Header.Write
-              (0, 0,
-               Symbol (16#258D#) & " " & Author_Label (Value.Author)
-                 & " " & Symbol (16#00B7#) & " " & Role_Label (Value.Role)
-                 & (if State'Length = 0
-                    then ""
-                    else " " & Symbol (16#00B7#) & " " & State),
-               Chosen);
-            Result.Frame_Value.Overlay_Clipped
-              (Header,
-               0,
-               Result.Layout_Value.Header_Regions.Element
-                 (Visible - 1).Y);
-            Result.Frame_Value.Overlay_Clipped
+              (0, 0, Label, Chosen);
+            Bubble.Overlay_Clipped (Header, Integer (Inner_X), 0);
+            Bubble.Overlay_Clipped
               (Bodies (Positive (Body_Position)).Content,
-               0,
-               Result.Layout_Value.Body_Origins.Element (Visible - 1));
-            Result.Frame_Value.Overlay_Clipped
+               Integer (Inner_X), 1, Transparent_Spaces => True);
+            Bubble.Overlay_Clipped
               (Bodies (Positive (Body_Position)).Actions,
-               0,
-               Result.Layout_Value.Action_Origins.Element (Visible - 1));
+               Integer (Inner_X),
+               Integer (1 + Item.Body_Heights.Element (Index - 1)),
+               Transparent_Spaces => True);
+            Result.Frame_Value.Overlay_Clipped
+              (Bubble, Integer (Bubble_X), Bubble_Y);
+            Result.Layout_Value.Header_Regions.Replace_Element
+              (Visible - 1,
+               (X => Integer (Bubble_X), Y => Bubble_Y,
+                Width => Bubble_Width, Height => 1));
+            Body_Region.X := Integer (Bubble_X + Inner_X);
+            Body_Region.Width := Natural'Min
+              (Inner_Width,
+               Bodies (Positive (Body_Position)).Content.Width);
+            Result.Layout_Value.Body_Regions.Replace_Element
+              (Visible - 1, Body_Region);
+            Action_Region.X := Integer (Bubble_X + Inner_X);
+            Action_Region.Width := Natural'Min
+              (Inner_Width,
+               Bodies (Positive (Body_Position)).Actions.Width);
+            Result.Layout_Value.Action_Regions.Replace_Element
+              (Visible - 1, Action_Region);
+            Result.Layout_Value.Bubble_Regions.Replace_Element
+              (Visible - 1,
+               (X => Integer (Bubble_X), Y => Visible_Bubble_Y,
+                Width => Bubble_Width,
+                Height =>
+                  (if Visible_Bubble_End > Visible_Bubble_Y
+                   then Natural (Visible_Bubble_End - Visible_Bubble_Y)
+                   else 0)));
          end;
       end loop;
 
@@ -737,6 +885,11 @@ package body Flyology_TUI.Components.Chats is
    function Has_Message
      (Item : Presentation; Id : Message_Id) return Boolean is
      (Presentation_Index (Item, Id) > 0);
+   function Bubble_Region
+     (Item : Presentation; Id : Message_Id)
+      return Flyology_TUI.Geometry.Rectangle is
+     (Item.Layout_Value.Bubble_Regions.Element
+        (Presentation_Index (Item, Id) - 1));
    function Header_Region
      (Item : Presentation; Id : Message_Id)
       return Flyology_TUI.Geometry.Rectangle is
@@ -775,6 +928,7 @@ package body Flyology_TUI.Components.Chats is
                Block_Height
                  (Item.Body_Heights.Element (Index),
                   Item.Action_Heights.Element (Index)));
+            Result := Safe_Add (Result, Item.Options.Message_Gap);
          end loop;
       end if;
       return Result;

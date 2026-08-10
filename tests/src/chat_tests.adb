@@ -32,6 +32,7 @@ procedure Chat_Tests is
 
    use type Chats.Delivery_State;
    use type Chats.Message_Role;
+   use type Chats.Layout_Options;
    use type Flyology_TUI.Styles.Style;
 
    Empty_Messages : constant Chats.Message_Array (1 .. 0) :=
@@ -695,6 +696,51 @@ procedure Chat_Tests is
       end;
    end Test_Clipped_Child_Regions;
 
+   procedure Test_Conversational_Bubbles is
+      Item : Chats.Model := Chats.Create
+        ((Message (One, Alice, Chats.User),
+          Message (Two, Ada_Bot, Chats.Assistant)), 8);
+      No_Actions : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (0, 0);
+   begin
+      Assert
+        (Item.Layout = Chats.Dense_Layout,
+         "chat did not preserve dense layout compatibility");
+      Item.Set_Layout (Chats.Conversational_Layout);
+      Item.Reconcile_Measurements (((One, 1, 0), (Two, 1, 0)));
+      declare
+         Plan : constant Chats.Layout_Plan := Item.Plan (40);
+         Bodies : constant Chats.Body_Array :=
+           ((One, Painted (12, 1, "hello"), No_Actions),
+            (Two, Painted (18, 1, "hello from Ada"), No_Actions));
+         View : constant Chats.Presentation := Item.Present
+           (Bodies, 40, Flyology_TUI.Themes.Charm, Has_Focus => True);
+         User_Bubble : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Bubble_Region (View, One);
+         Assistant_Bubble : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Bubble_Region (View, Two);
+         User_Body : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Body_Region (View, One);
+      begin
+         Assert
+           (Item.Content_Height = 5
+            and then Chats.Height (Plan) = 8,
+            "conversational message gap changed frame geometry incorrectly");
+         Assert
+           (User_Bubble.X > Assistant_Bubble.X
+            and then Assistant_Bubble.X = 0
+            and then User_Bubble.Width <= 28
+            and then Assistant_Bubble.Width <= 28,
+            "role-based bubble alignment or readable width was lost");
+         Assert
+           (User_Body.X = User_Bubble.X + 1
+            and then User_Body.Width = 12
+            and then User_Bubble.Y + Integer (User_Bubble.Height)
+              < Assistant_Bubble.Y,
+            "bubble padding, body containment, or message spacing was lost");
+      end;
+   end Test_Conversational_Bubbles;
+
 begin
    Test_Empty_Tiny_And_Theme;
    Test_Virtualization_And_Mixed_Heights;
@@ -704,5 +750,6 @@ begin
    Test_Keyboard_Mouse_And_Pass_Through;
    Test_Navigation_Result_Accuracy;
    Test_Clipped_Child_Regions;
+   Test_Conversational_Bubbles;
    Ada.Text_IO.Put_Line ("chat tests passed");
 end Chat_Tests;

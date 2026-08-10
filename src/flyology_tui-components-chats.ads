@@ -41,6 +41,12 @@ package Flyology_TUI.Components.Chats is
    type Appearance is record
       Transcript : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Header     : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      User_Bubble : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Assistant_Bubble : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
+      System_Bubble : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Tool_Bubble : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Notice_Bubble : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       User       : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Assistant  : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       System     : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
@@ -58,11 +64,37 @@ package Flyology_TUI.Components.Chats is
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance;
 
+   subtype Message_Width_Percentage is Positive range 1 .. 100;
+   type Layout_Options is record
+      Maximum_Message_Width : Natural := Natural'Last;
+      Maximum_Percentage    : Message_Width_Percentage := 100;
+      Horizontal_Padding    : Natural := 0;
+      Message_Gap           : Natural := 0;
+   end record;
+
+   Dense_Layout : constant Layout_Options :=
+     (Maximum_Message_Width => Natural'Last,
+      Maximum_Percentage    => 100,
+      Horizontal_Padding    => 0,
+      Message_Gap           => 0);
+   Conversational_Layout : constant Layout_Options :=
+     (Maximum_Message_Width => 72,
+      Maximum_Percentage    => 72,
+      Horizontal_Padding    => 1,
+      Message_Gap           => 1);
+
    type Model is tagged private;
 
    function Create
      (Messages      : Message_Array;
       Viewport_Rows : Natural := 12) return Model;
+
+   --  Layout geometry is independent from Appearance and remains under the
+   --  serial application owner's control. Dense_Layout preserves the original
+   --  full-width transcript; Conversational_Layout adds readable bubbles.
+   procedure Set_Layout
+     (Item : in out Model; Options : Layout_Options);
+   function Layout (Item : Model) return Layout_Options;
 
    --  Replacement validates capacity and duplicate ids before mutation.
    --  Measurements, focus, and selection follow surviving stable ids.
@@ -190,6 +222,10 @@ package Flyology_TUI.Components.Chats is
    function Layout (Item : Presentation) return Layout_Plan;
    function Has_Message
      (Item : Presentation; Id : Message_Id) return Boolean;
+   function Bubble_Region
+     (Item : Presentation; Id : Message_Id)
+      return Flyology_TUI.Geometry.Rectangle
+     with Pre => Has_Message (Item, Id);
    function Header_Region
      (Item : Presentation; Id : Message_Id)
       return Flyology_TUI.Geometry.Rectangle
@@ -252,6 +288,7 @@ private
       Rows           : Natural := 12;
       Follow_Tail    : Boolean := True;
       Unread         : Natural := 0;
+      Options        : Layout_Options := Dense_Layout;
    end record;
 
    type Layout_Plan is record
@@ -264,6 +301,7 @@ private
       Header_Regions    : Region_Vectors.Vector;
       Body_Regions      : Region_Vectors.Vector;
       Action_Regions    : Region_Vectors.Vector;
+      Bubble_Regions    : Region_Vectors.Vector;
       Body_Origins      : Integer_Vectors.Vector;
       Action_Origins    : Integer_Vectors.Vector;
    end record;
