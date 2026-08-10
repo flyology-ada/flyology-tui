@@ -20,6 +20,7 @@ procedure Markdown_Components_Tests is
    use type Flyology_TUI.Components.Markdown_Viewers.Action_Kind;
    use type Flyology_TUI.Components.Markdown_Viewers.Link_Id;
    use type Flyology_TUI.Components.Markdown_Viewers.Parsing_State;
+   use type Flyology_TUI.Colors.Color;
    use type Text.Unbounded_Wide_Wide_String;
    use type Flyology_TUI.Styles.Style;
 
@@ -483,6 +484,148 @@ procedure Markdown_Components_Tests is
       end;
    end Test_Editor_Composition;
 
+   procedure Test_Source_Annotations is
+      Item : Editors.Model := Editors.Create
+        (500, 20, 8, 1_000, 8, 60, 12, Editors.Source_Only);
+      Look : constant Editors.Appearance :=
+        Editors.From_Theme (Flyology_TUI.Themes.Default);
+      Annotations : Editors.Annotation_Appearance :=
+        (others => Flyology_TUI.Styles.Default);
+      Success : Boolean;
+
+      function Cell_With
+        (Surface    : Flyology_TUI.Surfaces.Surface;
+         Row        : Natural;
+         Glyph      : Wide_Wide_String;
+         Occurrence : Positive := 1) return Flyology_TUI.Surfaces.Cell
+      is
+         Seen : Natural := 0;
+      begin
+         for X in 0 .. Surface.Width - 1 loop
+            if Text.To_Wide_Wide_String (Surface.Element (X, Row).Glyph)
+              = Glyph
+            then
+               Seen := Seen + 1;
+               if Seen = Occurrence then
+                  return Surface.Element (X, Row);
+               end if;
+            end if;
+         end loop;
+         raise Program_Error with "expected annotated glyph was not rendered";
+      end Cell_With;
+
+      function Has_Bold_Cell
+        (Surface : Flyology_TUI.Surfaces.Surface;
+         Row     : Natural) return Boolean
+      is
+      begin
+         for X in 0 .. Surface.Width - 1 loop
+            if Surface.Element (X, Row).Appearance.Bold then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Has_Bold_Cell;
+   begin
+      Item.Try_Set_Source
+        ("# Heading" & LF
+         & "**bold** *italics* `code`" & LF
+         & "- [x] task [link](target)" & LF
+         & "> quoted" & LF
+         & "---" & LF
+         & "```ada" & LF
+         & "body" & LF
+         & "```",
+         Success);
+      Assert (Success, "Markdown annotation source was rejected");
+
+      Annotations (Editors.Marker).Foreground :=
+        Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Red);
+      Annotations (Editors.Heading).Bold := True;
+      Annotations (Editors.Strong).Bold := True;
+      Annotations (Editors.Emphasis).Italic := True;
+      Annotations (Editors.Code).Foreground :=
+        Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Green);
+      Annotations (Editors.Link).Underline := True;
+      Annotations (Editors.Task_Marker).Strikethrough := True;
+      Annotations (Editors.Quote).Faint := True;
+      Annotations (Editors.Rule).Reverse_Video := True;
+
+      declare
+         Plain : constant Flyology_TUI.Surfaces.Surface :=
+           Item.Render_Source (Look);
+         Styled : constant Flyology_TUI.Surfaces.Surface :=
+           Item.Render_Source (Look, Annotations);
+         Themed : constant Flyology_TUI.Surfaces.Surface :=
+           Item.Render_Source (Flyology_TUI.Themes.Charm);
+      begin
+         Assert
+           (not Cell_With (Plain, 0, "H").Appearance.Bold,
+            "plain explicit source rendering gained implicit annotations");
+         Assert
+           (Cell_With (Styled, 0, "#").Appearance.Foreground =
+              Annotations (Editors.Marker).Foreground,
+            "Markdown marker annotation was not rendered");
+         Assert (Cell_With (Styled, 0, "H").Appearance.Bold,
+                 "Markdown heading annotation was not rendered");
+         Assert (Cell_With (Styled, 1, "b").Appearance.Bold,
+                 "Markdown strong annotation was not rendered");
+         Assert (Cell_With (Styled, 1, "i").Appearance.Italic,
+                 "Markdown emphasis annotation was not rendered");
+         Assert
+           (Cell_With (Styled, 1, "c", 2).Appearance.Foreground =
+              Annotations (Editors.Code).Foreground,
+            "Markdown inline-code annotation was not rendered");
+         Assert (Cell_With (Styled, 2, "x").Appearance.Strikethrough,
+                 "Markdown task annotation was not rendered");
+         Assert (Cell_With (Styled, 2, "l").Appearance.Underline,
+                 "Markdown link annotation was not rendered");
+         Assert (Cell_With (Styled, 3, "q").Appearance.Faint,
+                 "Markdown quote annotation was not rendered");
+         Assert (Cell_With (Styled, 4, "-").Appearance.Reverse_Video,
+                 "Markdown rule annotation was not rendered");
+         Assert
+           (Cell_With (Styled, 6, "b").Appearance.Foreground =
+              Annotations (Editors.Code).Foreground,
+            "Markdown fenced-code annotation was not rendered");
+         Assert
+           (Cell_With (Themed, 0, "H").Appearance.Bold,
+            "theme source rendering omitted semantic annotations");
+      end;
+
+      Item.Focus_Source;
+      declare
+         Press : constant Flyology_TUI.Components.Interactions.Update_Result :=
+           Item.Handle_Source
+             (Mouse (3, 0, Flyology_TUI.Events.Mouse_Click));
+         Release : constant
+           Flyology_TUI.Components.Interactions.Update_Result :=
+             Item.Handle_Source
+               (Mouse (3, 0, Flyology_TUI.Events.Mouse_Release));
+         pragma Unreferenced (Press, Release);
+      begin
+         null;
+      end;
+      declare
+         Focused : constant Flyology_TUI.Surfaces.Surface :=
+           Item.Render_Source (Look, Annotations);
+      begin
+         Assert
+           (Focused.Element (3, 0).Appearance = Look.Source.Cursor,
+            "Markdown annotation overwrote the source cursor style");
+      end;
+      Item.Blur;
+      Item.Set_Size (10, 12);
+      declare
+         Wrapped : constant Flyology_TUI.Surfaces.Surface :=
+           Item.Render_Source (Look, Annotations);
+      begin
+         Assert
+           (Has_Bold_Cell (Wrapped, 1),
+            "wrapped Markdown heading lost its source annotation");
+      end;
+   end Test_Source_Annotations;
+
 begin
    Test_Parsing_And_Rendering;
    Test_Unsupported_And_Malformed;
@@ -491,5 +634,6 @@ begin
    Test_Bounds_Read_Only_And_Unicode;
    Test_Resize_Scroll_And_Stale_Layout;
    Test_Editor_Composition;
+   Test_Source_Annotations;
    Ada.Text_IO.Put_Line ("markdown component tests passed");
 end Markdown_Components_Tests;

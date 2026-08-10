@@ -30,7 +30,8 @@ Flyology-aware adapter can be added separately.
 - tables, trees, breadcrumbs, lists, forms, viewports, and help;
 - spinners, progress groups, indicators, sparklines, and scrollbars;
 - split panes, jointly resizable panel groups, and movable/resizable windows;
-- bounded text areas, syntax and Markdown editors/viewers, streaming text, and
+- bounded text areas, syntax and semantically annotated Markdown
+  editors/viewers, streaming text, and
   heterogeneous chat transcripts with caller-owned composers;
 - sRGB- and linear-light-interpolated foreground/background gradients;
 - interactive counter and responsive kitchen-sink examples plus a nested

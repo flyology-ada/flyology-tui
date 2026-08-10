@@ -4,6 +4,7 @@ with Flyology_TUI.Components.Text_Areas;
 with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Mouse;
+with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
 with Flyology_TUI.Themes;
 
@@ -22,6 +23,16 @@ package Flyology_TUI.Components.Markdown_Editors is
 
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance;
+
+   type Annotation_Kind is
+     (Marker, Heading, Strong, Emphasis, Code, Link, Task_Marker, Quote, Rule);
+   type Annotation_Appearance is
+     array (Annotation_Kind) of Flyology_TUI.Styles.Style;
+
+   --  Semantic source annotations are borrowed while rendering and never
+   --  alter the editable Markdown text, cursor, selection, or preview model.
+   function Annotations_From_Theme
+     (Theme : Flyology_TUI.Themes.Theme) return Annotation_Appearance;
 
    --  Source editing delegates to Text_Areas. Preview parsing and link state
    --  delegate to Markdown_Viewers. This model only synchronizes those two
@@ -109,6 +120,11 @@ package Flyology_TUI.Components.Markdown_Editors is
 
    function Render_Source
      (Item : Model; Look : Appearance)
+      return Flyology_TUI.Surfaces.Surface;
+   function Render_Source
+     (Item        : Model;
+      Look        : Appearance;
+      Annotations : Annotation_Appearance)
       return Flyology_TUI.Surfaces.Surface;
    function Present_Preview
      (Item        : Model;
