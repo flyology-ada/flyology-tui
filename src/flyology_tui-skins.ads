@@ -252,13 +252,16 @@ private
          Background => Turbo_Dialog, Bold => True, others => <>),
       Focused =>
         (Foreground => Turbo_White,
-         Background => Turbo_Blue, Bold => True, others => <>),
+         Background => Turbo_Blue, Bold => True, Underline => True,
+         Reverse_Video => True, others => <>),
       Interaction =>
         (Foreground => Turbo_Red,
-         Background => Turbo_Dialog, others => <>),
+         Background => Turbo_Dialog, Bold => True, Underline => True,
+         others => <>),
       Selected =>
-        (Foreground => Turbo_White,
-         Background => Turbo_Blue, Bold => True, others => <>),
+        (Foreground => Turbo_Desktop,
+         Background => Turbo_Black, Bold => True, Reverse_Video => True,
+         others => <>),
       Border =>
         (Foreground => Turbo_White,
          Background => Turbo_Blue, others => <>),
@@ -278,8 +281,9 @@ private
         (Foreground => Turbo_Black,
          Background => Turbo_Green, Bold => True, others => <>),
       Button_Focused =>
-        (Foreground => Turbo_Black,
-         Background => Turbo_Green, Bold => True, others => <>),
+        (Foreground => Turbo_White,
+         Background => Turbo_Blue, Bold => True, Underline => True,
+         Reverse_Video => True, others => <>),
       Button_Pressed =>
         (Foreground => Turbo_Yellow,
          Background => Turbo_Blue, Bold => True, others => <>),
@@ -362,11 +366,12 @@ private
         (Foreground => Turbo_Black, Background => Turbo_Desktop,
          others => <>),
       Control_Focused =>
-        (Foreground => Turbo_Yellow, Background => Turbo_Desktop,
+        (Foreground => Turbo_White, Background => Turbo_Blue,
+         Bold => True, Underline => True, Reverse_Video => True,
          others => <>),
       Control_Selected =>
-        (Foreground => Turbo_Black, Background => Turbo_Green,
-         others => <>),
+        (Foreground => Turbo_Green, Background => Turbo_Black,
+         Bold => True, Reverse_Video => True, others => <>),
       Panel => (Frame => Double_Frame, Title => Centered_Title),
       Window =>
         (Frame => Single_Frame, Focused_Frame => Double_Frame,

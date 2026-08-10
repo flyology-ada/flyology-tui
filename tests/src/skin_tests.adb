@@ -85,12 +85,35 @@ procedure Skin_Tests is
          and then Turbo.Palette.Title.Foreground =
            Flyology_TUI.Colors.True_Color (0, 0, 168)
          and then Turbo.Palette.Button_Focused.Foreground =
-           Flyology_TUI.Colors.True_Color (0, 0, 0)
+           Flyology_TUI.Colors.True_Color (255, 255, 255)
          and then Turbo.Palette.Button_Focused.Background =
-           Flyology_TUI.Colors.True_Color (0, 168, 0)
+           Flyology_TUI.Colors.True_Color (0, 0, 168)
          and then Turbo.Panel.Frame.Shadow_X = 1
          and then Turbo.Panel.Frame.Shadow_Y = 1,
          "Turbo preset lost its later Borland surface hierarchy");
+      Assert
+        (Turbo.Palette.Focused.Reverse_Video
+         and then Turbo.Palette.Focused.Underline
+         and then Turbo.Palette.Selected.Reverse_Video
+         and then Turbo.Palette.Interaction.Underline
+         and then Turbo.Palette.Button_Focused.Reverse_Video
+         and then Turbo.Control_Focused.Reverse_Video
+         and then Turbo.Control_Selected.Reverse_Video,
+         "Turbo focus and selection depend on color alone");
+      Assert
+        (Flyology_TUI.Color_Profiles.Adapt
+           (Turbo.Palette.Focused.Foreground,
+            Flyology_TUI.Color_Profiles.ANSI_16) /=
+         Flyology_TUI.Color_Profiles.Adapt
+           (Turbo.Palette.Focused.Background,
+            Flyology_TUI.Color_Profiles.ANSI_16)
+         and then Flyology_TUI.Color_Profiles.Adapt
+           (Turbo.Palette.Selected.Foreground,
+            Flyology_TUI.Color_Profiles.ANSI_16) /=
+         Flyology_TUI.Color_Profiles.Adapt
+           (Turbo.Palette.Selected.Background,
+            Flyology_TUI.Color_Profiles.ANSI_16),
+         "Turbo focus or selection collapsed under ANSI16");
       Assert
         (Flyology_TUI.Themes.To_Theme (Turbo.Palette).Primary =
            Turbo.Palette.Content,
@@ -194,7 +217,8 @@ procedure Skin_Tests is
         (Glyph (Frame, 0, 0) = " "
          and then Glyph (Frame, 4, 0) = " "
          and then Frame.Element (1, 0).Appearance.Background =
-           Flyology_TUI.Colors.True_Color (0, 168, 0)
+           Flyology_TUI.Colors.True_Color (0, 0, 168)
+         and then Frame.Element (1, 0).Appearance.Reverse_Video
          and then Frame.Element (7, 0).Appearance.Foreground =
            Flyology_TUI.Colors.True_Color (168, 0, 0),
          "skin tab active command field was not rendered");
@@ -249,10 +273,11 @@ procedure Skin_Tests is
            (Normal.Width = 7 and then Normal.Height = 2
             and then Glyph (Normal, 2, 0) = "O"
             and then Normal.Element (2, 0).Appearance.Background =
-              Flyology_TUI.Colors.True_Color (0, 168, 0)
+              Flyology_TUI.Colors.True_Color (0, 0, 168)
+            and then Normal.Element (2, 0).Appearance.Reverse_Video
             and then Normal.Element (6, 1).Appearance.Background =
               Flyology_TUI.Colors.True_Color (0, 0, 0),
-            "skin button lost its green body or hard drop shadow");
+            "skin button lost its focused body or hard drop shadow");
       end;
       Button.Update
         (Flyology_TUI.Mouse.Local_Event'
@@ -277,7 +302,8 @@ procedure Skin_Tests is
          Assert
            (Glyph (Choice, 1, 0) = "X"
             and then Choice.Element (1, 0).Appearance.Background =
-              Flyology_TUI.Colors.True_Color (0, 168, 168),
+              Flyology_TUI.Colors.True_Color (0, 0, 168)
+            and then Choice.Element (1, 0).Appearance.Reverse_Video,
             "skin choice did not use its late Turbo field grammar");
       end;
       Bar.Configure (Total => 20, Page_Size => 5, First => 3);
