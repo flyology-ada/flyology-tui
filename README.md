@@ -18,17 +18,21 @@ Flyology-aware adapter can be added separately.
 - incremental UTF-8, CSI, SGR mouse, focus, and bracketed-paste input parsing;
 - typed mouse regions, terminal-to-local hit testing, and component interaction;
 - terminal-oriented grapheme clusters and one- or two-cell glyph widths;
-- typed RGB, indexed, and ANSI colors plus text attributes;
+- typed RGB, indexed, and ANSI colors, negotiated color profiles, palette
+  fallback, and text attributes;
 - optional semantic themes with a configurable Charm-inspired preset;
 - clipped cell surfaces, compositing, borders, padding, alignment, and joins;
 - stateful cell diffing and declarative ANSI/DEC terminal modes;
 - raw-mode POSIX lifecycle, resize observation, and interruptible waits;
 - deterministic headless backend;
-- buttons, checks, radios, selectors, dropdowns, tabs, and accordions;
+- buttons, checks, radios, selectors, dropdowns, tabs, accordions, and
+  application-composed menubars;
 - tables, trees, breadcrumbs, lists, forms, viewports, and help;
 - spinners, progress groups, indicators, sparklines, and scrollbars;
 - split panes, jointly resizable panel groups, and movable/resizable windows;
-- bounded text areas, syntax editors, streaming text, and chat transcripts;
+- bounded text areas, syntax and Markdown editors/viewers, streaming text, and
+  heterogeneous chat transcripts with caller-owned composers;
+- sRGB- and linear-light-interpolated foreground/background gradients;
 - interactive counter and responsive kitchen-sink examples plus a nested
   behavioral test crate.
 
@@ -82,6 +86,13 @@ Runtime.Run (State, Terminal);
 The model is deliberately mutable. The invariant is unidirectional ownership:
 only the runner calls initialize, update, and present. Commands never receive a
 live model reference.
+
+That serial Elm-style owner remains canonical when an application uses other
+implementation models. Pure renderers can stay stateless, synchronous retained
+controllers can own bounded local state, and external tasks or actors can do
+work concurrently. External workers may post only detached typed snapshots
+into the serial inbox; they never own, mutate, or render live component UI
+state.
 
 ## Layers
 
@@ -144,18 +155,27 @@ alr exec -- ./examples/bin/counter
 alr exec -- ./examples/bin/kitchen_sink
 ```
 
+The kitchen sink accepts an explicit color policy when comparing terminal
+fallbacks:
+
+```sh
+./examples/bin/kitchen_sink --color=auto
+./examples/bin/kitchen_sink --color=mono
+./examples/bin/kitchen_sink --color=ansi16
+./examples/bin/kitchen_sink --color=ansi256
+./examples/bin/kitchen_sink --color=truecolor
+```
+
 The examples and test suite are nested Alire crates pinned to the parent
 library, keeping their build state outside the published dependency set. The
 kitchen sink occupies the complete terminal, recomputes one layout snapshot on
 every resize, and uses that snapshot for rendering, mouse routing, and cursor
-projection. Narrow terminals stack component regions instead of retaining the
-wide two-column arrangement.
-
-## Explicit backlog
-
-- bounded Markdown editor and viewer components;
-- terminal color-capability negotiation and graceful palette fallback;
-- application-composed menubars and menu routing.
+projection. Its dedicated Markdown, Menus, Chat, Panels, Windows, and Color
+pages use centered, page-specific bounds. Narrow terminals stack or simplify
+regions instead of retaining a sparse wide arrangement. The Chat page includes
+a persistent multiline composer and Send action. The Color page identifies the
+active profile, compares palette fallbacks, and renders identical stops with
+sRGB-channel and linear-light interpolation.
 
 ## Platform boundary
 

@@ -21,6 +21,15 @@ An unexpected worker exception becomes `Runner_Error` after orderly cleanup.
 `Programs` remains a task-free kernel for applications that want to supply a
 different orchestration policy.
 
+The serial Elm-style owner is the canonical state model, not a requirement
+that every reusable unit have the same internal shape. Pure renderers may
+remain stateless, and synchronous retained controllers may own their bounded
+local interaction state. An alternative task or actor orchestration layer may
+perform external work only by posting a detached, typed snapshot into the
+serial inbox. It must never retain, mutate, or render live component or
+application UI state. The runner owner remains the only authority that applies
+the message and presents the resulting model.
+
 ## Presentation pipeline
 
 The view pipeline has typed boundaries:
@@ -144,13 +153,39 @@ start tasks, execute commands, or retain a backend. The current set includes:
 - telemetry: spinners, progress and progress groups, immediate indicators,
   sparklines, scrollbars, and streaming text;
 - composition: boxes, split panes, panel groups with shared boundaries, and
-  movable/resizable windows;
+  movable/resizable windows, plus application-composed menubars;
 - editing and conversation: grapheme-aware text inputs and text areas,
-  caller-budgeted syntax editors, and chat transcripts.
+  caller-budgeted syntax and Markdown editors/viewers, streaming text, and
+  chat transcripts.
 
 Applications decide how component state fits into their model and route events
 explicitly. This keeps focus, validation, and command policy visible in the
 application update function.
+
+Chat owns bounded transcript metadata, viewport state, measurement snapshots,
+and message presentation. Message bodies and actions are heterogeneous
+caller-owned surfaces, so an embedded tool result is measured and routed by
+the application that owns it. A composer is likewise a caller-owned text area
+and button: the application routes both through the same immutable geometry
+snapshot, rejects or accepts submission, and posts stable message values back
+to the transcript. The component neither starts a streaming task nor retains
+an application transport.
+
+## Color profiles and gradients
+
+The POSIX backend resolves an automatic or forced color policy to monochrome,
+ANSI 16, ANSI 256, or truecolor. Rendering maps typed colors to the effective
+profile; component and theme models remain independent of terminal escape
+encoding. This keeps graceful fallback at the backend boundary and allows
+headless tests to assert profiles deterministically.
+
+Gradient components interpolate bounded color stops either per sRGB channel or
+in linear light, then apply the result to foreground, background, or both.
+Interpolation and direction are explicit model values. The kitchen sink Color
+page labels the effective profile and fallback samples, compares identical
+stops in both interpolation modes, and demonstrates foreground/background
+application. Its `--color=auto|mono|ansi16|ansi256|truecolor` option makes each
+policy directly inspectable.
 
 ## Responsive application layout
 
@@ -161,12 +196,17 @@ call, hit testing and coordinate localization, and cursor projection. This
 prevents a resize from producing a frame with one geometry while input or the
 cursor still uses another.
 
-The kitchen sink demonstrates the contract. Its wide layout uses paired
-columns at 56 cells or wider; below 56 cells it stacks regions vertically.
-The header and page tabs occupy the first two rows, help occupies the final row
-when at least three rows exist, and page content receives the bounded remainder.
-On each resize it updates the size-bearing component models before presenting.
-Components whose content has an intrinsic width, such as a button or text input, remain
+The kitchen sink demonstrates the contract with page-specific centered frames.
+Card galleries use two columns from 72 cells and stack below that breakpoint;
+each page has a readable maximum width and a bounded content height rather than
+stretching sparse cards into terminal quadrants. Dedicated Markdown, Menus,
+Chat, Panels, Windows, and Color pages may simplify their own regions at narrow
+sizes. The Windows page is a bounded desktop; split-pane boundary interaction
+belongs to Panels. The tab strip keeps the active page visible when every tab
+does not fit. The header and tabs occupy the leading rows, help occupies the
+final row when it fits, and page content receives the bounded remainder. On
+each resize the application updates size-bearing component models before
+presenting. Components whose content has an intrinsic width remain
 application-owned children and are clipped by their assigned responsive
 region.
 
