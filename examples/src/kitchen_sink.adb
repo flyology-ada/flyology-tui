@@ -477,6 +477,8 @@ procedure Kitchen_Sink is
       Accordion_Origin : Flyology_TUI.Geometry.Point;
       Text_Area_Origin, Syntax_Origin : Flyology_TUI.Geometry.Point;
       Chat_Origin, Windows_Origin : Flyology_TUI.Geometry.Point;
+      Chat_Frame, Markdown_Frame, Menu_Frame, Gradient_Frame :
+        Flyology_TUI.Geometry.Rectangle;
       Window_Workspace : Flyology_TUI.Geometry.Rectangle;
       Vertical_Scroll_Origin : Flyology_TUI.Geometry.Point;
       Horizontal_Scroll_Origin : Flyology_TUI.Geometry.Point;
@@ -484,6 +486,8 @@ procedure Kitchen_Sink is
       Vertical_Group_Origin : Flyology_TUI.Geometry.Point;
       Horizontal_Group_Region : Flyology_TUI.Geometry.Rectangle;
       Vertical_Group_Region : Flyology_TUI.Geometry.Rectangle;
+      Split_Region : Flyology_TUI.Geometry.Rectangle;
+      Split_Origin : Flyology_TUI.Geometry.Point;
    end record;
 
    type Model is limited record
@@ -704,9 +708,10 @@ procedure Kitchen_Sink is
    function Layout (Item : Model) return Layout_Snapshot is
       Result : Layout_Snapshot;
       Content_Height : Natural;
-      Gap : Natural;
-      Left_Width, Right_Width : Natural;
-      Top_Height, Bottom_Height : Natural;
+      Gap : Natural := 1;
+      Frame : Flyology_TUI.Geometry.Rectangle;
+      Left_Width, Right_Width : Natural := 0;
+      Top_Height, Bottom_Height : Natural := 0;
 
       function Fits
         (Region : Flyology_TUI.Geometry.Rectangle) return Boolean is
@@ -716,6 +721,72 @@ procedure Kitchen_Sink is
          and then Natural (Region.Y) <= Result.Height
          and then Region.Width <= Result.Width - Natural (Region.X)
          and then Region.Height <= Result.Height - Natural (Region.Y));
+
+      function Centered
+        (Maximum_Width : Natural;
+         Maximum_Height : Natural := Natural'Last)
+         return Flyology_TUI.Geometry.Rectangle
+      is
+         Width : constant Natural :=
+           Natural'Min (Result.Content.Width, Maximum_Width);
+         Height : constant Natural :=
+           Natural'Min (Result.Content.Height, Maximum_Height);
+      begin
+         return
+           (X => Result.Content.X
+              + Integer ((Result.Content.Width - Width) / 2),
+            Y => Result.Content.Y,
+            Width => Width,
+            Height => Height);
+      end Centered;
+
+      procedure Four_Cards (Maximum_Width, Maximum_Height : Natural) is
+         Available : Natural;
+         First_Height, Second_Height, Third_Height, Fourth_Height : Natural;
+      begin
+         Frame := Centered (Maximum_Width, Maximum_Height);
+         Gap :=
+           (if Frame.Width >= 72 then 2
+            elsif Frame.Width > 0 then 1 else 0);
+         if Frame.Width >= 72 then
+            Left_Width := (Frame.Width - Gap) / 2;
+            Right_Width := Frame.Width - Gap - Left_Width;
+            Top_Height := (Frame.Height - Natural'Min (Gap, Frame.Height)) / 2;
+            Bottom_Height := Frame.Height
+              - Natural'Min (Gap, Frame.Height) - Top_Height;
+            Result.First := (Frame.X, Frame.Y, Left_Width, Top_Height);
+            Result.Second :=
+              (Frame.X + Integer (Left_Width + Gap), Frame.Y,
+               Right_Width, Top_Height);
+            Result.Third :=
+              (Frame.X, Frame.Y + Integer (Top_Height + Gap),
+               Left_Width, Bottom_Height);
+            Result.Fourth :=
+              (Frame.X + Integer (Left_Width + Gap),
+               Frame.Y + Integer (Top_Height + Gap),
+               Right_Width, Bottom_Height);
+         else
+            Available := Frame.Height - Natural'Min (3 * Gap, Frame.Height);
+            First_Height := Available / 4;
+            Second_Height := Available / 4;
+            Third_Height := Available / 4;
+            Fourth_Height := Available - First_Height - Second_Height
+              - Third_Height;
+            Result.First := (Frame.X, Frame.Y, Frame.Width, First_Height);
+            Result.Second :=
+              (Frame.X, Frame.Y + Integer (First_Height + Gap),
+               Frame.Width, Second_Height);
+            Result.Third :=
+              (Frame.X,
+               Frame.Y + Integer (First_Height + Second_Height + 2 * Gap),
+               Frame.Width, Third_Height);
+            Result.Fourth :=
+              (Frame.X,
+               Frame.Y + Integer
+                 (First_Height + Second_Height + Third_Height + 3 * Gap),
+               Frame.Width, Fourth_Height);
+         end if;
+      end Four_Cards;
 
    begin
       Result.Width := Item.Terminal_Width;
@@ -738,73 +809,139 @@ procedure Kitchen_Sink is
         (X => 0, Y => Integer (Natural'Min (2, Result.Height)),
          Width => Result.Width, Height => Content_Height);
 
-      Gap := (if Result.Width > 1 then 1 else 0);
-      if Result.Width >= 56 then
-         Left_Width := (Result.Width - Gap) / 2;
-         Right_Width := Result.Width - Gap - Left_Width;
-      else
-         Left_Width := Result.Width;
-         Right_Width := 0;
-      end if;
-      Top_Height := Content_Height / 2;
-      Bottom_Height := Content_Height - Top_Height;
-      Result.Left_Full :=
-        (X => 0, Y => Result.Content.Y,
-         Width => Left_Width, Height => Content_Height);
-      Result.Right_Full :=
-        (X => Integer
-           ((if Right_Width > 0 then Left_Width + Gap else Result.Width)),
-         Y => Result.Content.Y,
-         Width => Right_Width, Height => Content_Height);
-      Result.Top_Full :=
-        (X => 0, Y => Result.Content.Y,
-         Width => Result.Width, Height => Top_Height);
-      Result.Bottom_Full :=
-        (X => 0, Y => Result.Content.Y + Integer (Top_Height),
-         Width => Result.Width, Height => Bottom_Height);
-
-      if Right_Width > 0 then
-         Result.First :=
-           (X => 0, Y => Result.Content.Y,
-            Width => Left_Width, Height => Top_Height);
-         Result.Second :=
-           (X => Integer (Left_Width + Gap), Y => Result.Content.Y,
-            Width => Right_Width, Height => Top_Height);
-         Result.Third :=
-           (X => 0, Y => Result.Content.Y + Integer (Top_Height),
-            Width => Left_Width, Height => Bottom_Height);
-         Result.Fourth :=
-           (X => Integer (Left_Width + Gap),
-            Y => Result.Content.Y + Integer (Top_Height),
-            Width => Right_Width, Height => Bottom_Height);
-      else
-         declare
-            First_Height : constant Natural := Content_Height / 4;
-            Second_Height : constant Natural := Content_Height / 4;
-            Third_Height : constant Natural := Content_Height / 4;
-            Fourth_Height : constant Natural :=
-              Content_Height - First_Height - Second_Height - Third_Height;
-         begin
-            Result.First :=
-              (X => 0, Y => Result.Content.Y, Width => Result.Width,
-               Height => First_Height);
+      case Current_Page (Item) is
+         when Basics_Page | Controls_Page =>
+            Four_Cards (112, Natural'Min (23, Result.Content.Height));
+         when Navigation_Page =>
+            Frame := Centered (120, Natural'Min (32, Result.Content.Height));
+            Gap := (if Frame.Height > 2 then 1 else 0);
+            Top_Height := Natural'Min (6, Frame.Height);
+            declare
+               After_Top : constant Natural := Frame.Height - Top_Height;
+               First_Gap : constant Natural := Natural'Min (Gap, After_Top);
+               Available : constant Natural := After_Top - First_Gap;
+               Second_Gap : constant Natural :=
+                 Natural'Min (Gap, Available);
+               Usable : constant Natural := Available - Second_Gap;
+               Middle_Height : constant Natural :=
+                 (if Usable > 9 then Usable - 9 else Usable / 2);
+               Middle_Y : constant Integer :=
+                 Frame.Y + Integer (Top_Height + First_Gap);
+            begin
+               Bottom_Height := Usable - Middle_Height;
+               if Frame.Width >= 72 then
+                  Gap := Natural'Min (2, Frame.Width);
+                  Left_Width := (Frame.Width - Gap) / 2;
+                  Right_Width := Frame.Width - Gap - Left_Width;
+                  Result.Second :=
+                    (Frame.X, Middle_Y, Left_Width, Middle_Height);
+                  Result.Third :=
+                    (Frame.X + Integer (Left_Width + Gap), Middle_Y,
+                     Right_Width, Middle_Height);
+               else
+                  Result.Second :=
+                    (Frame.X, Middle_Y, Frame.Width, Middle_Height / 2);
+                  Result.Third :=
+                    (Frame.X, Middle_Y + Integer (Middle_Height / 2),
+                     Frame.Width, Middle_Height - Middle_Height / 2);
+               end if;
+               Result.First := (Frame.X, Frame.Y, Frame.Width, Top_Height);
+               Result.Fourth :=
+                 (Frame.X,
+                  Middle_Y + Integer (Middle_Height + Second_Gap),
+                  Frame.Width, Bottom_Height);
+            end;
+         when Editors_Page =>
+            Frame := Centered (132);
+            Gap :=
+              (if Frame.Width > 0 and then Frame.Height > 0 then 1 else 0);
+            Bottom_Height :=
+              (Frame.Height - Natural'Min (Gap, Frame.Height)) / 2;
+            Top_Height :=
+              Frame.Height - Natural'Min (Gap, Frame.Height)
+                - Bottom_Height;
+            if Frame.Width >= 96 then
+               Left_Width := (Frame.Width - 2) / 2;
+               Right_Width := Frame.Width - 2 - Left_Width;
+               Result.Left_Full := (Frame.X, Frame.Y, Left_Width, Top_Height);
+               Result.Right_Full :=
+                 (Frame.X + Integer (Left_Width + 2), Frame.Y,
+                  Right_Width, Top_Height);
+            else
+               Result.Left_Full :=
+                 (Frame.X, Frame.Y, Frame.Width, Top_Height / 2);
+               Result.Right_Full :=
+                 (Frame.X, Frame.Y + Integer (Top_Height / 2),
+                  Frame.Width, Top_Height - Top_Height / 2);
+            end if;
+            Result.Markdown_Frame :=
+              (Frame.X, Frame.Y + Integer (Top_Height + Gap),
+               Frame.Width, Bottom_Height);
+            Result.First := Result.Left_Full;
+            Result.Second := Result.Right_Full;
+            Result.Third := Result.Markdown_Frame;
+         when Telemetry_Page =>
+            Frame := Centered (120, Natural'Min (28, Result.Content.Height));
+            Gap := (if Frame.Height > 0 then 1 else 0);
+            Top_Height := Natural'Min (13, Frame.Height);
+            Gap := Natural'Min (Gap, Frame.Height - Top_Height);
+            Bottom_Height := Frame.Height - Top_Height - Gap;
+            Left_Width := (Frame.Width - Natural'Min (2, Frame.Width)) / 2;
+            Right_Width :=
+              Frame.Width - Natural'Min (2, Frame.Width) - Left_Width;
+            Result.First := (Frame.X, Frame.Y, Left_Width, Top_Height);
             Result.Second :=
-              (X => 0,
-               Y => Result.Content.Y + Integer (First_Height),
-               Width => Result.Width, Height => Second_Height);
+              (Frame.X + Integer (Left_Width + Natural'Min (2, Frame.Width)),
+               Frame.Y, Right_Width, Top_Height);
             Result.Third :=
-              (X => 0,
-               Y => Result.Content.Y
-                 + Integer (First_Height + Second_Height),
-               Width => Result.Width, Height => Third_Height);
-            Result.Fourth :=
-              (X => 0,
-               Y => Integer
-                 (Natural (Result.Content.Y)
-                  + First_Height + Second_Height + Third_Height),
-               Width => Result.Width, Height => Fourth_Height);
-         end;
+              (Frame.X, Frame.Y + Integer (Top_Height + Gap),
+               Frame.Width, Bottom_Height);
+            Result.Gradient_Frame := Result.Second;
+         when Chat_Page =>
+            Result.Chat_Frame := Centered (96);
+            Frame := Result.Chat_Frame;
+         when Panels_Page =>
+            Frame := Centered (132);
+            Gap := (if Frame.Height > 0 then 1 else 0);
+            declare
+               Used_Gap : constant Natural := Natural'Min (Gap, Frame.Height);
+            begin
+               Top_Height := (Frame.Height - Used_Gap) / 2;
+               Bottom_Height := Frame.Height - Used_Gap - Top_Height;
+            end;
+            Result.Horizontal_Group_Region :=
+              (Frame.X, Frame.Y, Frame.Width, Top_Height);
+            if Frame.Width >= 72 then
+               Left_Width := (Frame.Width - 2) / 2;
+               Result.Vertical_Group_Region :=
+                 (Frame.X, Frame.Y + Integer (Top_Height + Gap),
+                  Left_Width, Bottom_Height);
+               Result.Split_Region :=
+                 (Frame.X + Integer (Left_Width + 2),
+                  Frame.Y + Integer (Top_Height + Gap),
+                  Frame.Width - Left_Width - 2, Bottom_Height);
+            else
+               Result.Vertical_Group_Region :=
+                 (Frame.X, Frame.Y + Integer (Top_Height + Gap),
+                  Frame.Width, Bottom_Height / 2);
+               Result.Split_Region :=
+                 (Frame.X,
+                  Frame.Y + Integer (Top_Height + Gap + Bottom_Height / 2),
+                  Frame.Width, Bottom_Height - Bottom_Height / 2);
+            end if;
+         when Windows_Page =>
+            Frame := Centered (120, Natural'Min (34, Result.Content.Height));
+            Result.Window_Workspace :=
+              (X => 0, Y => 0, Width => Frame.Width, Height => Frame.Height);
+            Result.Windows_Origin := Origin (Frame);
+      end case;
+
+      if Current_Page (Item) /= Editors_Page then
+         Result.Left_Full := Result.First;
+         Result.Right_Full := Result.Second;
       end if;
+      Result.Top_Full := Result.First;
+      Result.Bottom_Full := Result.Third;
 
       Result.Text_Content := Inset_Panel (Result.First);
       Result.Text_Content.Height :=
@@ -830,20 +967,28 @@ procedure Kitchen_Sink is
          Result.Text_Area_Origin := Origin (Inset_Panel (Result.Top_Full));
          Result.Syntax_Origin := Origin (Inset_Panel (Result.Bottom_Full));
       end if;
-      Result.Chat_Origin := Origin (Result.Content);
-      Result.Windows_Origin := Origin (Result.Content);
-      Result.Window_Workspace :=
-        (X => 0, Y => 0,
-         Width => Result.Content.Width, Height => Result.Content.Height);
+      if Result.Chat_Frame.Width > 0 then
+         Result.Chat_Origin := Origin (Result.Chat_Frame);
+      end if;
+      if Result.Window_Workspace.Width = 0 then
+         Result.Window_Workspace :=
+           (X => 0, Y => 0,
+            Width => Result.Content.Width, Height => Result.Content.Height);
+         Result.Windows_Origin := Origin (Result.Content);
+      end if;
       Result.Vertical_Scroll_Origin :=
         (X => Integer'Max (0, Integer (Result.Content.Width) - 1), Y => 0);
       Result.Horizontal_Scroll_Origin :=
         (X => 0,
          Y => Integer'Max (0, Integer (Result.Content.Height) - 1));
-      Result.Horizontal_Group_Region := Result.Top_Full;
-      Result.Vertical_Group_Region := Result.Bottom_Full;
-      Result.Horizontal_Group_Origin := Origin (Result.Top_Full);
-      Result.Vertical_Group_Origin := Origin (Result.Bottom_Full);
+      if Result.Horizontal_Group_Region.Width = 0 then
+         Result.Horizontal_Group_Region := Result.Top_Full;
+         Result.Vertical_Group_Region := Result.Bottom_Full;
+      end if;
+      Result.Horizontal_Group_Origin :=
+        Origin (Result.Horizontal_Group_Region);
+      Result.Vertical_Group_Origin := Origin (Result.Vertical_Group_Region);
+      Result.Split_Origin := Origin (Result.Split_Region);
       if not Fits (Result.Header)
         or else not Fits (Result.Tabs)
         or else not Fits (Result.Help)
@@ -905,14 +1050,16 @@ procedure Kitchen_Sink is
       Item.Tree.Set_Viewport_Rows
         ((if Geometry.Second.Height > 5
           then Geometry.Second.Height - 5 else 0));
-      Item.Chat.Set_Viewport_Rows (Geometry.Content.Height);
+      Item.Chat.Set_Viewport_Rows
+        ((if Geometry.Chat_Frame.Height > 6
+          then Geometry.Chat_Frame.Height - 6 else 0));
       Result := Item.Chat_Stream.Resize
         (Stream_Width, Stream_Height);
       if Result = Chat_Streams.Rejected_Geometry then
          raise Program_Error with "responsive chat geometry was rejected";
       end if;
       Item.Split.Resize
-        (Geometry.Window_Workspace.Width, Geometry.Window_Workspace.Height);
+        (Geometry.Split_Region.Width, Geometry.Split_Region.Height);
       Item.Vertical_Scroll.Resize (Geometry.Window_Workspace.Height);
       Item.Horizontal_Scroll.Resize (Geometry.Window_Workspace.Width);
       Item.Vertical_Scroll.Configure
@@ -1281,8 +1428,7 @@ procedure Kitchen_Sink is
                Item.Top_Window := Window_B;
                Item.Window_B_Model.Focus;
             else
-               Item.Focus := Split_Field;
-               Item.Split.Focus;
+               Item.Focus := Page_Navigation;
             end if;
          when Split_Field => Item.Split.Focus;
          when Vertical_Scroll_Field => Item.Vertical_Scroll.Focus;
@@ -1543,6 +1689,7 @@ procedure Kitchen_Sink is
       when Panels_Page =>
          if Item.Focus not in
            Page_Navigation | Horizontal_Group_Field | Vertical_Group_Field
+             | Split_Field
          then
             Activate (Item, Horizontal_Group_Field);
             return;
@@ -1551,9 +1698,10 @@ procedure Kitchen_Sink is
             Activate
               (Item,
                (case Item.Focus is
-                   when Page_Navigation => Vertical_Group_Field,
+                   when Page_Navigation => Split_Field,
                    when Horizontal_Group_Field => Page_Navigation,
                    when Vertical_Group_Field => Horizontal_Group_Field,
+                   when Split_Field => Vertical_Group_Field,
                    when others => Horizontal_Group_Field));
          else
             Activate
@@ -1561,43 +1709,21 @@ procedure Kitchen_Sink is
                (case Item.Focus is
                    when Page_Navigation => Horizontal_Group_Field,
                    when Horizontal_Group_Field => Vertical_Group_Field,
-                   when Vertical_Group_Field => Page_Navigation,
+                   when Vertical_Group_Field => Split_Field,
+                   when Split_Field => Page_Navigation,
                    when others => Horizontal_Group_Field));
          end if;
       when Windows_Page =>
-         if Item.Focus not in
-           Page_Navigation | Window_Field .. Horizontal_Scroll_Field
-         then
-            Activate (Item, Window_Field);
+         if Item.Focus not in Page_Navigation | Window_Field then
+            Activate
+              (Item,
+               (if Has_Visible_Window then Window_Field else Page_Navigation));
             return;
          end if;
-         if Backwards then
-            Activate
-              (Item,
-               (case Item.Focus is
-                   when Page_Navigation        => Horizontal_Scroll_Field,
-                   when Window_Field           => Page_Navigation,
-                   when Split_Field            =>
-                     (if Has_Visible_Window
-                      then Window_Field
-                      else Page_Navigation),
-                   when Vertical_Scroll_Field  => Split_Field,
-                   when Horizontal_Scroll_Field => Vertical_Scroll_Field,
-                   when others                 => Window_Field));
-         else
-            Activate
-              (Item,
-               (case Item.Focus is
-                   when Page_Navigation         =>
-                     (if Has_Visible_Window
-                      then Window_Field
-                      else Split_Field),
-                   when Window_Field            => Split_Field,
-                   when Split_Field             => Vertical_Scroll_Field,
-                   when Vertical_Scroll_Field   => Horizontal_Scroll_Field,
-                   when Horizontal_Scroll_Field => Page_Navigation,
-                   when others                  => Window_Field));
-         end if;
+         Activate
+           (Item,
+            (if Item.Focus = Page_Navigation and then Has_Visible_Window
+             then Window_Field else Page_Navigation));
       end case;
    end Next_Focus;
 
@@ -1639,14 +1765,16 @@ procedure Kitchen_Sink is
          when Panels_Page =>
             if Item.Focus not in
               Page_Navigation | Horizontal_Group_Field | Vertical_Group_Field
+                | Split_Field
             then
                Activate (Item, Horizontal_Group_Field);
             end if;
          when Windows_Page =>
-            if Item.Focus not in
-              Page_Navigation | Window_Field .. Horizontal_Scroll_Field
-            then
-               Activate (Item, Window_Field);
+            if Item.Focus not in Page_Navigation | Window_Field then
+               Activate
+                 (Item,
+                  (if Item.Window_A_Visible or else Item.Window_B_Visible
+                   then Window_Field else Page_Navigation));
             end if;
       end case;
    end Normalize_Focus;
@@ -1713,7 +1841,7 @@ procedure Kitchen_Sink is
             Item.Top_Window := Window_B;
             Activate (Item, Window_Field);
          else
-            Activate (Item, Split_Field);
+            Activate (Item, Page_Navigation);
          end if;
       end if;
    end Apply_Window_Result;
@@ -1729,10 +1857,19 @@ procedure Kitchen_Sink is
       case Item.Capture is
          when No_Capture => return;
          when Page_Capture =>
-            Result := Item.Pages.Handle
-              (Flyology_TUI.Mouse.Relative (Event, Origin (Geometry.Tabs)));
-            Apply_Result (Item, Page_Navigation, Page_Capture, Result);
-            Normalize_Focus (Item);
+            declare
+               Previous : constant Page_Id := Current_Page (Item);
+            begin
+               Result := Item.Pages.Handle
+                 (Flyology_TUI.Mouse.Relative
+                    (Event, Origin (Geometry.Tabs)));
+               Apply_Result (Item, Page_Navigation, Page_Capture, Result);
+               Normalize_Focus (Item);
+               if Current_Page (Item) /= Previous then
+                  Resize_Components (Item, Layout (Item));
+                  Reconcile_Chat (Item);
+               end if;
+            end;
          when Button_Capture =>
             Result := Item.Button.Handle
               (Flyology_TUI.Mouse.Relative (Event, Geometry.Button_Origin));
@@ -1806,8 +1943,8 @@ procedure Kitchen_Sink is
               (Page_Event, Geometry.Window_Workspace);
             Apply_Window_Result (Item, Window_B, Result);
          when Split_Capture =>
-            Page_Event :=
-              Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
+            Page_Event := Flyology_TUI.Mouse.Relative
+              (Event, Geometry.Split_Origin);
             Result := Item.Split.Handle (Page_Event);
             Apply_Result (Item, Split_Field, Split_Capture, Result);
          when Vertical_Scroll_Capture =>
@@ -2135,39 +2272,6 @@ procedure Kitchen_Sink is
       then
          Route_Window
            ((if Item.Top_Window = Window_A then Window_B else Window_A));
-         return;
-      end if;
-
-      if Flyology_TUI.Geometry.Contains
-        ((X => Geometry.Vertical_Scroll_Origin.X,
-          Y => Geometry.Vertical_Scroll_Origin.Y,
-          Width => 1,
-          Height => Geometry.Window_Workspace.Height),
-         Point)
-      then
-         Result := Item.Vertical_Scroll.Handle
-           (Flyology_TUI.Mouse.Relative
-              (Page_Event, Geometry.Vertical_Scroll_Origin));
-         Apply_Result
-           (Item, Vertical_Scroll_Field, Vertical_Scroll_Capture, Result);
-      elsif Flyology_TUI.Geometry.Contains
-        ((X => Geometry.Horizontal_Scroll_Origin.X,
-          Y => Geometry.Horizontal_Scroll_Origin.Y,
-          Width => Geometry.Window_Workspace.Width,
-          Height => 1),
-         Point)
-      then
-         Result := Item.Horizontal_Scroll.Handle
-           (Flyology_TUI.Mouse.Relative
-              (Page_Event, Geometry.Horizontal_Scroll_Origin));
-         Apply_Result
-           (Item, Horizontal_Scroll_Field,
-            Horizontal_Scroll_Capture, Result);
-      elsif Flyology_TUI.Geometry.Contains
-        (Geometry.Window_Workspace, Point)
-      then
-         Result := Item.Split.Handle (Page_Event);
-         Apply_Result (Item, Split_Field, Split_Capture, Result);
       end if;
    end Handle_Windows_Mouse;
 
@@ -2197,6 +2301,11 @@ procedure Kitchen_Sink is
               (Event, Geometry.Vertical_Group_Origin));
          Apply_Result
            (Item, Vertical_Group_Field, Vertical_Group_Capture, Result);
+      elsif Flyology_TUI.Geometry.Contains (Geometry.Split_Region, Point)
+      then
+         Result := Item.Split.Handle
+           (Flyology_TUI.Mouse.Relative (Event, Geometry.Split_Origin));
+         Apply_Result (Item, Split_Field, Split_Capture, Result);
       end if;
    end Handle_Panels_Mouse;
 
@@ -2237,10 +2346,19 @@ procedure Kitchen_Sink is
       end if;
 
       if Flyology_TUI.Geometry.Contains (Tabs_Bounds, Point) then
-         Result := Item.Pages.Handle
-           (Flyology_TUI.Mouse.Relative (Event.Mouse, Origin (Geometry.Tabs)));
-         Apply_Result (Item, Page_Navigation, Page_Capture, Result);
-         Normalize_Focus (Item);
+         declare
+            Previous : constant Page_Id := Current_Page (Item);
+         begin
+            Result := Item.Pages.Handle
+              (Flyology_TUI.Mouse.Relative
+                 (Event.Mouse, Origin (Geometry.Tabs)));
+            Apply_Result (Item, Page_Navigation, Page_Capture, Result);
+            Normalize_Focus (Item);
+            if Current_Page (Item) /= Previous then
+               Resize_Components (Item, Layout (Item));
+               Reconcile_Chat (Item);
+            end if;
+         end;
          return;
       end if;
 
@@ -2317,8 +2435,16 @@ procedure Kitchen_Sink is
    begin
       case Item.Focus is
          when Page_Navigation =>
-            Result := Item.Pages.Handle (Event);
-            Apply_Result (Item, Page_Navigation, Page_Capture, Result);
+            declare
+               Previous : constant Page_Id := Current_Page (Item);
+            begin
+               Result := Item.Pages.Handle (Event);
+               Apply_Result (Item, Page_Navigation, Page_Capture, Result);
+               if Current_Page (Item) /= Previous then
+                  Resize_Components (Item, Layout (Item));
+                  Reconcile_Chat (Item);
+               end if;
+            end;
          when Text_Field => Item.Input.Update (Event);
          when List_Field => Item.Choices.Update (Event);
          when Viewport_Field => Item.Viewport.Update (Event);
@@ -2491,7 +2617,9 @@ procedure Kitchen_Sink is
       Content    : Flyology_TUI.Surfaces.Surface;
       Is_Active  : Boolean;
       Accent     : Flyology_TUI.Styles.Style;
-      Muted      : Flyology_TUI.Styles.Style)
+      Muted      : Flyology_TUI.Styles.Style;
+      Width      : Natural := 0;
+      Height     : Natural := 0)
       return Flyology_TUI.Surfaces.Surface
    is
       Marker : constant Wide_Wide_String :=
@@ -2504,7 +2632,9 @@ procedure Kitchen_Sink is
       Body_Surface : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Vertically (Heading, Content, Gap => 1);
       Box : constant Flyology_TUI.Layouts.Block :=
-        (Padding    => (Top => 1, Right => 1, Bottom => 1, Left => 1),
+        (Width      => Width,
+         Height     => Height,
+         Padding    => (Top => 1, Right => 1, Bottom => 1, Left => 1),
          Border     => Flyology_TUI.Layouts.Rounded,
          Appearance => (if Is_Active then Accent else Muted),
          others     => <>);
@@ -2536,20 +2666,24 @@ procedure Kitchen_Sink is
       Input_Panel : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Text input", Item.Input.Render (Visual),
-           Item.Focus = Text_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Text_Field, Visual.Border, Visual.Muted,
+           Geometry.First.Width, Geometry.First.Height);
       List_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Generic list", Item.Choices.Render (Visual),
-           Item.Focus = List_Field, Visual.Border, Visual.Muted);
+           Item.Focus = List_Field, Visual.Border, Visual.Muted,
+           Geometry.Third.Width, Geometry.Third.Height);
       Viewport_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Viewport", Item.Viewport.Render,
-           Item.Focus = Viewport_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Viewport_Field, Visual.Border, Visual.Muted,
+           Geometry.Second.Width, Geometry.Second.Height);
       Form_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ((if Item.Form.Submitted then "Form done" else "Form"),
            Item.Form.Render (Visual), Item.Focus = Form_Field,
-           Visual.Border, Visual.Muted);
+           Visual.Border, Visual.Muted,
+           Geometry.Fourth.Width, Geometry.Fourth.Height);
    begin
       Overlay_Region (Canvas, Input_Panel, Geometry.First, Geometry);
       Overlay_Region (Canvas, List_View, Geometry.Third, Geometry);
@@ -2574,22 +2708,26 @@ procedure Kitchen_Sink is
         Panel
           ("Actions", Action_Content,
            Item.Focus in Button_Field | Check_Field,
-           Visual.Border, Visual.Muted);
+           Visual.Border, Visual.Muted,
+           Geometry.First.Width, Geometry.First.Height);
       Radio_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Radio group",
            Item.Radios.Render (Visual, Item.Focus = Radio_Field),
-           Item.Focus = Radio_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Radio_Field, Visual.Border, Visual.Muted,
+           Geometry.Second.Width, Geometry.Second.Height);
       Selector_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Multi selector",
            Item.Selector.Render (Visual, Item.Focus = Selector_Field),
-           Item.Focus = Selector_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Selector_Field, Visual.Border, Visual.Muted,
+           Geometry.Third.Width, Geometry.Third.Height);
       Dropdown_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Dropdown",
            Item.Dropdown.Render (Visual, Item.Focus = Dropdown_Field),
-           Item.Focus = Dropdown_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Dropdown_Field, Visual.Border, Visual.Muted,
+           Geometry.Fourth.Width, Geometry.Fourth.Height);
    begin
       Overlay_Region (Canvas, Action_View, Geometry.First, Geometry);
       Overlay_Region (Canvas, Radio_View, Geometry.Second, Geometry);
@@ -2609,7 +2747,8 @@ procedure Kitchen_Sink is
       Work_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Work progress", Item.Work.Render (Visual),
-           Item.Focus = Telemetry_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Telemetry_Field, Visual.Border, Visual.Muted,
+           Geometry.First.Width, Geometry.First.Height);
       Spark_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Bounded series",
@@ -2617,7 +2756,8 @@ procedure Kitchen_Sink is
              (Item.Samples,
               Inset_Panel (Geometry.Second).Width,
               Sparklines.Automatic, Visual),
-           False, Visual.Border, Visual.Muted);
+           False, Visual.Border, Visual.Muted,
+           Geometry.Second.Width, Geometry.Second.Height);
       Aggregate : constant Work_Progress.Fraction :=
         Item.Work.Weighted_Total;
       Summary : constant Flyology_TUI.Surfaces.Surface :=
@@ -2643,32 +2783,27 @@ procedure Kitchen_Sink is
               ("paused tests", Indicators.Normal, Indicators.Warning_Tone),
             Indicators.Make_Segment
               ("ring:32", Indicators.Low, Indicators.Neutral)],
-           Geometry.Content.Width,
+           Inset_Panel (Geometry.Third).Width,
            Visual);
       Indicator_Content : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Vertically
           (Indicators.Divider
-             (Geometry.Content.Width, "telemetry", Visual),
+             (Inset_Panel (Geometry.Third).Width, "telemetry", Visual),
            Flyology_TUI.Layouts.Join_Vertically
              (Summary,
               Flyology_TUI.Layouts.Join_Vertically
                 (Item.Work.Render_Segments
-                   (Geometry.Content.Width, Visual), Status),
+                   (Inset_Panel (Geometry.Third).Width, Visual), Status),
               Gap => 1));
       Indicator_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Immediate indicators", Indicator_Content,
-           False, Visual.Border, Visual.Muted);
+           False, Visual.Border, Visual.Muted,
+           Geometry.Third.Width, Geometry.Third.Height);
    begin
       Overlay_Region (Canvas, Work_View, Geometry.First, Geometry);
       Overlay_Region (Canvas, Spark_View, Geometry.Second, Geometry);
-      Overlay_Region
-        (Canvas, Indicator_View,
-         (X => Geometry.Third.X,
-          Y => Geometry.Third.Y,
-          Width => Geometry.Content.Width,
-          Height => Geometry.Third.Height),
-         Geometry);
+      Overlay_Region (Canvas, Indicator_View, Geometry.Third, Geometry);
       return Canvas;
    end Telemetry_View;
 
@@ -2684,24 +2819,28 @@ procedure Kitchen_Sink is
           ("Breadcrumbs",
            Item.Breadcrumb.Render
              (Visual, Item.Focus = Breadcrumb_Field),
-           Item.Focus = Breadcrumb_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Breadcrumb_Field, Visual.Border, Visual.Muted,
+           Geometry.First.Width, Geometry.First.Height);
       Table_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Sortable typed table",
            Item.Table.Render (Visual, Item.Focus = Table_Field),
-           Item.Focus = Table_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Table_Field, Visual.Border, Visual.Muted,
+           Geometry.Third.Width, Geometry.Third.Height);
       Tree_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Collapsible tree",
            Item.Tree.Render (Visual, Item.Focus = Tree_Field),
-           Item.Focus = Tree_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Tree_Field, Visual.Border, Visual.Muted,
+           Geometry.Second.Width, Geometry.Second.Height);
       Accordion_Layout : constant Accordions.Presentation :=
         Accordion_Presentation (Item, Inset_Panel (Geometry.Fourth).Width);
       Accordion_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("External accordion bodies",
            Accordions.Frame (Accordion_Layout),
-           Item.Focus = Accordion_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Accordion_Field, Visual.Border, Visual.Muted,
+           Geometry.Fourth.Width, Geometry.Fourth.Height);
    begin
       Overlay_Region (Canvas, Breadcrumb_View, Geometry.First, Geometry);
       Overlay_Region (Canvas, Table_View, Geometry.Third, Geometry);
@@ -2744,12 +2883,14 @@ procedure Kitchen_Sink is
         Panel
           ("Text area · no wrap",
            Item.Text_Area.Render (Text_Area_Look),
-           Item.Focus = Text_Area_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Text_Area_Field, Visual.Border, Visual.Muted,
+           Geometry.Left_Full.Width, Geometry.Left_Full.Height);
       Code_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Syntax editor · soft wrap",
            Item.Syntax.Render (Syntax_Look),
-           Item.Focus = Syntax_Field, Visual.Border, Visual.Muted);
+           Item.Focus = Syntax_Field, Visual.Border, Visual.Muted,
+           Geometry.Right_Full.Width, Geometry.Right_Full.Height);
    begin
       if Geometry.Right_Full.Width > 0 then
          Overlay_Region (Canvas, Text_View, Geometry.Left_Full, Geometry);
@@ -2801,6 +2942,15 @@ procedure Kitchen_Sink is
               3 => Flyology_TUI.Surfaces.From_Text
               ("STATUS · pane minimums remain bounded")],
            Visual);
+      Split_View : constant Flyology_TUI.Surfaces.Surface :=
+        Item.Split.Render
+          (Flyology_TUI.Surfaces.From_Text
+             ("PRIMARY" & Wide_Wide_Character'Val (10)
+              & "drag the shared divider"),
+           Flyology_TUI.Surfaces.From_Text
+             ("SECONDARY" & Wide_Wide_Character'Val (10)
+              & "arrows resize when focused"),
+           Visual);
    begin
       Overlay_Region
         (Canvas, Horizontal_View,
@@ -2808,6 +2958,7 @@ procedure Kitchen_Sink is
       Overlay_Region
         (Canvas, Vertical_View,
          Geometry.Vertical_Group_Region, Geometry);
+      Overlay_Region (Canvas, Split_View, Geometry.Split_Region, Geometry);
       return Canvas;
    end Panels_View;
 
@@ -2815,32 +2966,11 @@ procedure Kitchen_Sink is
      (Item : Model; Geometry : Layout_Snapshot)
       return Flyology_TUI.Surfaces.Surface
    is
-      function Split_Demo
-        (Region : Flyology_TUI.Geometry.Rectangle;
-         Label  : Wide_Wide_String) return Flyology_TUI.Surfaces.Surface
-      is
-         Result : Flyology_TUI.Surfaces.Surface :=
-           Flyology_TUI.Surfaces.Create (Region.Width, Region.Height);
-      begin
-         if Region.Width > 2 and then Region.Height > 1 then
-            Result.Write (1, Region.Height - 2, Label, Visual.Muted);
-         end if;
-         return Result;
-      end Split_Demo;
-
-      First_Split : constant Flyology_TUI.Geometry.Rectangle :=
-        Item.Split.First_Region;
-      Second_Split : constant Flyology_TUI.Geometry.Rectangle :=
-        Item.Split.Second_Region;
       Base : constant Flyology_TUI.Surfaces.Surface :=
-        Item.Split.Render
-          (Split_Demo (First_Split, "pane A · drag divider"),
-           Split_Demo (Second_Split, "pane B · arrows resize"),
-           Visual);
-      Vertical_Bar : constant Flyology_TUI.Surfaces.Surface :=
-        Item.Vertical_Scroll.Render (Visual);
-      Horizontal_Bar : constant Flyology_TUI.Surfaces.Surface :=
-        Item.Horizontal_Scroll.Render (Visual);
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Window_Workspace.Width,
+           Geometry.Window_Workspace.Height,
+           Visual.Input);
       Window_A_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
         Item.Window_A_Model.Bounds;
       Window_B_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
@@ -2884,21 +3014,27 @@ procedure Kitchen_Sink is
          then Window_A_Bounds
          else Window_B_Bounds);
    begin
-      return Flyology_TUI.Layouts.Layers.Compose
-        (Geometry.Content.Width,
-         Geometry.Content.Height,
+      declare
+         Desktop : constant Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Layouts.Layers.Compose
+        (Geometry.Window_Workspace.Width,
+         Geometry.Window_Workspace.Height,
          [(Content => Base, X => 0, Y => 0,
            Transparent_Spaces => False),
-          (Content => Vertical_Bar,
-           X => Geometry.Vertical_Scroll_Origin.X, Y => 0,
-           Transparent_Spaces => True),
-          (Content => Horizontal_Bar, X => 0,
-           Y => Geometry.Horizontal_Scroll_Origin.Y,
-           Transparent_Spaces => True),
           (Content => Lower_Window, X => Lower_Bounds.X, Y => Lower_Bounds.Y,
            Transparent_Spaces => False),
           (Content => Upper_Window, X => Upper_Bounds.X, Y => Upper_Bounds.Y,
            Transparent_Spaces => False)]);
+         Canvas : Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Surfaces.Create
+             (Geometry.Content.Width, Geometry.Content.Height);
+         Region : constant Flyology_TUI.Geometry.Rectangle :=
+           (Geometry.Windows_Origin.X, Geometry.Windows_Origin.Y,
+            Geometry.Window_Workspace.Width, Geometry.Window_Workspace.Height);
+      begin
+         Overlay_Region (Canvas, Desktop, Region, Geometry);
+         return Canvas;
+      end;
    end Windows_View;
 
    function Present (Item : Model) return Flyology_TUI.Views.View is
@@ -3170,7 +3306,6 @@ procedure Kitchen_Sink is
    end Execute;
 
    procedure Run_Responsive_Self_Test is
-      use type Flyology_TUI.Geometry.Rectangle;
       Item : Model;
       Next : Transitions.Transition;
 
@@ -3223,6 +3358,24 @@ procedure Kitchen_Sink is
              <= Long_Long_Integer (Outer.Y)
                 + Long_Long_Integer (Outer.Height));
 
+      function Overlaps
+        (Left, Right : Flyology_TUI.Geometry.Rectangle) return Boolean is
+        (Left.Width > 0
+         and then Left.Height > 0
+         and then Right.Width > 0
+         and then Right.Height > 0
+         and then Left.X < Right.X + Integer (Right.Width)
+         and then Right.X < Left.X + Integer (Left.Width)
+         and then Left.Y < Right.Y + Integer (Right.Height)
+         and then Right.Y < Left.Y + Integer (Left.Height));
+
+      type Size_Case is record
+         Width, Height : Natural;
+      end record;
+      Responsive_Sizes : constant array (Positive range <>) of Size_Case :=
+        [(20, 6), (40, 12), (71, 24), (72, 24),
+         (111, 30), (112, 30), (190, 55)];
+
       Geometry : Layout_Snapshot;
       Frame : Flyology_TUI.Views.View;
       Before_Divider : Integer;
@@ -3231,34 +3384,108 @@ procedure Kitchen_Sink is
    begin
       Initialize (Item, Next);
 
-      Set_Terminal_Size (Item, 55, 15);
-      Geometry := Layout (Item);
-      Frame := Present (Item);
-      Assert
-        (Geometry.Right_Full.Width = 0
-         and then Geometry.First = (0, 2, 55, 3)
-         and then Geometry.Second = (0, 5, 55, 3)
-         and then Geometry.Third = (0, 8, 55, 3)
-         and then Geometry.Fourth = (0, 11, 55, 3),
-         "55-column layout did not use four stacked slots");
-      Assert
-        (Frame.Frame.Width = 55 and then Frame.Frame.Height = 15,
-         "55-column frame did not match the terminal");
+      for Size of Responsive_Sizes loop
+         for Page in Page_Id loop
+            Item.Pages.Activate (Page);
+            Set_Terminal_Size (Item, Size.Width, Size.Height);
+            Geometry := Layout (Item);
+            Frame := Present (Item);
+            Assert
+              (Frame.Frame.Width = Size.Width
+               and then Frame.Frame.Height = Size.Height,
+               "rendered frame did not match responsive terminal size");
+            case Page is
+               when Basics_Page | Controls_Page =>
+                  Assert
+                    (Fits (Geometry.Content, Geometry.First)
+                     and then Fits (Geometry.Content, Geometry.Second)
+                     and then Fits (Geometry.Content, Geometry.Third)
+                     and then Fits (Geometry.Content, Geometry.Fourth),
+                     "gallery card escaped the content region");
+                  Assert
+                    (not Overlaps (Geometry.First, Geometry.Second)
+                     and then not Overlaps (Geometry.First, Geometry.Third)
+                     and then not Overlaps
+                       (Geometry.Second, Geometry.Fourth)
+                     and then not Overlaps
+                       (Geometry.Third, Geometry.Fourth),
+                     "gallery cards overlap");
+               when Navigation_Page =>
+                  Assert
+                    (Fits (Geometry.Content, Geometry.First)
+                     and then Fits (Geometry.Content, Geometry.Second)
+                     and then Fits (Geometry.Content, Geometry.Third)
+                     and then Fits (Geometry.Content, Geometry.Fourth)
+                     and then not Overlaps
+                       (Geometry.First, Geometry.Second)
+                     and then not Overlaps
+                       (Geometry.Second, Geometry.Fourth),
+                     "navigation regions escaped or overlapped");
+               when Editors_Page =>
+                  Assert
+                    (Fits (Geometry.Content, Geometry.Left_Full)
+                     and then Fits (Geometry.Content, Geometry.Right_Full)
+                     and then Fits
+                       (Geometry.Content, Geometry.Markdown_Frame)
+                     and then not Overlaps
+                       (Geometry.Left_Full, Geometry.Right_Full)
+                     and then not Overlaps
+                       (Geometry.Left_Full, Geometry.Markdown_Frame),
+                     "editor regions escaped or overlapped");
+               when Telemetry_Page =>
+                  Assert
+                    (Fits (Geometry.Content, Geometry.First)
+                     and then Fits (Geometry.Content, Geometry.Second)
+                     and then Fits (Geometry.Content, Geometry.Third)
+                     and then not Overlaps
+                       (Geometry.First, Geometry.Second)
+                     and then not Overlaps
+                       (Geometry.First, Geometry.Third),
+                     "telemetry regions escaped or overlapped");
+               when Chat_Page =>
+                  Assert
+                    (Fits (Geometry.Content, Geometry.Chat_Frame)
+                     and then Geometry.Chat_Frame.Width <= 96,
+                     "chat frame escaped or exceeded readable width");
+               when Panels_Page =>
+                  Assert
+                    (Fits
+                       (Geometry.Content,
+                        Geometry.Horizontal_Group_Region)
+                     and then Fits
+                       (Geometry.Content, Geometry.Vertical_Group_Region)
+                     and then Fits
+                       (Geometry.Content, Geometry.Split_Region)
+                     and then not Overlaps
+                       (Geometry.Horizontal_Group_Region,
+                        Geometry.Vertical_Group_Region)
+                     and then not Overlaps
+                       (Geometry.Vertical_Group_Region,
+                        Geometry.Split_Region),
+                     "panel regions escaped or overlapped");
+               when Windows_Page =>
+                  Assert
+                    (Geometry.Window_Workspace.Width <= 120
+                     and then Geometry.Window_Workspace.Height <= 34
+                     and then Fits
+                       (Geometry.Content,
+                        (Geometry.Windows_Origin.X,
+                         Geometry.Windows_Origin.Y,
+                         Geometry.Window_Workspace.Width,
+                         Geometry.Window_Workspace.Height)),
+                     "window desktop escaped or exceeded its bound");
+            end case;
+         end loop;
+      end loop;
 
-      Set_Terminal_Size (Item, 56, 15);
+      Item.Pages.Activate (Basics_Page);
+      Set_Terminal_Size (Item, 190, 55);
       Geometry := Layout (Item);
-      Frame := Present (Item);
       Assert
-        (Geometry.Left_Full.Width = 27
-         and then Geometry.Right_Full.Width = 28
-         and then Geometry.First = (0, 2, 27, 6)
-         and then Geometry.Second = (28, 2, 28, 6)
-         and then Geometry.Third = (0, 8, 27, 6)
-         and then Geometry.Fourth = (28, 8, 28, 6),
-         "56-column layout did not use the two-column breakpoint");
-      Assert
-        (Frame.Frame.Width = 56 and then Frame.Frame.Height = 15,
-         "56-column frame did not match the terminal");
+        (Geometry.First.X = 39
+         and then Geometry.First.Width + Geometry.Second.Width + 2 = 112
+         and then Geometry.First.Height + Geometry.Third.Height + 2 = 23,
+         "wide gallery was not centered at its maximum working size");
 
       Set_Terminal_Size (Item, 80, 24);
       Item.Pages.Activate (Controls_Page);
@@ -3316,8 +3543,8 @@ procedure Kitchen_Sink is
         (not Frame.Cursor.Visible,
          "a clipped editor exposed its retained cursor");
 
-      Set_Terminal_Size (Item, 80, 24);
       Item.Pages.Activate (Panels_Page);
+      Set_Terminal_Size (Item, 80, 24);
       Activate (Item, Horizontal_Group_Field);
       Frame := Present (Item);
       Assert
@@ -3339,63 +3566,71 @@ procedure Kitchen_Sink is
         (Item.Focus = Vertical_Group_Field,
          "Control-Tab did not traverse application focus");
 
-      Item.Pages.Activate (Windows_Page);
-      Frame := Present (Item);
-      Assert
-        (Frame.Mouse = Flyology_TUI.Views.Cell_Motion,
-         "windows page did not request drag motion events");
       Geometry := Layout (Item);
       declare
          Divider : constant Flyology_TUI.Geometry.Rectangle :=
            Item.Split.Divider_Region;
          X : constant Natural :=
-           Natural (Geometry.Content.X + Divider.X);
+           Natural (Geometry.Split_Origin.X + Divider.X);
          Y : constant Natural :=
-           Natural
-             (Geometry.Content.Y
-              + Integer'Min
-                  (Integer (Geometry.Content.Height - 2), 15));
+           Natural (Geometry.Split_Origin.Y + Divider.Y);
+         Drag_X : Natural;
       begin
          Before_Split := Item.Split.First_Span;
+         Drag_X :=
+           (if Before_Split > 10 then X - 3 else X + 3);
          Handle_Mouse
            (Item,
             (Kind => Flyology_TUI.Events.Mouse_Input,
              Mouse => Pointer (X, Y)));
+         Assert
+           (Item.Capture = Split_Capture,
+            "split divider click did not acquire kitchen capture");
          Handle_Mouse
            (Item,
             (Kind => Flyology_TUI.Events.Mouse_Input,
              Mouse => Pointer
-               (X + 3, Y, Flyology_TUI.Events.Mouse_Drag)));
+               (Drag_X, Y, Flyology_TUI.Events.Mouse_Drag)));
+         Assert
+           (Item.Split.First_Span /= Before_Split,
+            "captured split drag did not change its span");
          Handle_Mouse
            (Item,
             (Kind => Flyology_TUI.Events.Mouse_Input,
              Mouse => Pointer
-               (X + 3, Y, Flyology_TUI.Events.Mouse_Release)));
+               (Drag_X, Y, Flyology_TUI.Events.Mouse_Release)));
          Assert
            (Item.Split.First_Span /= Before_Split,
             "split divider did not move through kitchen mouse routing");
       end;
 
+      Item.Pages.Activate (Windows_Page);
+      Set_Terminal_Size (Item, 80, 24);
+      Frame := Present (Item);
+      Assert
+        (Frame.Mouse = Flyology_TUI.Views.Cell_Motion,
+         "windows page did not request drag motion events");
+      Geometry := Layout (Item);
       Before_Window := Item.Window_B_Model.Bounds;
       Handle_Mouse
         (Item,
          (Kind => Flyology_TUI.Events.Mouse_Input,
           Mouse => Pointer
-            (Natural (Geometry.Content.X + Before_Window.X + 5),
-             Natural (Geometry.Content.Y + Before_Window.Y))));
+            (Natural (Geometry.Windows_Origin.X + Before_Window.X + 5),
+             Natural (Geometry.Windows_Origin.Y + Before_Window.Y))));
       Handle_Mouse
         (Item,
          (Kind => Flyology_TUI.Events.Mouse_Input,
           Mouse => Pointer
-            (Natural (Geometry.Content.X + Before_Window.X + 8),
-             Natural (Geometry.Content.Y + Before_Window.Y + 2),
+            (Natural (Geometry.Windows_Origin.X + Before_Window.X + 8),
+             Natural (Geometry.Windows_Origin.Y + Before_Window.Y + 2),
              Flyology_TUI.Events.Mouse_Drag)));
       Handle_Mouse
         (Item,
          (Kind => Flyology_TUI.Events.Mouse_Input,
           Mouse => Pointer
-            (Natural (Geometry.Content.X + Before_Window.X + 8),
-             Natural (Geometry.Content.Y + Before_Window.Y + 2),
+            (Natural (Geometry.Windows_Origin.X + Before_Window.X + 8),
+             Natural (Geometry.Windows_Origin.Y + Before_Window.Y + 2),
              Flyology_TUI.Events.Mouse_Release)));
       Assert
         (Item.Window_B_Model.Bounds.X = Before_Window.X + 3
