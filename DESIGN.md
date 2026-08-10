@@ -5,6 +5,13 @@ models retain interaction state and geometry, never a theme. `Appearance`
 records map semantic roles to styles at render time, and the renderer adapts
 semantic colors to the active terminal profile.
 
+Full skins remain render-time values. They combine a semantic palette with
+desktop fill and structural chrome for frames, tabs, windows, and docks.
+Switching a skin must not replace a component model, alter stable IDs, or
+change input geometry. A preset may change one-cell tab markers, border glyphs,
+close marks, and clipped shadows when those substitutions preserve the same
+published regions.
+
 ## Character
 
 - Precise: stable alignment, explicit bounds, visible focus, deterministic
@@ -13,6 +20,10 @@ semantic colors to the active terminal profile.
   gradients where terminal capability permits.
 - Terminal-native: dense enough to scan, readable in cells, useful without a
   mouse, and respectful of terminal defaults.
+- Skin-coherent: presets change the complete visual grammar, not merely an
+  accent color. Charm uses soft grouping and persistent state cues; the Turbo
+  Vision-inspired preset uses a blue desktop, double frames, hard shadows, and
+  compact command-oriented contrast.
 
 Avoid sparse full-screen quadrants, isolated intrinsic-size cards in distant
 corners, raw implementation notes presented as content, website-like hero

@@ -59,6 +59,11 @@
 - Derive component appearances from semantic palette roles. Keep explicit
   `Appearance` values as the low-level escape hatch and never branch on theme
   identity or retain a palette/theme in model state.
+- Treat full skins as borrowed bundles of palette and structural chrome. A
+  skin may change borders, shadows, tab edges, window marks, and dock cues, but
+  must preserve immutable hit geometry, stable IDs, and the explicit
+  Appearance/Theme overloads. Do not implement skins as model subclasses or
+  identity tests inside component behavior.
 - Design truecolor and gradients as progressive enhancement. Renderer profile
   adaptation must preserve distinct foreground/background identities and
   structural cues in ANSI-256, ANSI-16, monochrome, `NO_COLOR`, and unknown

@@ -20,7 +20,8 @@ Flyology-aware adapter can be added separately.
 - terminal-oriented grapheme clusters and one- or two-cell glyph widths;
 - typed RGB, indexed, and ANSI colors, negotiated color profiles, palette
   fallback, and text attributes;
-- optional semantic themes with a configurable Charm-inspired preset;
+- optional semantic themes and switchable full skins, including Charm and a
+  Turbo Vision-inspired preset;
 - clipped cell surfaces, compositing, borders, padding, alignment, and joins;
 - stateful cell diffing and declarative ANSI/DEC terminal modes;
 - raw-mode POSIX lifecycle, resize observation, and interruptible waits;
@@ -137,6 +138,20 @@ selectors, and dropdowns accept it through `From_Palette`; their existing
 available. Applications can replace any role without creating a new component
 type or storing presentation state in a model.
 
+`Flyology_TUI.Skins` adds a borrowed structural layer above palettes. A skin
+bundles desktop and semantic colors with panel/window border glyphs, clipped
+hard shadows, tab markers, close marks, and dock chrome. The Charm default,
+dark, and light skins retain the existing rounded visual language. The
+Turbo Vision-inspired preset uses a blue desktop, double-line frames, hard
+shadows, angle-marked tabs, and compact status-oriented contrast. It is an
+inspired preset rather than an API- or rendering-compatible clone.
+
+Skin overloads are additive: the original explicit `Appearance`, `Theme`, and
+render functions remain available. Models never retain the active skin.
+Truecolor skin roles are adapted progressively through the renderer's
+truecolor, ANSI-256, ANSI-16, and monochrome profiles while structural cues
+remain unchanged.
+
 See [docs/architecture.md](docs/architecture.md) for ownership and shutdown
 details. [examples/src/counter.adb](examples/src/counter.adb) is the compact
 starting point; [examples/src/kitchen_sink.adb](examples/src/kitchen_sink.adb)
@@ -168,7 +183,7 @@ alr exec -- ./examples/bin/kitchen_sink
 ```
 
 The kitchen sink accepts an explicit color policy when comparing terminal
-fallbacks:
+fallbacks and an optional starting skin:
 
 ```sh
 ./examples/bin/kitchen_sink --color=auto
@@ -176,7 +191,14 @@ fallbacks:
 ./examples/bin/kitchen_sink --color=ansi16
 ./examples/bin/kitchen_sink --color=ansi256
 ./examples/bin/kitchen_sink --color=truecolor
+./examples/bin/kitchen_sink --skin=charm
+./examples/bin/kitchen_sink --skin=dark
+./examples/bin/kitchen_sink --skin=light
+./examples/bin/kitchen_sink --skin=turbo --color=truecolor
 ```
+
+Press `F6` in the kitchen sink to cycle skins without replacing any component
+model or interaction state.
 
 The examples and test suite are nested Alire crates pinned to the parent
 library, keeping their build state outside the published dependency set. The
