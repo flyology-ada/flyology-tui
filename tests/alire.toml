@@ -25,6 +25,7 @@ executables = [
   "markdown_components_tests",
   "menubar_tests",
   "gradient_tests",
+  "responsive_geometry_tests",
 ]
 
 [[depends-on]]

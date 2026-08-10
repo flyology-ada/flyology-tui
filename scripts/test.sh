@@ -73,6 +73,7 @@ esac
 ./bin/markdown_components_tests
 ./bin/menubar_tests
 ./bin/gradient_tests
+./bin/responsive_geometry_tests
 
 cd "$root_dir"
 ./scripts/test-posix-initial-size.sh
