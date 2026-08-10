@@ -616,6 +616,7 @@ procedure Kitchen_Sink is
    use type Flyology_TUI.Events.Mouse_Action;
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Flyology_TUI.Views.Mouse_Mode;
 
    Visual : constant Flyology_TUI.Themes.Theme := Flyology_TUI.Themes.Charm;
 
@@ -864,6 +865,12 @@ procedure Kitchen_Sink is
    procedure Resize_Components
      (Item : in out Model; Geometry : Layout_Snapshot)
    is
+      function Scrollable_Total
+        (Page_Size, Minimum : Natural) return Natural is
+        (if Page_Size > Natural'Last / 3
+         then Natural'Last
+         else Natural'Max (Minimum, Page_Size * 3));
+
       use type Chat_Streams.Operation_Result;
       Editor_Region, Syntax_Region : Flyology_TUI.Geometry.Rectangle;
       Stream_Height : constant Natural := Chat_Stream_Height (Item);
@@ -909,11 +916,13 @@ procedure Kitchen_Sink is
       Item.Vertical_Scroll.Resize (Geometry.Window_Workspace.Height);
       Item.Horizontal_Scroll.Resize (Geometry.Window_Workspace.Width);
       Item.Vertical_Scroll.Configure
-        (Total => 100,
+        (Total => Scrollable_Total
+           (Geometry.Window_Workspace.Height, 100),
          Page_Size => Geometry.Window_Workspace.Height,
          First => Item.Vertical_Scroll.First);
       Item.Horizontal_Scroll.Configure
-        (Total => 180,
+        (Total => Scrollable_Total
+           (Geometry.Window_Workspace.Width, 180),
          Page_Size => Geometry.Window_Workspace.Width,
          First => Item.Horizontal_Scroll.First);
       Item.Window_A_Model.Constrain_To (Geometry.Window_Workspace);
@@ -2771,23 +2780,25 @@ procedure Kitchen_Sink is
           (Geometry.Content.Width, Geometry.Content.Height);
       Horizontal_View : constant Flyology_TUI.Surfaces.Surface :=
         Item.Horizontal_Group.Render
-          ([Flyology_TUI.Surfaces.From_Text
+          (Flyology_TUI.Components.Panel_Groups.Surface_Array'
+             [1 => Flyology_TUI.Surfaces.From_Text
               ("NAVIGATION" & Wide_Wide_Character'Val (10)
                & "shared vertical boundaries"),
-            Flyology_TUI.Surfaces.From_Text
+              2 => Flyology_TUI.Surfaces.From_Text
               ("WORKSPACE" & Wide_Wide_Character'Val (10)
                & "drag a divider with the mouse"),
-            Flyology_TUI.Surfaces.From_Text
+              3 => Flyology_TUI.Surfaces.From_Text
               ("INSPECTOR" & Wide_Wide_Character'Val (10)
                & "tab boundary · ctrl-tab focus")],
            Visual);
       Vertical_View : constant Flyology_TUI.Surfaces.Surface :=
         Item.Vertical_Group.Render
-          ([Flyology_TUI.Surfaces.From_Text
+          (Flyology_TUI.Components.Panel_Groups.Surface_Array'
+             [1 => Flyology_TUI.Surfaces.From_Text
               ("TIMELINE · weighted growth"),
-            Flyology_TUI.Surfaces.From_Text
+              2 => Flyology_TUI.Surfaces.From_Text
               ("DETAILS · arrows resize the focused boundary"),
-            Flyology_TUI.Surfaces.From_Text
+              3 => Flyology_TUI.Surfaces.From_Text
               ("STATUS · pane minimums remain bounded")],
            Visual);
    begin
@@ -2804,14 +2815,27 @@ procedure Kitchen_Sink is
      (Item : Model; Geometry : Layout_Snapshot)
       return Flyology_TUI.Surfaces.Surface
    is
+      function Split_Demo
+        (Region : Flyology_TUI.Geometry.Rectangle;
+         Label  : Wide_Wide_String) return Flyology_TUI.Surfaces.Surface
+      is
+         Result : Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Surfaces.Create (Region.Width, Region.Height);
+      begin
+         if Region.Width > 2 and then Region.Height > 1 then
+            Result.Write (1, Region.Height - 2, Label, Visual.Muted);
+         end if;
+         return Result;
+      end Split_Demo;
+
+      First_Split : constant Flyology_TUI.Geometry.Rectangle :=
+        Item.Split.First_Region;
+      Second_Split : constant Flyology_TUI.Geometry.Rectangle :=
+        Item.Split.Second_Region;
       Base : constant Flyology_TUI.Surfaces.Surface :=
         Item.Split.Render
-          (Flyology_TUI.Surfaces.From_Text
-             ("split pane A" & Wide_Wide_Character'Val (10)
-              & "drag the divider"),
-           Flyology_TUI.Surfaces.From_Text
-             ("split pane B" & Wide_Wide_Character'Val (10)
-              & "arrows resize when focused"),
+          (Split_Demo (First_Split, "pane A · drag divider"),
+           Split_Demo (Second_Split, "pane B · arrows resize"),
            Visual);
       Vertical_Bar : constant Flyology_TUI.Surfaces.Surface :=
         Item.Vertical_Scroll.Render (Visual);
@@ -3068,7 +3092,10 @@ procedure Kitchen_Sink is
       end if;
       Result := Flyology_TUI.Views.From_Surface (Canvas);
       Result.Alternate_Screen := True;
-      Result.Mouse := Flyology_TUI.Views.Button_Events;
+      Result.Mouse :=
+        (if Current_Page (Item) in Panels_Page | Windows_Page
+         then Flyology_TUI.Views.Cell_Motion
+         else Flyology_TUI.Views.Button_Events);
       Result.Report_Focus := True;
       Result.Bracketed_Paste := True;
       Result.Window_Title := U ("Flyology TUI kitchen sink");
@@ -3154,13 +3181,16 @@ procedure Kitchen_Sink is
          end if;
       end Assert;
 
-      function Pointer (X, Y : Natural)
+      function Pointer
+        (X, Y   : Natural;
+         Action : Flyology_TUI.Events.Mouse_Action :=
+           Flyology_TUI.Events.Mouse_Click)
         return Flyology_TUI.Events.Mouse_Event
       is
         (X        => X,
          Y        => Y,
          Button   => Flyology_TUI.Events.Left_Button,
-         Action   => Flyology_TUI.Events.Mouse_Click,
+         Action   => Action,
          Modified => (others => False),
          Wheel_X  => 0,
          Wheel_Y  => 0);
@@ -3196,6 +3226,8 @@ procedure Kitchen_Sink is
       Geometry : Layout_Snapshot;
       Frame : Flyology_TUI.Views.View;
       Before_Divider : Integer;
+      Before_Split : Natural;
+      Before_Window : Flyology_TUI.Geometry.Rectangle;
    begin
       Initialize (Item, Next);
 
@@ -3287,6 +3319,10 @@ procedure Kitchen_Sink is
       Set_Terminal_Size (Item, 80, 24);
       Item.Pages.Activate (Panels_Page);
       Activate (Item, Horizontal_Group_Field);
+      Frame := Present (Item);
+      Assert
+        (Frame.Mouse = Flyology_TUI.Views.Cell_Motion,
+         "panel page did not request drag motion events");
       Assert
         (Item.Horizontal_Group.Has_Focused_Divider,
          "focused panel group had no selected divider");
@@ -3302,6 +3338,69 @@ procedure Kitchen_Sink is
       Assert
         (Item.Focus = Vertical_Group_Field,
          "Control-Tab did not traverse application focus");
+
+      Item.Pages.Activate (Windows_Page);
+      Frame := Present (Item);
+      Assert
+        (Frame.Mouse = Flyology_TUI.Views.Cell_Motion,
+         "windows page did not request drag motion events");
+      Geometry := Layout (Item);
+      declare
+         Divider : constant Flyology_TUI.Geometry.Rectangle :=
+           Item.Split.Divider_Region;
+         X : constant Natural :=
+           Natural (Geometry.Content.X + Divider.X);
+         Y : constant Natural :=
+           Natural
+             (Geometry.Content.Y
+              + Integer'Min
+                  (Integer (Geometry.Content.Height - 2), 15));
+      begin
+         Before_Split := Item.Split.First_Span;
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer (X, Y)));
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (X + 3, Y, Flyology_TUI.Events.Mouse_Drag)));
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (X + 3, Y, Flyology_TUI.Events.Mouse_Release)));
+         Assert
+           (Item.Split.First_Span /= Before_Split,
+            "split divider did not move through kitchen mouse routing");
+      end;
+
+      Before_Window := Item.Window_B_Model.Bounds;
+      Handle_Mouse
+        (Item,
+         (Kind => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Pointer
+            (Natural (Geometry.Content.X + Before_Window.X + 5),
+             Natural (Geometry.Content.Y + Before_Window.Y))));
+      Handle_Mouse
+        (Item,
+         (Kind => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Pointer
+            (Natural (Geometry.Content.X + Before_Window.X + 8),
+             Natural (Geometry.Content.Y + Before_Window.Y + 2),
+             Flyology_TUI.Events.Mouse_Drag)));
+      Handle_Mouse
+        (Item,
+         (Kind => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Pointer
+            (Natural (Geometry.Content.X + Before_Window.X + 8),
+             Natural (Geometry.Content.Y + Before_Window.Y + 2),
+             Flyology_TUI.Events.Mouse_Release)));
+      Assert
+        (Item.Window_B_Model.Bounds.X = Before_Window.X + 3
+         and then Item.Window_B_Model.Bounds.Y = Before_Window.Y + 2,
+         "window header did not move through kitchen mouse routing");
 
       Ada.Text_IO.Put_Line ("kitchen responsive self-tests passed");
    end Run_Responsive_Self_Test;
