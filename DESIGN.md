@@ -41,6 +41,16 @@ the rendered frame, child regions, chrome hits, and floating z-order. Dropping
 a floating header on a free edge and the equivalent keyboard command perform
 the same state transition.
 
+## Backlog
+
+- Add a bounded drag-and-drop substrate with typed payloads, immutable
+  presentation-aligned source and target regions, explicit capture, accept,
+  reject, cancel, and release results, and complete keyboard parity. Edge
+  auto-scroll remains an application policy rather than hidden component work.
+- Build sortable and reorderable list, table, tree, and panel adapters on that
+  substrate. Stable IDs survive reorder, and a drop commits atomically to
+  caller-owned data only after the target accepts it.
+
 ## Interaction and accessibility
 
 Persistent glyphs, borders, labels, and inverse/attribute changes accompany
