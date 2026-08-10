@@ -16,6 +16,9 @@ with Flyology_TUI.Components.Help;
 with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Components.Indicators;
 with Flyology_TUI.Components.Lists;
+with Flyology_TUI.Components.Markdown_Editors;
+with Flyology_TUI.Components.Markdown_Viewers;
+with Flyology_TUI.Components.Menubars;
 with Flyology_TUI.Components.Panel_Groups;
 with Flyology_TUI.Components.Progress;
 with Flyology_TUI.Components.Progress_Groups;
@@ -34,6 +37,9 @@ with Flyology_TUI.Components.Text_Inputs;
 with Flyology_TUI.Components.Trees;
 with Flyology_TUI.Components.Viewports;
 with Flyology_TUI.Components.Windows;
+with Flyology_TUI.Color_Profiles;
+with Flyology_TUI.Colors;
+with Flyology_TUI.Components.Gradients;
 with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Layouts;
@@ -149,8 +155,11 @@ procedure Kitchen_Sink is
       Controls_Page,
       Navigation_Page,
       Editors_Page,
+      Markdown_Page,
       Telemetry_Page,
       Chat_Page,
+      Menus_Page,
+      Color_Page,
       Panels_Page,
       Windows_Page);
 
@@ -162,8 +171,11 @@ procedure Kitchen_Sink is
          when Controls_Page => "Controls",
          when Navigation_Page => "Navigation",
          when Editors_Page => "Editors",
+         when Markdown_Page => "Markdown",
          when Telemetry_Page => "Telemetry",
          when Chat_Page      => "Chat",
+         when Menus_Page     => "Menus",
+         when Color_Page     => "Color",
          when Panels_Page    => "Panels",
          when Windows_Page   => "Windows");
 
@@ -172,7 +184,64 @@ procedure Kitchen_Sink is
       Id_Type   => Page_Id,
       Id_Of     => Page_Identity,
       Label     => Page_Label,
-      Capacity  => 8);
+      Capacity  => 12);
+
+   type Demo_Menu_Id is (File_Menu, View_Menu, Density_Menu, Help_Menu);
+   type Demo_Menu_Item_Id is
+     (New_Item, Save_Item, Separator_Item, Quit_Item,
+      Status_Item, Density_Item, Compact_Item, Comfortable_Item,
+      Shortcuts_Item, About_Item);
+
+   function Demo_Menu_Label
+     (Id : Demo_Menu_Id) return Wide_Wide_String is
+     (case Id is
+         when File_Menu    => "File",
+         when View_Menu    => "View",
+         when Density_Menu => "Density",
+         when Help_Menu    => "Help");
+
+   function Demo_Item_Label
+     (Id : Demo_Menu_Item_Id) return Wide_Wide_String is
+     (case Id is
+         when New_Item         => "New",
+         when Save_Item        => "Save",
+         when Separator_Item   => "separator",
+         when Quit_Item        => "Quit",
+         when Status_Item      => "Status bar",
+         when Density_Item     => "Density",
+         when Compact_Item     => "Compact",
+         when Comfortable_Item => "Comfortable",
+         when Shortcuts_Item    => "Keyboard shortcuts",
+         when About_Item        => "About");
+
+   function Demo_Shortcut_Label
+     (Id : Demo_Menu_Item_Id) return Wide_Wide_String is
+     (case Id is
+         when New_Item       => "Ctrl+N",
+         when Save_Item      => "Ctrl+S",
+         when Quit_Item      => "Ctrl+Q",
+         when Shortcuts_Item => "?",
+         when others         => "");
+
+   function Demo_Menu_Mnemonic
+     (Id : Demo_Menu_Id) return Wide_Wide_Character is
+     (Demo_Menu_Label (Id) (1));
+
+   function Demo_Item_Mnemonic
+     (Id : Demo_Menu_Item_Id) return Wide_Wide_Character is
+     (Demo_Item_Label (Id) (1));
+
+   package Menus is new Flyology_TUI.Components.Menubars
+     (Menu_Id          => Demo_Menu_Id,
+      Item_Id          => Demo_Menu_Item_Id,
+      Menu_Label       => Demo_Menu_Label,
+      Item_Label       => Demo_Item_Label,
+      Shortcut_Label   => Demo_Shortcut_Label,
+      Menu_Mnemonic    => Demo_Menu_Mnemonic,
+      Item_Mnemonic    => Demo_Item_Mnemonic,
+      Maximum_Menus    => 4,
+      Maximum_Items    => 12,
+      Maximum_Depth    => 2);
 
    type Choice_Id is (Alpha, Beta, Gamma);
 
@@ -433,9 +502,12 @@ procedure Kitchen_Sink is
       Accordion_Field,
       Text_Area_Field,
       Syntax_Field,
+      Markdown_Source_Field,
+      Markdown_Preview_Field,
       Telemetry_Field,
       Chat_Field,
       Chat_Stream_Field,
+      Menu_Field,
       Horizontal_Group_Field,
       Vertical_Group_Field,
       Window_Field,
@@ -454,6 +526,8 @@ procedure Kitchen_Sink is
       Accordion_Capture,
       Text_Area_Capture,
       Syntax_Capture,
+      Markdown_Source_Capture,
+      Menu_Capture,
       Horizontal_Group_Capture,
       Vertical_Group_Capture,
       First_Window_Capture,
@@ -503,8 +577,11 @@ procedure Kitchen_Sink is
             Controls_Page,
             Navigation_Page,
             Editors_Page,
+            Markdown_Page,
             Telemetry_Page,
             Chat_Page,
+            Menus_Page,
+            Color_Page,
             Panels_Page,
             Windows_Page]);
       Input    : Flyology_TUI.Components.Text_Inputs.Model :=
@@ -557,6 +634,36 @@ procedure Kitchen_Sink is
         (4_096, 256, 32, 12_288) :=
         Kitchen_Sink.Ada_Editors.Create
           (4_096, 256, 32, 12_288, 28, 13, "Ada source");
+      Markdown : Flyology_TUI.Components.Markdown_Editors.Model
+        (4_096, 256, 32, 12_288, 32) :=
+        Flyology_TUI.Components.Markdown_Editors.Create
+          (4_096, 256, 32, 12_288, 32, 80, 20,
+           Flyology_TUI.Components.Markdown_Editors.Split_Horizontally);
+      Menu : Menus.Model := Menus.Create
+        (Menus =>
+           [(File_Menu, True, True),
+            (View_Menu, True, True),
+            (Density_Menu, False, True),
+            (Help_Menu, True, True)],
+         Items =>
+           [Menus.Action (New_Item, File_Menu),
+            Menus.Action (Save_Item, File_Menu),
+            Menus.Separator (Separator_Item, File_Menu),
+            Menus.Action (Quit_Item, File_Menu),
+            Menus.Check (Status_Item, View_Menu, Checked => True),
+            Menus.Submenu (Density_Item, View_Menu, Density_Menu),
+            Menus.Radio
+              (Compact_Item, Density_Menu, Compact_Item, Selected => True),
+            Menus.Radio
+              (Comfortable_Item, Density_Menu, Compact_Item),
+            Menus.Action (Shortcuts_Item, Help_Menu),
+            Menus.Action (About_Item, Help_Menu)]);
+      Deep_Gradient : Flyology_TUI.Components.Gradients.Model (4) :=
+        Flyology_TUI.Components.Gradients.Create (4);
+      Linear_Gradient : Flyology_TUI.Components.Gradients.Model (4) :=
+        Flyology_TUI.Components.Gradients.Create (4);
+      Heat_Gradient : Flyology_TUI.Components.Gradients.Model (3) :=
+        Flyology_TUI.Components.Gradients.Create (3);
       Samples  : Kitchen_Sink.Samples.Series :=
         Kitchen_Sink.Samples.Create (32);
       Work     : Kitchen_Sink.Work_Progress.Model :=
@@ -746,8 +853,11 @@ procedure Kitchen_Sink is
       begin
          Frame := Centered (Maximum_Width, Maximum_Height);
          Gap :=
-           (if Frame.Width >= 72 then 2
-            elsif Frame.Width > 0 then 1 else 0);
+           (if Frame.Width >= 72
+              and then Frame.Height > 0
+            then Natural'Min (2, Frame.Height)
+            elsif Frame.Width > 0 and then Frame.Height >= 7
+            then 1 else 0);
          if Frame.Width >= 72 then
             Left_Width := (Frame.Width - Gap) / 2;
             Right_Width := Frame.Width - Gap - Left_Width;
@@ -855,31 +965,31 @@ procedure Kitchen_Sink is
             Frame := Centered (132);
             Gap :=
               (if Frame.Width > 0 and then Frame.Height > 0 then 1 else 0);
-            Bottom_Height :=
-              (Frame.Height - Natural'Min (Gap, Frame.Height)) / 2;
-            Top_Height :=
-              Frame.Height - Natural'Min (Gap, Frame.Height)
-                - Bottom_Height;
             if Frame.Width >= 96 then
                Left_Width := (Frame.Width - 2) / 2;
                Right_Width := Frame.Width - 2 - Left_Width;
-               Result.Left_Full := (Frame.X, Frame.Y, Left_Width, Top_Height);
+               Result.Left_Full :=
+                 (Frame.X, Frame.Y, Left_Width, Frame.Height);
                Result.Right_Full :=
                  (Frame.X + Integer (Left_Width + 2), Frame.Y,
-                  Right_Width, Top_Height);
+                  Right_Width, Frame.Height);
             else
+               Top_Height :=
+                 (Frame.Height - Natural'Min (Gap, Frame.Height)) / 2;
+               Bottom_Height :=
+                 Frame.Height - Natural'Min (Gap, Frame.Height)
+                   - Top_Height;
                Result.Left_Full :=
-                 (Frame.X, Frame.Y, Frame.Width, Top_Height / 2);
+                 (Frame.X, Frame.Y, Frame.Width, Top_Height);
                Result.Right_Full :=
-                 (Frame.X, Frame.Y + Integer (Top_Height / 2),
-                  Frame.Width, Top_Height - Top_Height / 2);
+                 (Frame.X, Frame.Y + Integer (Top_Height + Gap),
+                  Frame.Width, Bottom_Height);
             end if;
-            Result.Markdown_Frame :=
-              (Frame.X, Frame.Y + Integer (Top_Height + Gap),
-               Frame.Width, Bottom_Height);
             Result.First := Result.Left_Full;
             Result.Second := Result.Right_Full;
-            Result.Third := Result.Markdown_Frame;
+         when Markdown_Page =>
+            Result.Markdown_Frame := Centered (120);
+            Frame := Result.Markdown_Frame;
          when Telemetry_Page =>
             Frame := Centered (120, Natural'Min (28, Result.Content.Height));
             Gap := (if Frame.Height > 0 then 1 else 0);
@@ -900,6 +1010,14 @@ procedure Kitchen_Sink is
          when Chat_Page =>
             Result.Chat_Frame := Centered (96);
             Frame := Result.Chat_Frame;
+         when Menus_Page =>
+            Result.Menu_Frame :=
+              Centered (96, Natural'Min (24, Result.Content.Height));
+            Frame := Result.Menu_Frame;
+         when Color_Page =>
+            Result.Gradient_Frame :=
+              Centered (120, Natural'Min (26, Result.Content.Height));
+            Frame := Result.Gradient_Frame;
          when Panels_Page =>
             Frame := Centered (132);
             Gap := (if Frame.Height > 0 then 1 else 0);
@@ -1034,6 +1152,19 @@ procedure Kitchen_Sink is
       if Syntax_Region.Width > 0 and then Syntax_Region.Height > 0 then
          Item.Syntax.Set_Size
            (Positive (Syntax_Region.Width), Positive (Syntax_Region.Height));
+      end if;
+      if Geometry.Markdown_Frame.Width > 0
+        and then Geometry.Markdown_Frame.Height > 0
+      then
+         Item.Markdown.Set_Size
+           (Positive (Geometry.Markdown_Frame.Width),
+            Positive (Geometry.Markdown_Frame.Height));
+         Item.Markdown.Set_Mode
+           (if Geometry.Markdown_Frame.Width >= 96
+            then Flyology_TUI.Components.Markdown_Editors.Split_Horizontally
+            elsif Geometry.Markdown_Frame.Height >= 16
+            then Flyology_TUI.Components.Markdown_Editors.Split_Vertically
+            else Flyology_TUI.Components.Markdown_Editors.Source_Only);
       end if;
       if Geometry.Viewport_Content.Width > 0
         and then Geometry.Viewport_Content.Height > 0
@@ -1314,7 +1445,7 @@ procedure Kitchen_Sink is
    function Chat_Presentation
      (Item : Model; Geometry : Layout_Snapshot) return Chats.Presentation
    is
-      Width : constant Natural := Geometry.Content.Width;
+      Width : constant Natural := Geometry.Chat_Frame.Width;
       Footer : constant Flyology_TUI.Surfaces.Surface :=
         Chat_Footer (Item, Width);
       Composer : constant Flyology_TUI.Surfaces.Surface :=
@@ -1405,6 +1536,7 @@ procedure Kitchen_Sink is
       Item.Horizontal_Scroll.Blur;
       Item.Text_Area.Blur;
       Item.Syntax.Blur;
+      Item.Markdown.Blur;
       Item.Horizontal_Group.Blur;
       Item.Vertical_Group.Blur;
       Item.Focus := Target;
@@ -1435,6 +1567,8 @@ procedure Kitchen_Sink is
          when Horizontal_Scroll_Field => Item.Horizontal_Scroll.Focus;
          when Text_Area_Field => Item.Text_Area.Focus;
          when Syntax_Field => Item.Syntax.Focus;
+         when Markdown_Source_Field => Item.Markdown.Focus_Source;
+         when Markdown_Preview_Field => Item.Markdown.Focus_Preview;
          when Horizontal_Group_Field => Item.Horizontal_Group.Focus;
          when Vertical_Group_Field => Item.Vertical_Group.Focus;
          when others => null;
@@ -1530,7 +1664,62 @@ procedure Kitchen_Sink is
          Item.Syntax.Set_Wrap
            (Flyology_TUI.Components.Text_Areas.Soft_Wrap);
          Item.Syntax.Advance_Highlighting (32);
+         Item.Markdown.Try_Set_Source
+           ("# Flyology TUI Markdown" & Wide_Wide_Character'Val (10)
+            & Wide_Wide_Character'Val (10)
+            & "Edit **bounded source** beside its live preview."
+            & Wide_Wide_Character'Val (10)
+            & Wide_Wide_Character'Val (10)
+            & "- [x] Unicode-aware editing"
+            & Wide_Wide_Character'Val (10)
+            & "- [x] Caller-budgeted parsing"
+            & Wide_Wide_Character'Val (10)
+            & "- [ ] Follow [Ada](https://ada-lang.io/) links"
+            & Wide_Wide_Character'Val (10)
+            & Wide_Wide_Character'Val (10)
+            & "```ada" & Wide_Wide_Character'Val (10)
+            & "Put_Line (""Hello from Markdown"");"
+            & Wide_Wide_Character'Val (10) & "```",
+            Accepted);
+         if not Accepted then
+            raise Program_Error with "kitchen-sink Markdown seed overflow";
+         end if;
+         Item.Markdown.Advance_Preview (Natural'Last);
+         Item.Deep_Gradient.Try_Set_Stops
+           ([(0, (80, 35, 160)),
+             (350_000, (170, 75, 235)),
+             (700_000, (35, 185, 210)),
+             (Flyology_TUI.Components.Gradients.Stop_Scale,
+              (185, 220, 65))],
+            Accepted);
+         if not Accepted then
+            raise Program_Error with "kitchen-sink deep gradient rejected";
+         end if;
+         Item.Linear_Gradient.Try_Set_Stops
+           ([(0, (80, 35, 160)),
+             (350_000, (170, 75, 235)),
+             (700_000, (35, 185, 210)),
+             (Flyology_TUI.Components.Gradients.Stop_Scale,
+              (185, 220, 65))],
+            Accepted);
+         if not Accepted then
+            raise Program_Error with "kitchen-sink linear gradient rejected";
+         end if;
+         Item.Linear_Gradient.Set_Interpolation
+           (Flyology_TUI.Components.Gradients.Linear_Light);
+         Item.Heat_Gradient.Try_Set_Stops
+           ([(0, (25, 55, 120)),
+             (500_000, (210, 75, 160)),
+             (Flyology_TUI.Components.Gradients.Stop_Scale,
+              (250, 190, 55))],
+            Accepted);
+         if not Accepted then
+            raise Program_Error with "kitchen-sink heat gradient rejected";
+         end if;
+         Item.Heat_Gradient.Set_Application
+           (Flyology_TUI.Components.Gradients.Apply_Background);
       end;
+      Item.Chat.Set_Layout (Chats.Conversational_Layout);
       Transitions.Run (Next, Wait_For_Tick);
    end Initialize;
 
@@ -1662,6 +1851,25 @@ procedure Kitchen_Sink is
                    when Syntax_Field    => Page_Navigation,
                    when others          => Text_Area_Field));
          end if;
+      when Markdown_Page =>
+         if Item.Focus not in
+           Page_Navigation | Markdown_Source_Field | Markdown_Preview_Field
+         then
+            Activate (Item, Markdown_Source_Field);
+            return;
+         end if;
+         Activate
+           (Item,
+            (if Backwards then
+               (case Item.Focus is
+                   when Page_Navigation => Markdown_Preview_Field,
+                   when Markdown_Source_Field => Page_Navigation,
+                   when others => Markdown_Source_Field)
+             else
+               (case Item.Focus is
+                   when Page_Navigation => Markdown_Source_Field,
+                   when Markdown_Source_Field => Markdown_Preview_Field,
+                   when others => Page_Navigation)));
       when Chat_Page =>
          if Item.Focus not in
            Page_Navigation | Chat_Field | Chat_Stream_Field
@@ -1686,6 +1894,13 @@ procedure Kitchen_Sink is
                    when Chat_Stream_Field => Page_Navigation,
                    when others          => Chat_Field));
          end if;
+      when Menus_Page =>
+         Activate
+           (Item,
+            (if Item.Focus = Page_Navigation
+             then Menu_Field else Page_Navigation));
+      when Color_Page =>
+         Activate (Item, Page_Navigation);
       when Panels_Page =>
          if Item.Focus not in
            Page_Navigation | Horizontal_Group_Field | Vertical_Group_Field
@@ -1756,11 +1971,26 @@ procedure Kitchen_Sink is
             then
                Activate (Item, Text_Area_Field);
             end if;
+         when Markdown_Page =>
+            if Item.Focus not in
+              Page_Navigation | Markdown_Source_Field
+                | Markdown_Preview_Field
+            then
+               Activate (Item, Markdown_Source_Field);
+            end if;
          when Chat_Page =>
             if Item.Focus not in
               Page_Navigation | Chat_Field | Chat_Stream_Field
             then
                Activate (Item, Chat_Field);
+            end if;
+         when Menus_Page =>
+            if Item.Focus not in Page_Navigation | Menu_Field then
+               Activate (Item, Menu_Field);
+            end if;
+         when Color_Page =>
+            if Item.Focus /= Page_Navigation then
+               Activate (Item, Page_Navigation);
             end if;
          when Panels_Page =>
             if Item.Focus not in
@@ -1859,10 +2089,14 @@ procedure Kitchen_Sink is
          when Page_Capture =>
             declare
                Previous : constant Page_Id := Current_Page (Item);
+               Tabs_Layout : constant Pages.Presentation :=
+                 Item.Pages.Present
+                   (Geometry.Tabs.Width, Visual,
+                    Item.Focus = Page_Navigation);
             begin
                Result := Item.Pages.Handle
                  (Flyology_TUI.Mouse.Relative
-                    (Event, Origin (Geometry.Tabs)));
+                    (Event, Origin (Geometry.Tabs)), Tabs_Layout);
                Apply_Result (Item, Page_Navigation, Page_Capture, Result);
                Normalize_Focus (Item);
                if Current_Page (Item) /= Previous then
@@ -1917,6 +2151,45 @@ procedure Kitchen_Sink is
                Item.Syntax.Advance_Highlighting (4);
             end if;
             Normalize_Focus (Item);
+         when Markdown_Source_Capture =>
+            declare
+               Snapshot : constant
+                 Flyology_TUI.Components.Markdown_Editors.Layout_Snapshot :=
+                   Item.Markdown.Layout;
+               Region : constant Flyology_TUI.Geometry.Rectangle :=
+                 Flyology_TUI.Components.Markdown_Editors.Source_Region
+                   (Snapshot);
+            begin
+               Result := Item.Markdown.Handle_Source
+                 (Flyology_TUI.Mouse.Relative
+                    (Event,
+                     Flyology_TUI.Geometry.Point'
+                       (Geometry.Markdown_Frame.X + Region.X,
+                        Geometry.Markdown_Frame.Y + Region.Y)));
+               Apply_Result
+                 (Item, Markdown_Source_Field,
+                  Markdown_Source_Capture, Result);
+               if Result.Changed then
+                  Item.Markdown.Advance_Preview (Natural'Last);
+               end if;
+            end;
+         when Menu_Capture =>
+            declare
+               Presentation : constant Menus.Presentation :=
+                 Item.Menu.Present
+                   (Geometry.Menu_Frame.Width,
+                    Geometry.Menu_Frame.Height,
+                    0, 0, Visual, Item.Focus = Menu_Field);
+               Menu_Result : constant Menus.Update_Result :=
+                 Item.Menu.Handle
+                   (Flyology_TUI.Mouse.Relative
+                      (Event, Origin (Geometry.Menu_Frame)),
+                    Presentation);
+            begin
+               Apply_Result
+                 (Item, Menu_Field, Menu_Capture,
+                  Menus.Interaction (Menu_Result));
+            end;
          when Horizontal_Group_Capture =>
             Result := Item.Horizontal_Group.Handle
               (Flyology_TUI.Mouse.Relative
@@ -2309,16 +2582,91 @@ procedure Kitchen_Sink is
       end if;
    end Handle_Panels_Mouse;
 
+   procedure Handle_Markdown_Mouse
+     (Item : in out Model;
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot)
+   is
+      package Markdown renames
+        Flyology_TUI.Components.Markdown_Editors;
+      package Viewers renames
+        Flyology_TUI.Components.Markdown_Viewers;
+      Snapshot : constant Markdown.Layout_Snapshot := Item.Markdown.Layout;
+      Point : constant Flyology_TUI.Geometry.Point :=
+        (Integer (Event.X), Integer (Event.Y));
+      Result : Flyology_TUI.Components.Interactions.Update_Result;
+   begin
+      if Markdown.Has_Source (Snapshot) then
+         declare
+            Local : constant Flyology_TUI.Geometry.Rectangle :=
+              Markdown.Source_Region (Snapshot);
+            Region : constant Flyology_TUI.Geometry.Rectangle :=
+              (Geometry.Markdown_Frame.X + Local.X,
+               Geometry.Markdown_Frame.Y + Local.Y,
+               Local.Width, Local.Height);
+         begin
+            if Flyology_TUI.Geometry.Contains (Region, Point) then
+               Result := Item.Markdown.Handle_Source
+                 (Flyology_TUI.Mouse.Relative (Event, Origin (Region)));
+               Apply_Result
+                 (Item, Markdown_Source_Field,
+                  Markdown_Source_Capture, Result);
+               if Result.Changed then
+                  Item.Markdown.Advance_Preview (Natural'Last);
+               end if;
+               return;
+            end if;
+         end;
+      end if;
+      if Markdown.Has_Preview (Snapshot) then
+         declare
+            Local : constant Flyology_TUI.Geometry.Rectangle :=
+              Markdown.Preview_Region (Snapshot);
+            Region : constant Flyology_TUI.Geometry.Rectangle :=
+              (Geometry.Markdown_Frame.X + Local.X,
+               Geometry.Markdown_Frame.Y + Local.Y,
+               Local.Width, Local.Height);
+            Presentation : constant Viewers.Presentation :=
+              Item.Markdown.Present_Preview (Visual);
+            Action : Viewers.Action_Result;
+         begin
+            if Flyology_TUI.Geometry.Contains (Region, Point) then
+               Action := Item.Markdown.Handle_Preview
+                 (Flyology_TUI.Mouse.Relative (Event, Origin (Region)),
+                  Presentation);
+               Apply_Result
+                 (Item, Markdown_Preview_Field,
+                  No_Capture, Action.Update);
+            end if;
+         end;
+      end if;
+   end Handle_Markdown_Mouse;
+
+   procedure Handle_Menu_Mouse
+     (Item : in out Model;
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot)
+   is
+      Presentation : constant Menus.Presentation := Item.Menu.Present
+        (Geometry.Menu_Frame.Width, Geometry.Menu_Frame.Height,
+         0, 0, Visual, Item.Focus = Menu_Field);
+      Result : constant Menus.Update_Result := Item.Menu.Handle
+        (Flyology_TUI.Mouse.Relative
+           (Event, Origin (Geometry.Menu_Frame)),
+         Presentation);
+   begin
+      Apply_Result
+        (Item, Menu_Field, Menu_Capture, Menus.Interaction (Result));
+   end Handle_Menu_Mouse;
+
    procedure Handle_Mouse
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Terminal_Event) is
       use Flyology_TUI.Components.Interactions;
       Geometry : constant Layout_Snapshot := Layout (Item);
-      Tabs_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
-        (X => Geometry.Tabs.X,
-         Y => Geometry.Tabs.Y,
-         Width => Natural'Min (Item.Pages.Width, Geometry.Tabs.Width),
-         Height => Geometry.Tabs.Height);
+      Tabs_Layout : constant Pages.Presentation := Item.Pages.Present
+        (Geometry.Tabs.Width, Visual, Item.Focus = Page_Navigation);
+      Tabs_Bounds : constant Flyology_TUI.Geometry.Rectangle := Geometry.Tabs;
       Point : constant Flyology_TUI.Geometry.Point :=
         (X => Integer (Event.Mouse.X), Y => Integer (Event.Mouse.Y));
       Result : Update_Result;
@@ -2351,7 +2699,7 @@ procedure Kitchen_Sink is
          begin
             Result := Item.Pages.Handle
               (Flyology_TUI.Mouse.Relative
-                 (Event.Mouse, Origin (Geometry.Tabs)));
+                 (Event.Mouse, Origin (Geometry.Tabs)), Tabs_Layout);
             Apply_Result (Item, Page_Navigation, Page_Capture, Result);
             Normalize_Focus (Item);
             if Current_Page (Item) /= Previous then
@@ -2417,8 +2765,14 @@ procedure Kitchen_Sink is
          Handle_Navigation_Mouse (Item, Event.Mouse, Geometry);
       when Editors_Page =>
          Handle_Editors_Mouse (Item, Event.Mouse, Geometry);
+      when Markdown_Page =>
+         Handle_Markdown_Mouse (Item, Event.Mouse, Geometry);
       when Chat_Page =>
          Handle_Chat_Mouse (Item, Event.Mouse, Geometry);
+      when Menus_Page =>
+         Handle_Menu_Mouse (Item, Event.Mouse, Geometry);
+      when Color_Page =>
+         null;
       when Panels_Page =>
          Handle_Panels_Mouse (Item, Event.Mouse, Geometry);
       when Windows_Page =>
@@ -2487,6 +2841,24 @@ procedure Kitchen_Sink is
             if Result.Changed then
                Item.Syntax.Advance_Highlighting (4);
             end if;
+         when Markdown_Source_Field =>
+            Result := Item.Markdown.Handle_Source (Event);
+            Apply_Result
+              (Item, Markdown_Source_Field,
+               Markdown_Source_Capture, Result);
+            if Result.Changed then
+               Item.Markdown.Advance_Preview (Natural'Last);
+            end if;
+         when Markdown_Preview_Field =>
+            declare
+               Action : constant
+                 Flyology_TUI.Components.Markdown_Viewers.Action_Result :=
+                   Item.Markdown.Handle_Preview (Event);
+            begin
+               Apply_Result
+                 (Item, Markdown_Preview_Field,
+                  No_Capture, Action.Update);
+            end;
          when Telemetry_Field =>
             Result := Item.Work.Handle (Event);
             Apply_Result (Item, Telemetry_Field, No_Capture, Result);
@@ -2496,6 +2868,15 @@ procedure Kitchen_Sink is
          when Chat_Stream_Field =>
             Result := Item.Chat_Stream.Handle (Event);
             Apply_Result (Item, Chat_Stream_Field, No_Capture, Result);
+         when Menu_Field =>
+            declare
+               Menu_Result : constant Menus.Update_Result :=
+                 Item.Menu.Handle (Event);
+            begin
+               Apply_Result
+                 (Item, Menu_Field, Menu_Capture,
+                  Menus.Interaction (Menu_Result));
+            end;
          when Horizontal_Group_Field =>
             Result := Item.Horizontal_Group.Handle (Event);
             Apply_Result
@@ -2902,14 +3283,157 @@ procedure Kitchen_Sink is
       return Canvas;
    end Editors_View;
 
+   function Markdown_View
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      package Markdown renames
+        Flyology_TUI.Components.Markdown_Editors;
+      package Viewers renames
+        Flyology_TUI.Components.Markdown_Viewers;
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
+      Snapshot : constant Markdown.Layout_Snapshot := Item.Markdown.Layout;
+   begin
+      if Markdown.Has_Source (Snapshot) then
+         declare
+            Region : constant Flyology_TUI.Geometry.Rectangle :=
+              Markdown.Source_Region (Snapshot);
+         begin
+            Overlay_Region
+              (Canvas,
+               Item.Markdown.Render_Source (Visual),
+               (Geometry.Markdown_Frame.X + Region.X,
+                Geometry.Markdown_Frame.Y + Region.Y,
+                Region.Width, Region.Height),
+               Geometry);
+         end;
+      end if;
+      if Markdown.Has_Preview (Snapshot) then
+         declare
+            Region : constant Flyology_TUI.Geometry.Rectangle :=
+              Markdown.Preview_Region (Snapshot);
+            Preview : constant Viewers.Presentation :=
+              Item.Markdown.Present_Preview (Visual);
+         begin
+            Overlay_Region
+              (Canvas,
+               Viewers.Frame (Preview),
+               (Geometry.Markdown_Frame.X + Region.X,
+                Geometry.Markdown_Frame.Y + Region.Y,
+                Region.Width, Region.Height),
+               Geometry);
+         end;
+      end if;
+      return Canvas;
+   end Markdown_View;
+
+   function Menus_View
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
+      Presentation : constant Menus.Presentation := Item.Menu.Present
+        (Geometry.Menu_Frame.Width, Geometry.Menu_Frame.Height,
+         0, 0, Visual, Item.Focus = Menu_Field);
+   begin
+      Overlay_Region
+        (Canvas, Menus.Frame (Presentation), Geometry.Menu_Frame, Geometry);
+      return Canvas;
+   end Menus_View;
+
+   function Color_View
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      use type Flyology_TUI.Color_Profiles.Profile;
+      package Profiles renames Flyology_TUI.Color_Profiles;
+      package Colors renames Flyology_TUI.Colors;
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
+      Demo : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Gradient_Frame.Width, Geometry.Gradient_Frame.Height);
+      Profiles_List : constant array (Positive range <>) of Profiles.Profile :=
+        [Profiles.Monochrome, Profiles.ANSI_16,
+         Profiles.ANSI_256, Profiles.Truecolor];
+      function Profile_Label
+        (Profile : Profiles.Profile) return Wide_Wide_String is
+        (case Profile is
+            when Profiles.Monochrome => "monochrome",
+            when Profiles.ANSI_16    => "ANSI 16",
+            when Profiles.ANSI_256   => "ANSI 256",
+            when Profiles.Truecolor  => "truecolor");
+   begin
+      if Demo.Width = 0 or else Demo.Height = 0 then
+         return Canvas;
+      end if;
+      Demo.Write (0, 0, "Terminal color profiles", Visual.Focused);
+      for Index in Profiles_List'Range loop
+         exit when Index >= Demo.Height;
+         declare
+            Profile : constant Profiles.Profile := Profiles_List (Index);
+            Style : Flyology_TUI.Styles.Style := Visual.Primary;
+            Start : constant Natural := Natural'Min (14, Demo.Width);
+         begin
+            Style.Foreground := Profiles.Adapt
+              (Colors.True_Color (190, 90, 245), Profile);
+            Demo.Write (0, Index, Profile_Label (Profile), Visual.Muted);
+            if Start < Demo.Width then
+               for X in Start .. Demo.Width - 1 loop
+                  Demo.Put (X, Index, "█", Style);
+               end loop;
+            end if;
+         end;
+      end loop;
+      if Demo.Height > 8 then
+         Demo.Write (0, 6, "Identical stops, different interpolation",
+                     Visual.Focused);
+         Demo.Write (0, 7, "sRGB channels", Visual.Muted);
+         Demo.Write (0, 8, "linear light", Visual.Muted);
+         for X in Natural'Min (14, Demo.Width) .. Demo.Width - 1 loop
+            Demo.Put (X, 7, "▄", Visual.Primary);
+            Demo.Put (X, 8, "▄", Visual.Primary);
+         end loop;
+         Item.Deep_Gradient.Apply
+           (Demo,
+            (Natural'Min (14, Demo.Width), 7,
+             Demo.Width - Natural'Min (14, Demo.Width), 1));
+         Item.Linear_Gradient.Apply
+           (Demo,
+            (Natural'Min (14, Demo.Width), 8,
+             Demo.Width - Natural'Min (14, Demo.Width), 1));
+      end if;
+      if Demo.Height > 11 then
+         Demo.Write (0, 10, "Background heatmap, profile-safe fallback",
+                     Visual.Focused);
+         for X in 0 .. Demo.Width - 1 loop
+            Demo.Put (X, 11, " ", Visual.Primary);
+         end loop;
+         Item.Heat_Gradient.Apply (Demo, (0, 11, Demo.Width, 1));
+      end if;
+      Overlay_Region
+        (Canvas, Demo, Geometry.Gradient_Frame, Geometry);
+      return Canvas;
+   end Color_View;
+
    function Chat_View
      (Item : Model; Geometry : Layout_Snapshot)
       return Flyology_TUI.Surfaces.Surface
    is
       Presentation : constant Chats.Presentation :=
         Chat_Presentation (Item, Geometry);
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
    begin
-      return Chats.Frame (Presentation);
+      Overlay_Region
+        (Canvas, Chats.Frame (Presentation), Geometry.Chat_Frame, Geometry);
+      return Canvas;
    end Chat_View;
 
    function Panels_View
@@ -3180,16 +3704,21 @@ procedure Kitchen_Sink is
            Gap => 1);
       Meter : constant Flyology_TUI.Surfaces.Surface :=
         Item.Progress.Render (Visual);
+      Tabs_Layout : constant Pages.Presentation := Item.Pages.Present
+        (Geometry.Tabs.Width, Visual, Item.Focus = Page_Navigation);
       Page_Bar : constant Flyology_TUI.Surfaces.Surface :=
-        Item.Pages.Render (Visual, Item.Focus = Page_Navigation);
+        Pages.Frame (Tabs_Layout);
       Page : constant Flyology_TUI.Surfaces.Surface :=
         (case Current_Page (Item) is
             when Basics_Page   => Basics_View (Item, Geometry),
             when Controls_Page => Controls_View (Item, Geometry),
             when Navigation_Page => Navigation_View (Item, Geometry),
             when Editors_Page => Editors_View (Item, Geometry),
+            when Markdown_Page => Markdown_View (Item, Geometry),
             when Telemetry_Page => Telemetry_View (Item, Geometry),
             when Chat_Page       => Chat_View (Item, Geometry),
+            when Menus_Page      => Menus_View (Item, Geometry),
+            when Color_Page      => Color_View (Item, Geometry),
             when Panels_Page     => Panels_View (Item, Geometry),
             when Windows_Page   => Windows_View (Item, Geometry));
       Help : constant Flyology_TUI.Surfaces.Surface :=
@@ -3373,7 +3902,7 @@ procedure Kitchen_Sink is
          Width, Height : Natural;
       end record;
       Responsive_Sizes : constant array (Positive range <>) of Size_Case :=
-        [(20, 6), (40, 12), (71, 24), (72, 24),
+        [(1, 1), (20, 6), (40, 12), (71, 24), (72, 24),
          (111, 30), (112, 30), (190, 55)];
 
       Geometry : Layout_Snapshot;
@@ -3425,13 +3954,14 @@ procedure Kitchen_Sink is
                   Assert
                     (Fits (Geometry.Content, Geometry.Left_Full)
                      and then Fits (Geometry.Content, Geometry.Right_Full)
-                     and then Fits
-                       (Geometry.Content, Geometry.Markdown_Frame)
                      and then not Overlaps
-                       (Geometry.Left_Full, Geometry.Right_Full)
-                     and then not Overlaps
-                       (Geometry.Left_Full, Geometry.Markdown_Frame),
+                       (Geometry.Left_Full, Geometry.Right_Full),
                      "editor regions escaped or overlapped");
+               when Markdown_Page =>
+                  Assert
+                    (Fits (Geometry.Content, Geometry.Markdown_Frame)
+                     and then Geometry.Markdown_Frame.Width <= 120,
+                     "Markdown frame escaped or exceeded its bound");
                when Telemetry_Page =>
                   Assert
                     (Fits (Geometry.Content, Geometry.First)
@@ -3447,6 +3977,16 @@ procedure Kitchen_Sink is
                     (Fits (Geometry.Content, Geometry.Chat_Frame)
                      and then Geometry.Chat_Frame.Width <= 96,
                      "chat frame escaped or exceeded readable width");
+               when Menus_Page =>
+                  Assert
+                    (Fits (Geometry.Content, Geometry.Menu_Frame)
+                     and then Geometry.Menu_Frame.Width <= 96,
+                     "menu frame escaped or exceeded its bound");
+               when Color_Page =>
+                  Assert
+                    (Fits (Geometry.Content, Geometry.Gradient_Frame)
+                     and then Geometry.Gradient_Frame.Width <= 120,
+                     "color frame escaped or exceeded its bound");
                when Panels_Page =>
                   Assert
                     (Fits
@@ -3486,6 +4026,35 @@ procedure Kitchen_Sink is
          and then Geometry.First.Width + Geometry.Second.Width + 2 = 112
          and then Geometry.First.Height + Geometry.Third.Height + 2 = 23,
          "wide gallery was not centered at its maximum working size");
+
+      Item.Pages.Activate (Chat_Page);
+      Set_Terminal_Size (Item, 190, 55);
+      Geometry := Layout (Item);
+      declare
+         Presentation : constant Chats.Presentation :=
+           Chat_Presentation (Item, Geometry);
+         Body_Area : constant Flyology_TUI.Geometry.Rectangle :=
+           Chats.Body_Region (Presentation, User_Request_Message);
+      begin
+         Assert
+           (Geometry.Chat_Origin.X = 47
+            and then Chats.Frame (Presentation).Width = 96
+            and then Fits
+              ((0, 0, Geometry.Chat_Frame.Width,
+                Geometry.Chat_Frame.Height),
+               Chats.Bubble_Region
+                 (Presentation, User_Request_Message)),
+            "wide chat ignored its centered readable frame");
+         Handle_Chat_Mouse
+           (Item,
+            Pointer
+              (Natural (Geometry.Chat_Origin.X + Body_Area.X),
+               Natural (Geometry.Chat_Origin.Y + Body_Area.Y)),
+            Geometry);
+         Assert
+           (Item.Chat.Selected_Id = User_Request_Message,
+            "wide chat hit routing ignored its centered origin");
+      end;
 
       Set_Terminal_Size (Item, 80, 24);
       Item.Pages.Activate (Controls_Page);
@@ -3659,6 +4228,39 @@ begin
    then
       Run_Responsive_Self_Test;
    else
+      if Ada.Command_Line.Argument_Count > 1 then
+         Ada.Text_IO.Put_Line
+           (Ada.Text_IO.Standard_Error,
+            "usage: kitchen_sink [--responsive-self-test|"
+            & "--color=auto|mono|ansi16|ansi256|truecolor]");
+         Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
+         return;
+      elsif Ada.Command_Line.Argument_Count = 1 then
+         declare
+            Argument : constant String := Ada.Command_Line.Argument (1);
+            Policy : Flyology_TUI.Color_Profiles.Policy;
+         begin
+            if Argument = "--color=auto" then
+               Policy := Flyology_TUI.Color_Profiles.Automatic;
+            elsif Argument = "--color=mono" then
+               Policy := Flyology_TUI.Color_Profiles.Force_Monochrome;
+            elsif Argument = "--color=ansi16" then
+               Policy := Flyology_TUI.Color_Profiles.Force_ANSI_16;
+            elsif Argument = "--color=ansi256" then
+               Policy := Flyology_TUI.Color_Profiles.Force_ANSI_256;
+            elsif Argument = "--color=truecolor" then
+               Policy := Flyology_TUI.Color_Profiles.Force_Truecolor;
+            else
+               Ada.Text_IO.Put_Line
+                 (Ada.Text_IO.Standard_Error,
+                  "usage: kitchen_sink [--responsive-self-test|"
+                  & "--color=auto|mono|ansi16|ansi256|truecolor]");
+               Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
+               return;
+            end if;
+            Terminal.Set_Color_Policy (Policy);
+         end;
+      end if;
       Runtime.Run (State, Terminal);
    end if;
 exception
