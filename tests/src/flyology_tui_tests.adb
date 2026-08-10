@@ -1018,6 +1018,206 @@ procedure Flyology_TUI_Tests is
       Execute     => Execute,
       Command_Capacity => 1);
 
+   type Motion_Model is limited record
+      Pressed       : Boolean := False;
+      Drag_Count    : Natural := 0;
+      Last_Drag_X   : Natural := 0;
+      Release_Count : Natural := 0;
+   end record;
+
+   protected type Motion_Signal is
+      procedure Reset;
+      procedure Mark_Read;
+      entry Wait_Until_Read;
+   private
+      Is_Read : Boolean := False;
+   end Motion_Signal;
+
+   protected body Motion_Signal is
+      procedure Reset is
+      begin
+         Is_Read := False;
+      end Reset;
+
+      procedure Mark_Read is
+      begin
+         Is_Read := True;
+      end Mark_Read;
+
+      entry Wait_Until_Read when Is_Read is
+      begin
+         null;
+      end Wait_Until_Read;
+   end Motion_Signal;
+
+   Motion_Burst : Motion_Signal;
+
+   procedure Motion_Initialize
+     (Item : in out Motion_Model;
+      Next : in out App_Transitions.Transition)
+   is
+      pragma Unreferenced (Next);
+   begin
+      Item.Pressed := False;
+      Item.Drag_Count := 0;
+      Item.Last_Drag_X := 0;
+      Item.Release_Count := 0;
+   end Motion_Initialize;
+
+   procedure Motion_Update
+     (Item  : in out Motion_Model;
+      Event : App_Events.Event;
+      Next  : in out App_Transitions.Transition) is
+   begin
+      if Event.Kind = App_Events.Terminal_Input
+        and then Event.Terminal.Kind = Flyology_TUI.Events.Mouse_Input
+      then
+         case Event.Terminal.Mouse.Action is
+            when Flyology_TUI.Events.Mouse_Click =>
+               Item.Pressed := True;
+            when Flyology_TUI.Events.Mouse_Drag =>
+               Item.Drag_Count := Item.Drag_Count + 1;
+               Item.Last_Drag_X := Event.Terminal.Mouse.X;
+            when Flyology_TUI.Events.Mouse_Release =>
+               Item.Release_Count := Item.Release_Count + 1;
+               App_Transitions.Quit (Next);
+            when others => null;
+         end case;
+      end if;
+   end Motion_Update;
+
+   function Motion_Present
+     (Item : Motion_Model) return Flyology_TUI.Views.View is
+   begin
+      if Item.Pressed and then Item.Release_Count = 0 then
+         --  The custom backend signals only after the input worker has read
+         --  the complete drag burst.  This makes the coalescing assertion
+         --  independent of scheduler speed while retaining a bounded failure
+         --  if queue admission deadlocks.
+         select
+            Motion_Burst.Wait_Until_Read;
+         or
+            delay 2.0;
+            raise Program_Error with "motion burst did not reach the runner";
+         end select;
+      end if;
+      return Flyology_TUI.Views.From_Surface
+        (Flyology_TUI.Surfaces.Create (1, 1));
+   end Motion_Present;
+
+   package Motion_Runtime is new Flyology_TUI.Runners
+     (Events      => App_Events,
+      Transitions => App_Transitions,
+      Model_Type  => Motion_Model,
+      Initialize  => Motion_Initialize,
+      Update      => Motion_Update,
+      Present     => Motion_Present,
+      Execute     => Execute,
+      Event_Capacity => 1,
+      Command_Capacity => 1);
+
+   type Motion_Backend is limited new Flyology_TUI.Backends.Backend with
+      record
+         Opened : Boolean := False;
+         Index  : Natural range 0 .. 66 := 0;
+      end record;
+
+   overriding procedure Open (Item : in out Motion_Backend);
+   overriding procedure Close (Item : in out Motion_Backend);
+   overriding procedure Next_Event
+     (Item   : in out Motion_Backend;
+      Event  : out Flyology_TUI.Events.Terminal_Event;
+      Status : out Flyology_TUI.Backends.Input_Status);
+   overriding procedure Render
+     (Item : in out Motion_Backend;
+      View : Flyology_TUI.Views.View);
+   overriding procedure Interrupt (Item : in out Motion_Backend);
+
+   overriding procedure Open (Item : in out Motion_Backend) is
+   begin
+      Item.Opened := True;
+      Item.Index := 0;
+      Motion_Burst.Reset;
+   end Open;
+
+   overriding procedure Close (Item : in out Motion_Backend) is
+   begin
+      Item.Opened := False;
+   end Close;
+
+   overriding procedure Next_Event
+     (Item   : in out Motion_Backend;
+      Event  : out Flyology_TUI.Events.Terminal_Event;
+      Status : out Flyology_TUI.Backends.Input_Status)
+   is
+      Modifiers : constant Flyology_TUI.Events.Modifiers :=
+        (others => False);
+   begin
+      if not Item.Opened then
+         raise Flyology_TUI.Backends.Backend_Error with
+           "motion backend is not open";
+      end if;
+      if Item.Index = 0 then
+         Event :=
+           (Kind  => Flyology_TUI.Events.Mouse_Input,
+            Mouse =>
+              (X          => 0,
+               Y          => 0,
+               Button     => Flyology_TUI.Events.Left_Button,
+               Action     => Flyology_TUI.Events.Mouse_Click,
+               Modified   => Modifiers,
+               Wheel_X    => 0,
+               Wheel_Y    => 0));
+         Item.Index := 1;
+         Status := Flyology_TUI.Backends.Event_Available;
+      elsif Item.Index <= 64 then
+         Event :=
+           (Kind  => Flyology_TUI.Events.Mouse_Input,
+            Mouse =>
+              (X          => Item.Index,
+               Y          => 0,
+               Button     => Flyology_TUI.Events.Left_Button,
+               Action     => Flyology_TUI.Events.Mouse_Drag,
+               Modified   => Modifiers,
+               Wheel_X    => 0,
+               Wheel_Y    => 0));
+         Item.Index := Item.Index + 1;
+         Status := Flyology_TUI.Backends.Event_Available;
+      elsif Item.Index = 65 then
+         Event :=
+           (Kind  => Flyology_TUI.Events.Mouse_Input,
+            Mouse =>
+              (X          => 64,
+               Y          => 0,
+               Button     => Flyology_TUI.Events.Left_Button,
+               Action     => Flyology_TUI.Events.Mouse_Release,
+               Modified   => Modifiers,
+               Wheel_X    => 0,
+               Wheel_Y    => 0));
+         Item.Index := 66;
+         Motion_Burst.Mark_Read;
+         Status := Flyology_TUI.Backends.Event_Available;
+      else
+         Event := (Kind => Flyology_TUI.Events.Interrupt);
+         Status := Flyology_TUI.Backends.End_Of_Input;
+      end if;
+   end Next_Event;
+
+   overriding procedure Render
+     (Item : in out Motion_Backend;
+      View : Flyology_TUI.Views.View)
+   is
+      pragma Unreferenced (Item, View);
+   begin
+      null;
+   end Render;
+
+   overriding procedure Interrupt (Item : in out Motion_Backend) is
+      pragma Unreferenced (Item);
+   begin
+      null;
+   end Interrupt;
+
    type Partial_Backend is limited new Flyology_TUI.Backends.Backend with
       record
          Opened : Boolean := False;
@@ -1137,6 +1337,20 @@ procedure Flyology_TUI_Tests is
          Assert
            (Partial.Closed and then not Partial.Opened,
             "runner did not close a partially opened backend");
+      end;
+
+      declare
+         Motion_State : Motion_Model;
+         Backend : Motion_Backend;
+      begin
+         Motion_Runtime.Run (Motion_State, Backend);
+         Assert
+           (Motion_State.Drag_Count = 1
+            and then Motion_State.Last_Drag_X = 64,
+            "runner replayed stale mouse motion instead of the latest sample");
+         Assert
+           (Motion_State.Release_Count = 1,
+            "mouse motion coalescing changed release ordering");
       end;
    end Test_Runner;
 

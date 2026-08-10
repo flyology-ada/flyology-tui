@@ -3,6 +3,11 @@ with Flyology_TUI.Programs;
 
 package body Flyology_TUI.Runners is
    use type Flyology_TUI.Backends.Input_Status;
+   use type Events.Event_Kind;
+   use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Flyology_TUI.Events.Mouse_Action;
+   use type Flyology_TUI.Events.Mouse_Button;
+   use type Flyology_TUI.Events.Modifiers;
 
    package Program is new Flyology_TUI.Programs
      (Events      => Events,
@@ -15,7 +20,26 @@ package body Flyology_TUI.Runners is
    type Event_Array is array (Positive range <>) of Events.Event;
    type Command_Array is array (Positive range <>) of Transitions.Command;
 
+   function Is_Mouse_Motion (Item : Events.Event) return Boolean is
+     (Item.Kind = Events.Terminal_Input
+      and then Item.Terminal.Kind = Flyology_TUI.Events.Mouse_Input
+      and then Item.Terminal.Mouse.Action in
+        Flyology_TUI.Events.Mouse_Move | Flyology_TUI.Events.Mouse_Drag);
+
+   function Same_Motion_Stream
+     (Left, Right : Events.Event) return Boolean
+   is
+     (Is_Mouse_Motion (Left)
+      and then Is_Mouse_Motion (Right)
+      and then Left.Terminal.Mouse.Action = Right.Terminal.Mouse.Action
+      and then Left.Terminal.Mouse.Button = Right.Terminal.Mouse.Button
+      and then Left.Terminal.Mouse.Modified = Right.Terminal.Mouse.Modified);
+
    protected type Event_Queue is
+      procedure Try_Coalesce
+        (Item      : Events.Event;
+         Accepted  : out Boolean;
+         Coalesced : out Boolean);
       entry Put (Item : Events.Event; Accepted : out Boolean);
       entry Get (Item : out Events.Event; Available : out Boolean);
       procedure Close;
@@ -28,15 +52,49 @@ package body Flyology_TUI.Runners is
    end Event_Queue;
 
    protected body Event_Queue is
+      procedure Try_Coalesce
+        (Item      : Events.Event;
+         Accepted  : out Boolean;
+         Coalesced : out Boolean)
+      is
+         Previous : constant Positive :=
+           (if Tail = 1 then Event_Capacity else Tail - 1);
+      begin
+         Accepted := not Closed;
+         Coalesced :=
+           Accepted
+           and then Count > 0
+           and then Same_Motion_Stream (Values (Previous), Item);
+         if Coalesced then
+            --  This procedure is deliberately separate from the blocking Put
+            --  entry.  It can replace a compatible tail even while a
+            --  capacity-one queue is full.
+            Values (Previous) := Item;
+         end if;
+      end Try_Coalesce;
+
       entry Put (Item : Events.Event; Accepted : out Boolean)
         when Count < Event_Capacity or else Closed
       is
+         Previous : constant Positive :=
+           (if Tail = 1 then Event_Capacity else Tail - 1);
       begin
          Accepted := not Closed;
          if Accepted then
-            Values (Tail) := Item;
-            Tail := (if Tail = Event_Capacity then 1 else Tail + 1);
-            Count := Count + 1;
+            if Count > 0
+              and then Same_Motion_Stream (Values (Previous), Item)
+            then
+               --  Rendering every intermediate pointer sample makes large
+               --  frames trail the physical mouse.  A consecutive motion
+               --  sample has no independent edge semantics, so retain only
+               --  the newest position.  Clicks, releases, wheel input, and
+               --  changes of action/button/modifiers remain ordered entries.
+               Values (Previous) := Item;
+            else
+               Values (Tail) := Item;
+               Tail := (if Tail = Event_Capacity then 1 else Tail + 1);
+               Count := Count + 1;
+            end if;
          end if;
       end Put;
 
@@ -199,13 +257,17 @@ package body Flyology_TUI.Runners is
             task body Input_Worker is
                Terminal : Flyology_TUI.Events.Terminal_Event;
                Status : Flyology_TUI.Backends.Input_Status;
-               Accepted : Boolean;
+               Accepted, Coalesced : Boolean;
             begin
                loop
                   Flyology_TUI.Backends.Next_Event
                     (Backend, Terminal, Status);
                   exit when Status = Flyology_TUI.Backends.Interrupted;
-                  Inbox.Put (Events.From_Terminal (Terminal), Accepted);
+                  Inbox.Try_Coalesce
+                    (Events.From_Terminal (Terminal), Accepted, Coalesced);
+                  if Accepted and then not Coalesced then
+                     Inbox.Put (Events.From_Terminal (Terminal), Accepted);
+                  end if;
                   exit when not Accepted
                     or else Status = Flyology_TUI.Backends.End_Of_Input;
                end loop;
