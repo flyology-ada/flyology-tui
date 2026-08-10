@@ -790,43 +790,43 @@ package body Flyology_TUI.Components.Chats is
                       then Natural (Visible_Bubble_End - Visible_Bubble_Y)
                       else 0)));
             else
-            Header.Write
-              (0, 0, Label, Chosen);
-            Bubble.Overlay_Clipped (Header, Integer (Inner_X), 0);
-            Bubble.Overlay_Clipped
-              (Bodies (Positive (Body_Position)).Content,
-               Integer (Inner_X), 1, Transparent_Spaces => True);
-            Bubble.Overlay_Clipped
-              (Bodies (Positive (Body_Position)).Actions,
-               Integer (Inner_X),
-               Integer (1 + Item.Body_Heights.Element (Index - 1)),
-               Transparent_Spaces => True);
-            Result.Frame_Value.Overlay_Clipped
-              (Bubble, Integer (Bubble_X), Bubble_Y);
-            Header_Region.X := Integer (Bubble_X);
-            Header_Region.Width := Bubble_Width;
-            Result.Layout_Value.Header_Regions.Replace_Element
-              (Visible - 1, Header_Region);
-            Body_Region.X := Integer (Bubble_X + Inner_X);
-            Body_Region.Width := Natural'Min
-              (Inner_Width,
-               Bodies (Positive (Body_Position)).Content.Width);
-            Result.Layout_Value.Body_Regions.Replace_Element
-              (Visible - 1, Body_Region);
-            Action_Region.X := Integer (Bubble_X + Inner_X);
-            Action_Region.Width := Natural'Min
-              (Inner_Width,
-               Bodies (Positive (Body_Position)).Actions.Width);
-            Result.Layout_Value.Action_Regions.Replace_Element
-              (Visible - 1, Action_Region);
-            Result.Layout_Value.Bubble_Regions.Replace_Element
-              (Visible - 1,
-               (X => Integer (Bubble_X), Y => Visible_Bubble_Y,
-                Width => Bubble_Width,
-                Height =>
-                  (if Visible_Bubble_End > Visible_Bubble_Y
-                   then Natural (Visible_Bubble_End - Visible_Bubble_Y)
-                   else 0)));
+               Header.Write
+                 (0, 0, Label, Chosen);
+               Bubble.Overlay_Clipped (Header, Integer (Inner_X), 0);
+               Bubble.Overlay_Clipped
+                 (Bodies (Positive (Body_Position)).Content,
+                  Integer (Inner_X), 1, Transparent_Spaces => True);
+               Bubble.Overlay_Clipped
+                 (Bodies (Positive (Body_Position)).Actions,
+                  Integer (Inner_X),
+                  Integer (1 + Item.Body_Heights.Element (Index - 1)),
+                  Transparent_Spaces => True);
+               Result.Frame_Value.Overlay_Clipped
+                 (Bubble, Integer (Bubble_X), Bubble_Y);
+               Header_Region.X := Integer (Bubble_X);
+               Header_Region.Width := Bubble_Width;
+               Result.Layout_Value.Header_Regions.Replace_Element
+                 (Visible - 1, Header_Region);
+               Body_Region.X := Integer (Bubble_X + Inner_X);
+               Body_Region.Width := Natural'Min
+                 (Inner_Width,
+                  Bodies (Positive (Body_Position)).Content.Width);
+               Result.Layout_Value.Body_Regions.Replace_Element
+                 (Visible - 1, Body_Region);
+               Action_Region.X := Integer (Bubble_X + Inner_X);
+               Action_Region.Width := Natural'Min
+                 (Inner_Width,
+                  Bodies (Positive (Body_Position)).Actions.Width);
+               Result.Layout_Value.Action_Regions.Replace_Element
+                 (Visible - 1, Action_Region);
+               Result.Layout_Value.Bubble_Regions.Replace_Element
+                 (Visible - 1,
+                  (X => Integer (Bubble_X), Y => Visible_Bubble_Y,
+                   Width => Bubble_Width,
+                   Height =>
+                     (if Visible_Bubble_End > Visible_Bubble_Y
+                      then Natural (Visible_Bubble_End - Visible_Bubble_Y)
+                      else 0)));
             end if;
          end;
       end loop;
