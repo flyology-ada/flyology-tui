@@ -17,11 +17,14 @@ project Flyology_Tui_Tests is
       "streaming_text_tests.adb",
       "chat_tests.adb",
       "panel_group_tests.adb",
-      "posix_initial_size_tests.adb");
+      "posix_initial_size_tests.adb",
+      "markdown_components_tests.adb",
+      "menubar_tests.adb",
+      "gradient_tests.adb");
 
    package Compiler is
       for Default_Switches ("Ada") use
-        Flyology_Tui_Tests_Config.Ada_Compiler_Switches;
+        Flyology_Tui_Tests_Config.Ada_Compiler_Switches & ("-gnat2022");
    end Compiler;
 
    package Binder is

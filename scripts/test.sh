@@ -70,6 +70,9 @@ esac
 ./bin/streaming_text_tests
 ./bin/chat_tests
 ./bin/panel_group_tests
+./bin/markdown_components_tests
+./bin/menubar_tests
+./bin/gradient_tests
 
 cd "$root_dir"
 ./scripts/test-posix-initial-size.sh

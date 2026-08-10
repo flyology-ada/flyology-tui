@@ -22,6 +22,9 @@ executables = [
   "chat_tests",
   "panel_group_tests",
   "posix_initial_size_tests",
+  "markdown_components_tests",
+  "menubar_tests",
+  "gradient_tests",
 ]
 
 [[depends-on]]
