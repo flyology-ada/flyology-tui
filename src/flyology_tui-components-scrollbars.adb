@@ -322,6 +322,15 @@ package body Flyology_TUI.Components.Scrollbars is
      (Item       : Model;
       Appearance : Scrollbars.Appearance)
       return Flyology_TUI.Surfaces.Surface
+   is (Render
+         (Item, Appearance,
+          Flyology_TUI.Skins.Charm_Default_Skin.Scrollbar));
+
+   function Render
+     (Item       : Model;
+      Appearance : Scrollbars.Appearance;
+      Chrome     : Flyology_TUI.Skins.Scrollbar_Chrome)
+      return Flyology_TUI.Surfaces.Surface
    is
       Track_Style : constant Flyology_TUI.Styles.Style :=
         (if Item.Enabled then Appearance.Track else Appearance.Disabled);
@@ -352,12 +361,13 @@ package body Flyology_TUI.Components.Scrollbars is
          if Item.Flow_Value = Flyology_TUI.Layouts.Boxes.Horizontal then
             Result.Put
               (Position, 0,
-               (if Position = 0 then "◀"
-                elsif Position + 1 = Item.Length then "▶"
+               (if Position = 0 then (1 => Chrome.Left_Arrow)
+                elsif Position + 1 = Item.Length
+                then (1 => Chrome.Right_Arrow)
                 elsif Flyology_TUI.Geometry.Contains
                   (Thumb, Integer (Position), 0)
-                then "█"
-                else "░"),
+                then (1 => Chrome.Thumb)
+                else (1 => Chrome.Track)),
                (if Position = 0 or else Position + 1 = Item.Length
                 then Button_Style
                 elsif Flyology_TUI.Geometry.Contains
@@ -366,12 +376,13 @@ package body Flyology_TUI.Components.Scrollbars is
          else
             Result.Put
               (0, Position,
-               (if Position = 0 then "▲"
-                elsif Position + 1 = Item.Length then "▼"
+               (if Position = 0 then (1 => Chrome.Up_Arrow)
+                elsif Position + 1 = Item.Length
+                then (1 => Chrome.Down_Arrow)
                 elsif Flyology_TUI.Geometry.Contains
                   (Thumb, 0, Integer (Position))
-                then "█"
-                else "░"),
+                then (1 => Chrome.Thumb)
+                else (1 => Chrome.Track)),
                (if Position = 0 or else Position + 1 = Item.Length
                 then Button_Style
                 elsif Flyology_TUI.Geometry.Contains
@@ -381,6 +392,19 @@ package body Flyology_TUI.Components.Scrollbars is
       end loop;
       return Result;
    end Render;
+
+   function Render
+     (Item : Model;
+      Skin : Flyology_TUI.Skins.Skin)
+      return Flyology_TUI.Surfaces.Surface is
+     (Render
+        (Item,
+         (Track         => Skin.Control,
+          Thumb         => Skin.Control_Selected,
+          Focused_Thumb => Skin.Palette.Focused,
+          Buttons       => Skin.Control,
+          Disabled      => Skin.Palette.Disabled),
+         Skin.Scrollbar));
 
    function Render
      (Item  : Model;

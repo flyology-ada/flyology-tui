@@ -171,12 +171,24 @@ package body Flyology_TUI.Components.Check_Boxes is
       Look      : Appearance;
       Has_Focus : Boolean := False)
       return Flyology_TUI.Surfaces.Surface
+   is (Render
+         (Item, Look, Flyology_TUI.Skins.Charm_Default_Skin.Choice,
+          Has_Focus));
+
+   function Render
+     (Item      : Model;
+      Look      : Appearance;
+      Chrome    : Flyology_TUI.Skins.Choice_Chrome;
+      Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface
    is
       Marker : constant Wide_Wide_String :=
         (case Item.Value is
             when Unchecked => "[ ] ",
-            when Checked   => "[x] ",
-            when Mixed     => "[-] ");
+            when Checked   =>
+              "[" & Wide_Wide_String'(1 => Chrome.Check_On) & "] ",
+            when Mixed     =>
+              "[" & Wide_Wide_String'(1 => Chrome.Check_Mixed) & "] ");
       Style : constant Flyology_TUI.Styles.Style :=
         (if not Item.Enabled then Look.Disabled
          elsif Item.Armed then Look.Pressed
@@ -187,6 +199,20 @@ package body Flyology_TUI.Components.Check_Boxes is
       return Flyology_TUI.Surfaces.From_Text
         (Marker & Text.To_Wide_Wide_String (Item.Caption), Style);
    end Render;
+
+   function Render
+     (Item      : Model;
+      Skin      : Flyology_TUI.Skins.Skin;
+      Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface is
+     (Render
+        (Item,
+         (Normal   => Skin.Control,
+          Selected => Skin.Control,
+          Focused  => Skin.Control_Focused,
+          Pressed  => Skin.Palette.Button_Pressed,
+          Disabled => Skin.Palette.Disabled),
+         Skin.Choice, Has_Focus));
 
    function Render
      (Item      : Model;

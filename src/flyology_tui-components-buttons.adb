@@ -149,16 +149,78 @@ package body Flyology_TUI.Components.Buttons is
       Look       : Appearance;
       Has_Focus  : Boolean := False)
       return Flyology_TUI.Surfaces.Surface
+   is (Render
+         (Item, Look, Flyology_TUI.Skins.Charm_Default_Skin.Button,
+          Has_Focus));
+
+   function Render
+     (Item       : Model;
+      Look       : Appearance;
+      Chrome     : Flyology_TUI.Skins.Button_Chrome;
+      Has_Focus  : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface
    is
       Style : constant Flyology_TUI.Styles.Style :=
         (if not Item.Enabled then Look.Disabled
          elsif Item.Armed then Look.Pressed
          elsif Has_Focus then Look.Focused
          else Look.Normal);
+      Body_Text : constant Wide_Wide_String :=
+        Wide_Wide_String'(1 => Chrome.Left_Outer)
+        & Wide_Wide_String'(1 => Chrome.Left_Inner)
+        & Label (Item)
+        & Wide_Wide_String'(1 => Chrome.Right_Inner)
+        & Wide_Wide_String'(1 => Chrome.Right_Outer);
+      Button_Surface : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.From_Text (Body_Text, Style);
+      Extra_X : constant Natural := Chrome.Shadow_X;
+      Extra_Y : constant Natural := Chrome.Shadow_Y;
+      Result : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Button_Surface.Width + Extra_X,
+           Button_Surface.Height + Extra_Y);
+      Offset_X : constant Natural :=
+        (if Item.Armed and then Chrome.Depress and then Extra_X > 0
+         then 1 else 0);
+      Offset_Y : constant Natural :=
+        (if Item.Armed and then Chrome.Depress and then Extra_Y > 0
+         then 1 else 0);
    begin
-      return Flyology_TUI.Surfaces.From_Text
-        ("[ " & Label (Item) & " ]", Style);
+      if not (Item.Armed and then Chrome.Depress) then
+         if Extra_X > 0 then
+            for X in Button_Surface.Width ..
+              Button_Surface.Width + Extra_X - 1
+            loop
+               for Y in Extra_Y ..
+                 Button_Surface.Height + Extra_Y - 1
+               loop
+                  Result.Put (X, Y, " ", Chrome.Shadow);
+               end loop;
+            end loop;
+         end if;
+         if Extra_Y > 0 then
+            for X in Extra_X ..
+              Button_Surface.Width + Extra_X - 1
+            loop
+               for Y in Button_Surface.Height ..
+                 Button_Surface.Height + Extra_Y - 1
+               loop
+                  Result.Put (X, Y, " ", Chrome.Shadow);
+               end loop;
+            end loop;
+         end if;
+      end if;
+      Result.Overlay_Clipped
+        (Button_Surface, Integer (Offset_X), Integer (Offset_Y));
+      return Result;
    end Render;
+
+   function Render
+     (Item       : Model;
+      Skin       : Flyology_TUI.Skins.Skin;
+      Has_Focus  : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface is
+     (Render (Item, From_Palette (Skin.Palette), Skin.Button, Has_Focus));
 
    function Render
      (Item       : Model;

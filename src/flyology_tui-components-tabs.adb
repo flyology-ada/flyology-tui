@@ -13,6 +13,7 @@ package body Flyology_TUI.Components.Tabs is
      (Normal   => Theme.Primary,
       Active   => Theme.Selected,
       Focused  => Theme.Focused,
+      Mnemonic => Theme.Focused,
       Disabled => Theme.Muted);
 
    function From_Palette
@@ -20,7 +21,16 @@ package body Flyology_TUI.Components.Tabs is
      (Normal   => Palette.Content,
       Active   => Palette.Button_Focused,
       Focused  => Palette.Interaction,
+      Mnemonic => Palette.Interaction,
       Disabled => Palette.Disabled);
+
+   function From_Skin
+     (Skin : Flyology_TUI.Skins.Skin) return Appearance is
+     (Normal   => Skin.Menu_Bar,
+      Active   => Skin.Palette.Button_Focused,
+      Focused  => Skin.Palette.Interaction,
+      Mnemonic => Skin.Palette.Interaction,
+      Disabled => Skin.Palette.Disabled);
 
    procedure Validate (Values : Item_Array) is
    begin
@@ -247,6 +257,22 @@ package body Flyology_TUI.Components.Tabs is
                   & Label (Item.Values.Element (Index - 1))
                   & Chrome.Normal_Right),
                Style);
+            if Chrome.Mnemonic_First and then Item.Enabled
+              and then Item.Active /= Index
+            then
+               declare
+                  Caption : constant Wide_Wide_String :=
+                    Label (Item.Values.Element (Index - 1));
+               begin
+                  if Caption'Length > 0 and then Columns > 2 then
+                     Tab.Put
+                       (1, 0,
+                        Wide_Wide_String'
+                          (1 => Caption (Caption'First)),
+                        Look.Mnemonic);
+                  end if;
+               end;
+            end if;
             Result.Frame_Value.Overlay_Clipped
               (Tab, Integer (Start) - Integer (View_Start), 0);
             if Visible_First < Visible_Last then
@@ -278,7 +304,7 @@ package body Flyology_TUI.Components.Tabs is
       Skin      : Flyology_TUI.Skins.Skin;
       Has_Focus : Boolean := False) return Presentation
    is (Present
-         (Item, Width, From_Palette (Skin.Palette), Skin.Tabs, Has_Focus));
+         (Item, Width, From_Skin (Skin), Skin.Tabs, Has_Focus));
 
    function Present
      (Item      : Model;
@@ -576,6 +602,22 @@ package body Flyology_TUI.Components.Tabs is
                   & Label (Item.Values.Element (Index - 1))
                   & Chrome.Normal_Right),
                Style);
+            if Chrome.Mnemonic_First and then Item.Enabled
+              and then Item.Active /= Index
+            then
+               declare
+                  Caption : constant Wide_Wide_String :=
+                    Label (Item.Values.Element (Index - 1));
+               begin
+                  if Caption'Length > 0 then
+                     Result.Put
+                       (X + 1, 0,
+                        Wide_Wide_String'
+                          (1 => Caption (Caption'First)),
+                        Look.Mnemonic);
+                  end if;
+               end;
+            end if;
             X := X + Tab_Width (Item, Index);
          end;
       end loop;
@@ -588,7 +630,7 @@ package body Flyology_TUI.Components.Tabs is
       Has_Focus : Boolean := False)
       return Flyology_TUI.Surfaces.Surface
    is (Render
-         (Item, From_Palette (Skin.Palette), Skin.Tabs, Has_Focus));
+         (Item, From_Skin (Skin), Skin.Tabs, Has_Focus));
 
    function Render
      (Item      : Model;

@@ -319,6 +319,16 @@ package body Flyology_TUI.Components.Radio_Groups is
       Look      : Appearance;
       Has_Focus : Boolean := False)
       return Flyology_TUI.Surfaces.Surface
+   is (Render
+         (Item, Look, Flyology_TUI.Skins.Charm_Default_Skin.Choice,
+          Has_Focus));
+
+   function Render
+     (Item      : Model;
+      Look      : Appearance;
+      Chrome    : Flyology_TUI.Skins.Choice_Chrome;
+      Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface
    is
       Columns : Natural := 0;
    begin
@@ -343,7 +353,10 @@ package body Flyology_TUI.Components.Radio_Groups is
             begin
                Result.Write
                  (0, Index - 1,
-                  (if Selected then "(o) " else "( ) ")
+                  (if Selected
+                   then "("
+                     & Wide_Wide_String'(1 => Chrome.Radio_On) & ") "
+                   else "( ) ")
                     & Label (Item.Values.Element (Index - 1)),
                   Style);
             end;
@@ -351,6 +364,19 @@ package body Flyology_TUI.Components.Radio_Groups is
          return Result;
       end;
    end Render;
+
+   function Render
+     (Item      : Model;
+      Skin      : Flyology_TUI.Skins.Skin;
+      Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface is
+     (Render
+        (Item,
+         (Normal   => Skin.Control,
+          Selected => Skin.Control,
+          Focused  => Skin.Control_Focused,
+          Disabled => Skin.Palette.Disabled),
+         Skin.Choice, Has_Focus));
 
    function Render
      (Item      : Model;

@@ -142,9 +142,13 @@ type or storing presentation state in a model.
 bundles desktop and semantic colors with panel/window border glyphs, clipped
 hard shadows, tab markers, close marks, and dock chrome. The Charm default,
 dark, and light skins retain the existing rounded visual language. The
-Turbo Vision-inspired preset uses a blue desktop, double-line frames, hard
-shadows, angle-marked tabs, and compact status-oriented contrast. It is an
-inspired preset rather than an API- or rendering-compatible clone.
+Turbo Vision-inspired preset follows the later Borland vocabulary rather than
+only borrowing its colors: a blue desktop and work windows, gray menu/status
+bars and dialogs, cyan choice/list fields, blue edit fields, green commands,
+centered border titles, single inactive and double active window frames,
+leading close boxes, hard offset shadows, depressed buttons, textured
+scrollbars, and red menu mnemonics. It is an inspired preset rather than an
+API- or rendering-compatible clone.
 
 Skin overloads are additive: the original explicit `Appearance`, `Theme`, and
 render functions remain available. Models never retain the active skin.

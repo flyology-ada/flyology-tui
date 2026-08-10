@@ -3,6 +3,7 @@ with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Layouts.Boxes;
 with Flyology_TUI.Mouse;
+with Flyology_TUI.Skins;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
 with Flyology_TUI.Themes;
@@ -75,6 +76,17 @@ package Flyology_TUI.Components.Scrollbars is
    function Render
      (Item       : Model;
       Appearance : Scrollbars.Appearance)
+      return Flyology_TUI.Surfaces.Surface;
+
+   function Render
+     (Item       : Model;
+      Appearance : Scrollbars.Appearance;
+      Chrome     : Flyology_TUI.Skins.Scrollbar_Chrome)
+      return Flyology_TUI.Surfaces.Surface;
+
+   function Render
+     (Item : Model;
+      Skin : Flyology_TUI.Skins.Skin)
       return Flyology_TUI.Surfaces.Surface;
 
    function Render

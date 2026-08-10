@@ -1,9 +1,13 @@
+with Flyology_TUI.Glyphs;
+
 package body Flyology_TUI.Components.Windows is
    use type Flyology_TUI.Events.Key_Kind;
    use type Flyology_TUI.Events.Mouse_Action;
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
    use type Flyology_TUI.Geometry.Rectangle;
+   use type Flyology_TUI.Skins.Control_Placement;
+   use type Flyology_TUI.Skins.Title_Placement;
 
    function Chrome_Style
      (Value : Flyology_TUI.Styles.Style) return Flyology_TUI.Styles.Style
@@ -177,12 +181,15 @@ package body Flyology_TUI.Components.Windows is
 
    function Close_Hit
      (Area : Flyology_TUI.Geometry.Rectangle;
-      Point : Flyology_TUI.Geometry.Point) return Boolean
+      Point : Flyology_TUI.Geometry.Point;
+      Chrome : Flyology_TUI.Skins.Window_Chrome) return Boolean
    is
       Close_X : constant Integer :=
-        Safe_Add
-          (Area.X,
-           Integer (if Area.Width > 1 then Area.Width - 2 else 0));
+        (if Chrome.Close_Position = Flyology_TUI.Skins.Leading_Control
+         then Safe_Add (Area.X, Integer (if Area.Width > 2 then 2 else 0))
+         else Safe_Add
+           (Area.X,
+            Integer (if Area.Width > 1 then Area.Width - 2 else 0)));
    begin
       return Area.Width > 1
         and then Point.Y = Area.Y
@@ -191,7 +198,8 @@ package body Flyology_TUI.Components.Windows is
 
    function Operation_At
      (Item  : Model;
-      Point : Flyology_TUI.Geometry.Point) return Operation
+      Point : Flyology_TUI.Geometry.Point;
+      Chrome : Flyology_TUI.Skins.Window_Chrome) return Operation
    is
       Left   : constant Boolean := Point.X = Item.Area.X;
       Top    : constant Boolean := Point.Y = Item.Area.Y;
@@ -202,7 +210,10 @@ package body Flyology_TUI.Components.Windows is
       North_Handle : constant Boolean :=
         Top and then Point.X = Safe_Add (Item.Area.X, 1);
    begin
-      if Item.Can_Close and then Close_Hit (Item.Area, Point) then
+      if Item.Can_Close
+        and then (not Chrome.Active_Controls_Only or else Item.Has_Focus)
+        and then Close_Hit (Item.Area, Point, Chrome)
+      then
          return Closing;
       elsif Item.Can_Resize then
          if Top and Left then
@@ -288,6 +299,16 @@ package body Flyology_TUI.Components.Windows is
       Event     : Flyology_TUI.Mouse.Local_Event;
       Workspace : Flyology_TUI.Geometry.Rectangle)
       return Flyology_TUI.Components.Interactions.Update_Result
+   is (Handle
+         (Item, Event, Workspace,
+          Flyology_TUI.Skins.Charm_Default_Skin.Window));
+
+   function Handle
+     (Item      : in out Model;
+      Event     : Flyology_TUI.Mouse.Local_Event;
+      Workspace : Flyology_TUI.Geometry.Rectangle;
+      Chrome    : Flyology_TUI.Skins.Window_Chrome)
+      return Flyology_TUI.Components.Interactions.Update_Result
    is
       Result : Flyology_TUI.Components.Interactions.Update_Result;
       Point : constant Flyology_TUI.Geometry.Point := (Event.X, Event.Y);
@@ -303,7 +324,9 @@ package body Flyology_TUI.Components.Windows is
          Result.Activated :=
            Item.Enabled
            and then Item.Active = Closing
-           and then Close_Hit (Item.Area, Point);
+           and then
+             (not Chrome.Active_Controls_Only or else Item.Has_Focus)
+           and then Close_Hit (Item.Area, Point, Chrome);
          Item.Capturing := False;
          Item.Active := Idle;
       elsif not Item.Enabled then
@@ -313,7 +336,7 @@ package body Flyology_TUI.Components.Windows is
         and then Flyology_TUI.Geometry.Contains (Item.Area, Point)
       then
          Item.Has_Focus := True;
-         Item.Active := Operation_At (Item, Point);
+         Item.Active := Operation_At (Item, Point, Chrome);
          Item.Press_Point := Point;
          Item.Press_Area := Item.Area;
          Result.Handled := True;
@@ -335,6 +358,14 @@ package body Flyology_TUI.Components.Windows is
       Result.Changed := Item.Area /= Before;
       return Result;
    end Handle;
+
+   function Handle
+     (Item      : in out Model;
+      Event     : Flyology_TUI.Mouse.Local_Event;
+      Workspace : Flyology_TUI.Geometry.Rectangle;
+      Skin      : Flyology_TUI.Skins.Skin)
+      return Flyology_TUI.Components.Interactions.Update_Result is
+     (Handle (Item, Event, Workspace, Skin.Window));
 
    function Handle
      (Item      : in out Model;
@@ -443,6 +474,8 @@ package body Flyology_TUI.Components.Windows is
         (if Item.Enabled then Appearance.Content else Appearance.Disabled);
       Close_Style : constant Flyology_TUI.Styles.Style :=
         (if Item.Enabled then Appearance.Close else Appearance.Disabled);
+      Frame_Chrome : constant Flyology_TUI.Skins.Frame_Chrome :=
+        (if Item.Has_Focus then Chrome.Focused_Frame else Chrome.Frame);
       Result : Flyology_TUI.Surfaces.Surface;
       Window : Flyology_TUI.Surfaces.Surface;
       Client_Layer : Flyology_TUI.Surfaces.Surface;
@@ -451,10 +484,22 @@ package body Flyology_TUI.Components.Windows is
         (if Item.Area.Width > 2 then Item.Area.Width - 2 else 0);
       Client_Height : constant Natural :=
         (if Item.Area.Height > 2 then Item.Area.Height - 2 else 0);
-      Title_Width : constant Natural :=
+      Left_Reserve : constant Natural :=
         (if Item.Can_Close
-         then (if Item.Area.Width > 4 then Item.Area.Width - 4 else 0)
-         else (if Item.Area.Width > 3 then Item.Area.Width - 3 else 0));
+           and then Chrome.Close_Position =
+             Flyology_TUI.Skins.Leading_Control
+         then Natural'Min (4, Item.Area.Width)
+         else Natural'Min (2, Item.Area.Width));
+      Right_Reserve : constant Natural :=
+        (if Item.Can_Close
+           and then Chrome.Close_Position =
+             Flyology_TUI.Skins.Trailing_Control
+         then Natural'Min (3, Item.Area.Width)
+         else Natural'Min (2, Item.Area.Width));
+      Title_Width : constant Natural :=
+        (if Left_Reserve + Right_Reserve < Item.Area.Width
+         then Item.Area.Width - Left_Reserve - Right_Reserve
+         else 0);
       Offset_X : constant Integer := Safe_Subtract (Item.Area.X, Workspace.X);
       Offset_Y : constant Integer := Safe_Subtract (Item.Area.Y, Workspace.Y);
 
@@ -465,7 +510,7 @@ package body Flyology_TUI.Components.Windows is
            and then Y < Long_Long_Integer (Result.Height)
          then
             Result.Put
-              (Natural (X), Natural (Y), " ", Chrome.Frame.Shadow);
+              (Natural (X), Natural (Y), " ", Frame_Chrome.Shadow);
          end if;
       end Put_Shadow;
    begin
@@ -488,9 +533,9 @@ package body Flyology_TUI.Components.Windows is
 
       declare
          Shadow_X : constant Natural :=
-           Natural'Min (Chrome.Frame.Shadow_X, Workspace.Width);
+           Natural'Min (Frame_Chrome.Shadow_X, Workspace.Width);
          Shadow_Y : constant Natural :=
-           Natural'Min (Chrome.Frame.Shadow_Y, Workspace.Height);
+           Natural'Min (Frame_Chrome.Shadow_Y, Workspace.Height);
       begin
          if Shadow_X > 0 then
             for DX in 0 .. Shadow_X - 1 loop
@@ -525,44 +570,82 @@ package body Flyology_TUI.Components.Windows is
             Window.Put
               (X,
                0,
-               (if X = 0 then (1 => Chrome.Frame.Border.Top_Left)
+               (if X = 0 then (1 => Frame_Chrome.Border.Top_Left)
                 elsif X + 1 = Item.Area.Width
-                then (1 => Chrome.Frame.Border.Top_Right)
-                else (1 => Chrome.Frame.Border.Horizontal)),
+                then (1 => Frame_Chrome.Border.Top_Right)
+                else (1 => Frame_Chrome.Border.Horizontal)),
                Frame_Style);
             if Item.Area.Height > 1 then
                Window.Put
                  (X,
                   Item.Area.Height - 1,
-                  (if X = 0 then (1 => Chrome.Frame.Border.Bottom_Left)
+                  (if X = 0 then (1 => Frame_Chrome.Border.Bottom_Left)
                    elsif X + 1 = Item.Area.Width
-                   then (1 => Chrome.Frame.Border.Bottom_Right)
-                   else (1 => Chrome.Frame.Border.Horizontal)),
+                   then (1 => Frame_Chrome.Border.Bottom_Right)
+                   else (1 => Frame_Chrome.Border.Horizontal)),
                   Frame_Style);
             end if;
          end loop;
          if Item.Area.Height > 2 then
             for Y in 1 .. Item.Area.Height - 2 loop
                Window.Put
-                 (0, Y, (1 => Chrome.Frame.Border.Vertical), Frame_Style);
+                 (0, Y, (1 => Frame_Chrome.Border.Vertical), Frame_Style);
                if Item.Area.Width > 1 then
                   Window.Put
                     (Item.Area.Width - 1, Y,
-                     (1 => Chrome.Frame.Border.Vertical), Frame_Style);
+                     (1 => Frame_Chrome.Border.Vertical), Frame_Style);
                end if;
             end loop;
          end if;
       end if;
 
       if Title_Width > 0 and then Title'Length > 0 then
-         Title_Layer :=
-           Flyology_TUI.Surfaces.Create (Title_Width, 1, Frame_Style);
-         Title_Layer.Write (0, 0, Title, Title_Style);
-         Window.Overlay_Clipped (Title_Layer, 2, 0);
+         declare
+            Title_Text : constant Wide_Wide_String := " " & Title & " ";
+            Text_Width : constant Natural :=
+              Natural'Min
+                (Title_Width, Flyology_TUI.Glyphs.Width_Of (Title_Text));
+            Title_X : constant Natural :=
+              (if Chrome.Title = Flyology_TUI.Skins.Centered_Title
+               then Left_Reserve + (Title_Width - Text_Width) / 2
+               else Left_Reserve);
+         begin
+            Title_Layer :=
+              Flyology_TUI.Surfaces.Create (Text_Width, 1, Frame_Style);
+            Title_Layer.Write (0, 0, Title_Text, Title_Style);
+            Window.Overlay_Clipped (Title_Layer, Integer (Title_X), 0);
+         end;
       end if;
-      if Item.Can_Close and then Item.Area.Width > 1 then
+      if Item.Can_Close and then Item.Area.Width > 1
+        and then (not Chrome.Active_Controls_Only or else Item.Has_Focus)
+      then
+         declare
+            Close_X : constant Natural :=
+              (if Chrome.Close_Position =
+                    Flyology_TUI.Skins.Leading_Control
+               then Natural'Min (2, Item.Area.Width - 1)
+               else Item.Area.Width - 2);
+         begin
+            if Close_X > 0 and then Chrome.Close_Left /= ' ' then
+               Window.Put
+                 (Close_X - 1, 0, (1 => Chrome.Close_Left), Close_Style);
+            end if;
+            Window.Put (Close_X, 0, (1 => Chrome.Close), Close_Style);
+            if Close_X + 1 < Item.Area.Width
+              and then Chrome.Close_Right /= ' '
+            then
+               Window.Put
+                 (Close_X + 1, 0, (1 => Chrome.Close_Right), Close_Style);
+            end if;
+         end;
+      end if;
+      if Item.Can_Resize and then Item.Area.Width > 0
+        and then Item.Area.Height > 0
+        and then (not Chrome.Active_Controls_Only or else Item.Has_Focus)
+      then
          Window.Put
-           (Item.Area.Width - 2, 0, (1 => Chrome.Close), Close_Style);
+           (Item.Area.Width - 1, Item.Area.Height - 1,
+            (1 => Chrome.Resize), Frame_Style);
       end if;
       if Client_Width > 0 and then Client_Height > 0 then
          Client_Layer :=
@@ -584,7 +667,13 @@ package body Flyology_TUI.Components.Windows is
       return Flyology_TUI.Surfaces.Surface
    is (Render
          (Item, Title, Content, Workspace,
-          From_Theme (Flyology_TUI.Themes.To_Theme (Skin.Palette)),
+          (Frame         => Chrome_Style (Skin.Palette.Border),
+           Focused_Frame => Chrome_Style (Skin.Palette.Border),
+           Title         => Skin.Palette.Content,
+           Focused_Title => Skin.Palette.Content,
+           Close         => Skin.Control_Selected,
+           Content       => Skin.Palette.Content,
+           Disabled      => Skin.Palette.Disabled),
           Skin.Window));
 
    function Render

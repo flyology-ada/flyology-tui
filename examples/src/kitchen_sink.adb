@@ -820,11 +820,13 @@ procedure Kitchen_Sink is
    use type Docking.Dock_Side;
    use type Docking.Pane_Placement;
    use type Flyology_TUI.Components.Interactions.Capture_Action;
+   use type Flyology_TUI.Colors.Color;
    use type Flyology_TUI.Events.Key_Kind;
    use type Flyology_TUI.Events.Mouse_Action;
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
    use type Flyology_TUI.Skins.Skin_Id;
+   use type Flyology_TUI.Skins.Title_Placement;
    use type Flyology_TUI.Views.Mouse_Mode;
 
    function Active_Skin (Item : Model) return Flyology_TUI.Skins.Skin is
@@ -837,23 +839,28 @@ procedure Kitchen_Sink is
    function Current_Theme (Item : Model) return Flyology_TUI.Themes.Theme is
      (Flyology_TUI.Themes.To_Theme (Current_Palette (Item)));
 
-   function Button_Appearance
-     (Item : Model) return Flyology_TUI.Components.Buttons.Appearance is
-     (Flyology_TUI.Components.Buttons.From_Palette (Current_Palette (Item)));
-
-   function Check_Appearance
-     (Item : Model) return Flyology_TUI.Components.Check_Boxes.Appearance is
-     (Flyology_TUI.Components.Check_Boxes.From_Palette
-        (Current_Palette (Item)));
-
-   function Radio_Appearance (Item : Model) return Radios.Appearance is
-     (Radios.From_Palette (Current_Palette (Item)));
-
    function Selector_Appearance (Item : Model) return Selectors.Appearance is
-     (Selectors.From_Palette (Current_Palette (Item)));
+     (Normal   => Active_Skin (Item).Control,
+      Selected => Active_Skin (Item).Control_Selected,
+      Focused  => Active_Skin (Item).Control_Focused,
+      Disabled => Current_Palette (Item).Disabled);
 
    function Dropdown_Appearance (Item : Model) return Dropdowns.Appearance is
-     (Dropdowns.From_Palette (Current_Palette (Item)));
+     (Normal      => Active_Skin (Item).Control,
+      Selected    => Active_Skin (Item).Control_Selected,
+      Highlighted => Current_Palette (Item).Button_Focused,
+      Focused     => Active_Skin (Item).Control_Focused,
+      Disabled    => Current_Palette (Item).Disabled);
+
+   function Menu_Appearance (Item : Model) return Menus.Appearance is
+     (Bar         => Active_Skin (Item).Menu_Bar,
+      Menu        => Active_Skin (Item).Dialog,
+      Focused     => Current_Palette (Item).Button_Focused,
+      Highlighted => Active_Skin (Item).Control_Selected,
+      Disabled    => Current_Palette (Item).Disabled,
+      Separator   => Current_Palette (Item).Border,
+      Shortcut    => Current_Palette (Item).Muted,
+      Marker      => Current_Palette (Item).Success);
 
    function Dock_Presentation
      (Item : Model; Geometry : Layout_Snapshot) return Docking.Presentation;
@@ -1096,23 +1103,45 @@ procedure Kitchen_Sink is
    begin
       Result.Width := Item.Terminal_Width;
       Result.Height := Item.Terminal_Height;
-      Result.Header :=
-        (X => 0, Y => 0, Width => Result.Width,
-         Height => (if Result.Height > 0 then 1 else 0));
-      Result.Tabs :=
-        (X => 0, Y => Integer (Natural'Min (1, Result.Height)),
-         Width => Result.Width,
-         Height => (if Result.Height > 1 then 1 else 0));
-      Result.Help :=
-        (X => 0,
-         Y => (if Result.Height > 2 then Integer (Result.Height - 1)
-               else Integer (Result.Height)),
-         Width => Result.Width,
-         Height => (if Result.Height > 2 then 1 else 0));
-      Content_Height := (if Result.Height > 3 then Result.Height - 3 else 0);
-      Result.Content :=
-        (X => 0, Y => Integer (Natural'Min (2, Result.Height)),
-         Width => Result.Width, Height => Content_Height);
+      if Item.Skin = Flyology_TUI.Skins.Turbo_Vision then
+         --  Late Turbo Vision applications put the menu at row zero and the
+         --  status line at the bottom; they do not reserve a website-like
+         --  application banner above the menu.
+         Result.Header := (0, 0, Result.Width, 0);
+         Result.Tabs :=
+           (X => 0, Y => 0, Width => Result.Width,
+            Height => (if Result.Height > 0 then 1 else 0));
+         Result.Help :=
+           (X => 0,
+            Y => (if Result.Height > 1 then Integer (Result.Height - 1)
+                  else Integer (Result.Height)),
+            Width => Result.Width,
+            Height => (if Result.Height > 1 then 1 else 0));
+         Content_Height :=
+           (if Result.Height > 2 then Result.Height - 2 else 0);
+         Result.Content :=
+           (X => 0, Y => Integer (Natural'Min (1, Result.Height)),
+            Width => Result.Width, Height => Content_Height);
+      else
+         Result.Header :=
+           (X => 0, Y => 0, Width => Result.Width,
+            Height => (if Result.Height > 0 then 1 else 0));
+         Result.Tabs :=
+           (X => 0, Y => Integer (Natural'Min (1, Result.Height)),
+            Width => Result.Width,
+            Height => (if Result.Height > 1 then 1 else 0));
+         Result.Help :=
+           (X => 0,
+            Y => (if Result.Height > 2 then Integer (Result.Height - 1)
+                  else Integer (Result.Height)),
+            Width => Result.Width,
+            Height => (if Result.Height > 2 then 1 else 0));
+         Content_Height :=
+           (if Result.Height > 3 then Result.Height - 3 else 0);
+         Result.Content :=
+           (X => 0, Y => Integer (Natural'Min (2, Result.Height)),
+            Width => Result.Width, Height => Content_Height);
+      end if;
 
       case Current_Page (Item) is
          when Basics_Page | Controls_Page =>
@@ -2727,7 +2756,7 @@ procedure Kitchen_Sink is
                  Item.Menu.Present
                    (Geometry.Menu_Frame.Width,
                     Geometry.Menu_Frame.Height,
-                    0, 0, Current_Theme (Item), Item.Focus = Menu_Field);
+                    0, 0, Menu_Appearance (Item), Item.Focus = Menu_Field);
                Menu_Result : constant Menus.Update_Result :=
                  Item.Menu.Handle
                    (Flyology_TUI.Mouse.Relative
@@ -2827,13 +2856,13 @@ procedure Kitchen_Sink is
             Page_Event :=
               Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
             Result := Item.Window_A_Model.Handle
-              (Page_Event, Geometry.Window_Workspace);
+              (Page_Event, Geometry.Window_Workspace, Active_Skin (Item));
             Apply_Window_Result (Item, Window_A, Result);
          when Second_Window_Capture =>
             Page_Event :=
               Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
             Result := Item.Window_B_Model.Handle
-              (Page_Event, Geometry.Window_Workspace);
+              (Page_Event, Geometry.Window_Workspace, Active_Skin (Item));
             Apply_Window_Result (Item, Window_B, Result);
          when Split_Capture =>
             Page_Event := Flyology_TUI.Mouse.Relative
@@ -3217,10 +3246,10 @@ procedure Kitchen_Sink is
       begin
          if Which = Window_A then
             Result := Item.Window_A_Model.Handle
-              (Page_Event, Geometry.Window_Workspace);
+              (Page_Event, Geometry.Window_Workspace, Active_Skin (Item));
          else
             Result := Item.Window_B_Model.Handle
-              (Page_Event, Geometry.Window_Workspace);
+              (Page_Event, Geometry.Window_Workspace, Active_Skin (Item));
          end if;
          Apply_Window_Result (Item, Which, Result);
       end Route_Window;
@@ -3352,7 +3381,7 @@ procedure Kitchen_Sink is
    is
       Presentation : constant Menus.Presentation := Item.Menu.Present
         (Geometry.Menu_Frame.Width, Geometry.Menu_Frame.Height,
-         0, 0, Current_Theme (Item), Item.Focus = Menu_Field);
+         0, 0, Menu_Appearance (Item), Item.Focus = Menu_Field);
       Result : constant Menus.Update_Result := Item.Menu.Handle
         (Flyology_TUI.Mouse.Relative
            (Event, Origin (Geometry.Menu_Frame)),
@@ -3780,6 +3809,13 @@ procedure Kitchen_Sink is
       Height     : Natural := 0)
       return Flyology_TUI.Surfaces.Surface
    is
+      function Dialog_Frame return Flyology_TUI.Styles.Style is
+         Result : Flyology_TUI.Styles.Style := Skin.Palette.Border;
+      begin
+         Result.Background := Skin.Dialog.Background;
+         return Result;
+      end Dialog_Frame;
+
       Marker : constant Wide_Wide_String :=
         [1 => Wide_Wide_Character'Val
            (if Is_Active then 16#25CF# else 16#25CB#),
@@ -3788,18 +3824,44 @@ procedure Kitchen_Sink is
         Flyology_TUI.Surfaces.From_Text
           (Marker & Name, (if Is_Active then Accent else Muted));
       Body_Surface : constant Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Layouts.Join_Vertically (Heading, Content, Gap => 1);
+        (if Skin.Panel.Title = Flyology_TUI.Skins.Centered_Title
+         then Content
+         else Flyology_TUI.Layouts.Join_Vertically
+           (Heading, Content, Gap => 1));
       Styled_Body : constant Flyology_TUI.Surfaces.Surface :=
-        Body_Surface.Inherit_Colors (Skin.Palette.Content);
+        Body_Surface.Inherit_Colors (Skin.Dialog);
       Box : constant Flyology_TUI.Layouts.Block :=
         (Width      => Width,
          Height     => Height,
          Padding    => (Top => 1, Right => 1, Bottom => 1, Left => 1),
          Border     => Flyology_TUI.Layouts.Rounded,
-         Appearance => (if Is_Active then Accent else Muted),
+         Appearance =>
+           (if Skin.Panel.Title = Flyology_TUI.Skins.Centered_Title
+            then Dialog_Frame
+            elsif Is_Active then Accent else Muted),
          others     => <>);
+      Result : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Render (Box, Styled_Body, Skin.Panel.Frame);
    begin
-      return Flyology_TUI.Layouts.Render (Box, Styled_Body, Skin.Panel);
+      if Skin.Panel.Title = Flyology_TUI.Skins.Centered_Title
+        and then Result.Width > 2 and then Result.Height > 0
+      then
+         declare
+            Title_Text : constant Wide_Wide_String := " " & Name & " ";
+            Available : constant Natural := Result.Width - 2;
+            Title_Width : constant Natural := Natural'Min
+              (Available, Flyology_TUI.Glyphs.Width_Of (Title_Text));
+            Title_X : constant Natural := 1 + (Available - Title_Width) / 2;
+            Title_Surface : Flyology_TUI.Surfaces.Surface :=
+              Flyology_TUI.Surfaces.Create
+                (Title_Width, 1, Skin.Dialog);
+         begin
+            Title_Surface.Write (0, 0, Title_Text, Skin.Palette.Title);
+            Result.Overlay_Clipped
+              (Title_Surface, Integer (Title_X), 0);
+         end;
+      end if;
+      return Result;
    end Panel;
 
    procedure Overlay_Region
@@ -3831,11 +3893,11 @@ procedure Kitchen_Sink is
          Geometry.Viewport_Content.X - Frame.X,
          Geometry.Viewport_Content.Y - Frame.Y);
       Result.Overlay_Clipped
-        (Item.Vertical_Scroll.Render (Current_Theme (Item)),
+        (Item.Vertical_Scroll.Render (Active_Skin (Item)),
          Geometry.Vertical_Scroll_Region.X - Frame.X,
          Geometry.Vertical_Scroll_Region.Y - Frame.Y);
       Result.Overlay_Clipped
-        (Item.Horizontal_Scroll.Render (Current_Theme (Item)),
+        (Item.Horizontal_Scroll.Render (Active_Skin (Item)),
          Geometry.Horizontal_Scroll_Region.X - Frame.X,
          Geometry.Horizontal_Scroll_Region.Y - Frame.Y);
       return Result;
@@ -3858,7 +3920,10 @@ procedure Kitchen_Sink is
            Geometry.First.Width, Geometry.First.Height);
       List_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
-          (Active_Skin (Item), "Generic list", Item.Choices.Render (Theme),
+          (Active_Skin (Item), "Generic list",
+           Item.Choices.Render
+             (Active_Skin (Item).Control,
+              Active_Skin (Item).Control_Selected),
            Item.Focus = List_Field, Palette.Title, Theme.Muted,
            Geometry.Third.Width, Geometry.Third.Height);
       Viewport_View : constant Flyology_TUI.Surfaces.Surface :=
@@ -3899,9 +3964,9 @@ procedure Kitchen_Sink is
       Action_Content : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Vertically
           (Item.Button.Render
-             (Button_Appearance (Item), Item.Focus = Button_Field),
+             (Active_Skin (Item), Item.Focus = Button_Field),
            Item.Check.Render
-             (Check_Appearance (Item), Item.Focus = Check_Field),
+             (Active_Skin (Item), Item.Focus = Check_Field),
            Gap => 1);
       Action_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
@@ -3913,7 +3978,7 @@ procedure Kitchen_Sink is
         Panel
           (Active_Skin (Item), "Radio group",
            Item.Radios.Render
-             (Radio_Appearance (Item), Item.Focus = Radio_Field),
+             (Active_Skin (Item), Item.Focus = Radio_Field),
            Item.Focus = Radio_Field, Palette.Title, Theme.Muted,
            Geometry.Second.Width, Geometry.Second.Height);
       Selector_View : constant Flyology_TUI.Surfaces.Surface :=
@@ -4226,7 +4291,7 @@ procedure Kitchen_Sink is
            Active_Skin (Item).Desktop);
       Presentation : constant Menus.Presentation := Item.Menu.Present
         (Geometry.Menu_Frame.Width, Geometry.Menu_Frame.Height,
-         0, 0, Current_Theme (Item), Item.Focus = Menu_Field);
+         0, 0, Menu_Appearance (Item), Item.Focus = Menu_Field);
    begin
       Overlay_Region
         (Canvas, Menus.Frame (Presentation), Geometry.Menu_Frame, Geometry);
@@ -4736,7 +4801,7 @@ procedure Kitchen_Sink is
               Current_Palette (Item).Title),
            Gap => 1);
       Header : constant Flyology_TUI.Surfaces.Surface :=
-        Header_Raw.Inherit_Colors (Active_Skin (Item).Desktop);
+        Header_Raw.Inherit_Colors (Active_Skin (Item).Menu_Bar);
       Meter : constant Flyology_TUI.Surfaces.Surface :=
         Item.Progress.Render (Current_Theme (Item));
       Tabs_Layout : constant Pages.Presentation := Item.Pages.Present
@@ -4772,9 +4837,10 @@ procedure Kitchen_Sink is
              Description => U ("skin"), Enabled => True),
             (Key => U ("ctrl-c"), Description => U ("quit"), Enabled => True)],
            Width => Geometry.Width, Vertical => False,
-           Theme => Current_Theme (Item));
+           Key_Appearance => Current_Palette (Item).Interaction,
+           Detail_Appearance => Active_Skin (Item).Status_Line);
       Help : constant Flyology_TUI.Surfaces.Surface :=
-        Help_Raw.Inherit_Colors (Active_Skin (Item).Desktop);
+        Help_Raw.Inherit_Colors (Active_Skin (Item).Status_Line);
       Canvas : Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Surfaces.Create
           (Geometry.Width, Geometry.Height, Active_Skin (Item).Desktop);
@@ -5061,14 +5127,23 @@ procedure Kitchen_Sink is
       Assert
         (Item.Skin = Flyology_TUI.Skins.Turbo_Vision,
          "F6 did not cycle to the Turbo Vision skin");
+      Geometry := Layout (Item);
+      Assert
+        (Geometry.Header.Height = 0
+         and then Geometry.Tabs.Y = 0
+         and then Geometry.Tabs.Height = 1
+         and then Geometry.Content.Y = 1,
+         "Turbo layout did not place the menu on the first row");
       declare
          Skin_Tabs : constant Pages.Presentation := Item.Pages.Present
            (80, Active_Skin (Item), True);
       begin
          Assert
            (Text.To_Wide_Wide_String
-              (Pages.Frame (Skin_Tabs).Element (0, 0).Glyph) =
-                [1 => Wide_Wide_Character'Val (16#00AB#)],
+              (Pages.Frame (Skin_Tabs).Element (0, 0).Glyph) = " "
+            and then Pages.Frame (Skin_Tabs).Element
+              (1, 0).Appearance.Background =
+                Flyology_TUI.Colors.True_Color (0, 168, 0),
             "kitchen skin switch did not change structural tab chrome");
       end;
       Update (Item, Skin_Key, Next);
@@ -5297,9 +5372,9 @@ procedure Kitchen_Sink is
          Bound : constant Flyology_TUI.Surfaces.Surface :=
            Bound_Viewport_View (Item, Geometry);
          Vertical : constant Flyology_TUI.Surfaces.Surface :=
-           Item.Vertical_Scroll.Render (Current_Theme (Item));
+           Item.Vertical_Scroll.Render (Active_Skin (Item));
          Horizontal : constant Flyology_TUI.Surfaces.Surface :=
-           Item.Horizontal_Scroll.Render (Current_Theme (Item));
+           Item.Horizontal_Scroll.Render (Active_Skin (Item));
       begin
          Assert
            (Bound.Width = Viewport_Frame.Width

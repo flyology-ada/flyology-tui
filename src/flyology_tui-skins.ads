@@ -25,6 +25,14 @@ package Flyology_TUI.Skins is
         Flyology_TUI.Styles.Default;
    end record;
 
+   type Title_Placement is (Leading_Title, Centered_Title);
+   type Control_Placement is (Leading_Control, Trailing_Control);
+
+   type Panel_Chrome is record
+      Frame : Frame_Chrome;
+      Title : Title_Placement := Leading_Title;
+   end record;
+
    --  Every tab edge occupies one cell, preserving width and hit geometry.
    type Tab_Chrome is record
       Normal_Left   : Wide_Wide_Character := ' ';
@@ -33,12 +41,54 @@ package Flyology_TUI.Skins is
       Active_Right  : Wide_Wide_Character := ']';
       Focused_Left  : Wide_Wide_Character := '>';
       Focused_Right : Wide_Wide_Character := ' ';
+      Mnemonic_First : Boolean := False;
    end record;
 
    type Window_Chrome is record
-      Frame    : Frame_Chrome;
-      Close    : Wide_Wide_Character := 'x';
-      Resize   : Wide_Wide_Character := '+';
+      Frame          : Frame_Chrome;
+      Focused_Frame  : Frame_Chrome;
+      Title          : Title_Placement := Leading_Title;
+      Close_Position : Control_Placement := Trailing_Control;
+      Close_Left     : Wide_Wide_Character := ' ';
+      Close           : Wide_Wide_Character := 'x';
+      Close_Right    : Wide_Wide_Character := ' ';
+      Resize          : Wide_Wide_Character := '+';
+      Active_Controls_Only : Boolean := False;
+   end record;
+
+   --  Button bodies retain their four-cell horizontal affordance. A shadow
+   --  may extend the rendered surface without becoming part of the hit area.
+   type Button_Chrome is record
+      Left_Outer  : Wide_Wide_Character := '[';
+      Left_Inner  : Wide_Wide_Character := ' ';
+      Right_Inner : Wide_Wide_Character := ' ';
+      Right_Outer : Wide_Wide_Character := ']';
+      Shadow_X    : Natural := 0;
+      Shadow_Y    : Natural := 0;
+      Shadow      : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
+      Depress     : Boolean := False;
+   end record;
+
+   type Choice_Chrome is record
+      Check_On    : Wide_Wide_Character := 'x';
+      Check_Mixed : Wide_Wide_Character := '-';
+      Radio_On    : Wide_Wide_Character := 'o';
+   end record;
+
+   type Scrollbar_Chrome is record
+      Left_Arrow  : Wide_Wide_Character :=
+        Wide_Wide_Character'Val (16#25C0#);
+      Right_Arrow : Wide_Wide_Character :=
+        Wide_Wide_Character'Val (16#25B6#);
+      Up_Arrow    : Wide_Wide_Character :=
+        Wide_Wide_Character'Val (16#25B2#);
+      Down_Arrow  : Wide_Wide_Character :=
+        Wide_Wide_Character'Val (16#25BC#);
+      Track       : Wide_Wide_Character :=
+        Wide_Wide_Character'Val (16#2591#);
+      Thumb       : Wide_Wide_Character :=
+        Wide_Wide_Character'Val (16#2588#);
    end record;
 
    type Dock_Chrome is record
@@ -51,12 +101,28 @@ package Flyology_TUI.Skins is
    end record;
 
    type Skin is record
-      Palette : Flyology_TUI.Themes.Palette;
-      Desktop : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
-      Panel   : Frame_Chrome;
-      Window  : Window_Chrome;
-      Tabs    : Tab_Chrome;
-      Dock    : Dock_Chrome;
+      Palette          : Flyology_TUI.Themes.Palette;
+      Desktop          : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
+      Menu_Bar         : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
+      Status_Line      : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
+      Dialog           : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
+      Control          : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
+      Control_Focused  : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
+      Control_Selected : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default;
+      Panel            : Panel_Chrome;
+      Window           : Window_Chrome;
+      Button           : Button_Chrome;
+      Choice           : Choice_Chrome;
+      Scrollbar        : Scrollbar_Chrome;
+      Tabs             : Tab_Chrome;
+      Dock             : Dock_Chrome;
    end record;
 
    Charm_Default_Skin : constant Skin;
@@ -76,18 +142,18 @@ private
      Flyology_TUI.Colors.True_Color (0, 0, 0);
    Turbo_Blue : constant Flyology_TUI.Colors.Color :=
      Flyology_TUI.Colors.True_Color (0, 0, 168);
-   Turbo_Cyan : constant Flyology_TUI.Colors.Color :=
+   Turbo_Desktop : constant Flyology_TUI.Colors.Color :=
      Flyology_TUI.Colors.True_Color (0, 168, 168);
+   Turbo_Dialog : constant Flyology_TUI.Colors.Color :=
+     Flyology_TUI.Colors.True_Color (168, 168, 168);
+   Turbo_Dark_Gray : constant Flyology_TUI.Colors.Color :=
+     Flyology_TUI.Colors.True_Color (84, 84, 84);
    Turbo_Bright_Cyan : constant Flyology_TUI.Colors.Color :=
      Flyology_TUI.Colors.True_Color (85, 255, 255);
-   Turbo_Gray : constant Flyology_TUI.Colors.Color :=
-     Flyology_TUI.Colors.True_Color (170, 170, 170);
    Turbo_Green : constant Flyology_TUI.Colors.Color :=
-     Flyology_TUI.Colors.True_Color (85, 255, 85);
+     Flyology_TUI.Colors.True_Color (0, 168, 0);
    Turbo_Red : constant Flyology_TUI.Colors.Color :=
      Flyology_TUI.Colors.True_Color (168, 0, 0);
-   Turbo_Bright_Red : constant Flyology_TUI.Colors.Color :=
-     Flyology_TUI.Colors.True_Color (255, 85, 85);
    Turbo_White : constant Flyology_TUI.Colors.Color :=
      Flyology_TUI.Colors.True_Color (255, 255, 255);
    Turbo_Yellow : constant Flyology_TUI.Colors.Color :=
@@ -131,14 +197,38 @@ private
    Charm_Tabs : constant Tab_Chrome :=
      (Normal_Left   => ' ', Normal_Right  => ' ',
       Active_Left   => '[', Active_Right  => ']',
-      Focused_Left  => '>', Focused_Right => ' ');
+      Focused_Left  => '>', Focused_Right => ' ',
+      Mnemonic_First => False);
 
    Turbo_Tabs : constant Tab_Chrome :=
      (Normal_Left   => ' ', Normal_Right  => ' ',
-      Active_Left   => Glyph (16#00AB#),
-      Active_Right  => Glyph (16#00BB#),
-      Focused_Left  => Glyph (16#25BA#),
-      Focused_Right => Glyph (16#25C4#));
+      Active_Left   => ' ', Active_Right  => ' ',
+      Focused_Left  => ' ', Focused_Right => ' ',
+      Mnemonic_First => True);
+
+   Charm_Button : constant Button_Chrome := (others => <>);
+
+   Turbo_Button : constant Button_Chrome :=
+     (Left_Outer => ' ', Left_Inner => ' ',
+      Right_Inner => ' ', Right_Outer => ' ',
+      Shadow_X => 1, Shadow_Y => 1,
+      Shadow =>
+        (Foreground => Turbo_Black, Background => Turbo_Black,
+         others => <>),
+      Depress => True);
+
+   Charm_Choice : constant Choice_Chrome := (others => <>);
+
+   Turbo_Choice : constant Choice_Chrome :=
+     (Check_On => 'X', Check_Mixed => '-',
+      Radio_On => Glyph (16#2022#));
+
+   Charm_Scrollbar : constant Scrollbar_Chrome := (others => <>);
+
+   Turbo_Scrollbar : constant Scrollbar_Chrome :=
+     (Left_Arrow => Glyph (16#25C4#), Right_Arrow => Glyph (16#25BA#),
+      Up_Arrow => Glyph (16#25B2#), Down_Arrow => Glyph (16#25BC#),
+      Track => Glyph (16#2592#), Thumb => Glyph (16#2588#));
 
    Charm_Dock : constant Dock_Chrome :=
      (Collapse => '-', Expand => '+', Float => '^', Dock => 'v',
@@ -151,85 +241,142 @@ private
       Drop_Vertical => Glyph (16#2551#));
 
    Turbo_Palette : constant Flyology_TUI.Themes.Palette :=
-      (Content =>
+     (Content =>
         (Foreground => Turbo_White,
          Background => Turbo_Blue, others => <>),
       Muted =>
-        (Foreground => Turbo_Bright_Cyan,
-         Background => Turbo_Blue, others => <>),
+        (Foreground => Turbo_Blue,
+         Background => Turbo_Dialog, others => <>),
       Title =>
-        (Foreground => Turbo_Yellow,
-         Background => Turbo_Blue, Bold => True, others => <>),
+        (Foreground => Turbo_Blue,
+         Background => Turbo_Dialog, Bold => True, others => <>),
       Focused =>
-        (Foreground => Turbo_Black,
-         Background => Turbo_Bright_Cyan, Bold => True, others => <>),
+        (Foreground => Turbo_White,
+         Background => Turbo_Blue, Bold => True, others => <>),
       Interaction =>
-        (Foreground => Turbo_Yellow,
-         Background => Turbo_Blue, Underline => True, others => <>),
+        (Foreground => Turbo_Red,
+         Background => Turbo_Dialog, others => <>),
       Selected =>
-        (Foreground => Turbo_Black,
-         Background => Turbo_White, Bold => True, others => <>),
+        (Foreground => Turbo_White,
+         Background => Turbo_Blue, Bold => True, others => <>),
       Border =>
         (Foreground => Turbo_White,
          Background => Turbo_Blue, others => <>),
       Input =>
-        (Foreground => Turbo_Black,
-         Background => Turbo_White, others => <>),
+        (Foreground => Turbo_White,
+         Background => Turbo_Blue, others => <>),
       Placeholder =>
-        (Foreground => Turbo_Gray,
-         Background => Turbo_White, Faint => True, others => <>),
+        (Foreground => Turbo_Bright_Cyan,
+         Background => Turbo_Blue, Faint => True, others => <>),
       Error =>
-        (Foreground => Turbo_Bright_Red,
-         Background => Turbo_Blue, Bold => True, others => <>),
+        (Foreground => Turbo_Red,
+         Background => Turbo_Dialog, Bold => True, others => <>),
       Success =>
         (Foreground => Turbo_Green,
-         Background => Turbo_Blue, Bold => True, others => <>),
+         Background => Turbo_Dialog, Bold => True, others => <>),
       Button =>
         (Foreground => Turbo_Black,
-         Background => Turbo_Cyan, others => <>),
+         Background => Turbo_Green, Bold => True, others => <>),
       Button_Focused =>
-        (Foreground => Turbo_White,
-         Background => Turbo_Red, Bold => True, others => <>),
+        (Foreground => Turbo_Black,
+         Background => Turbo_Green, Bold => True, others => <>),
       Button_Pressed =>
         (Foreground => Turbo_Yellow,
-         Background => Turbo_Black, Bold => True, others => <>),
+         Background => Turbo_Blue, Bold => True, others => <>),
       Disabled =>
-        (Foreground => Turbo_Gray,
-         Background => Turbo_Blue, Faint => True, others => <>));
+        (Foreground => Turbo_Dark_Gray,
+         Background => Turbo_Dialog, Faint => True, others => <>));
 
    Charm_Default_Skin : constant Skin :=
      (Palette => Flyology_TUI.Themes.Charm_Palette,
       Desktop => Flyology_TUI.Styles.Default,
-      Panel => Rounded_Frame,
-      Window => (Frame => Single_Frame, Close => Glyph (16#00D7#),
-                 Resize => '+'),
+      Menu_Bar => Flyology_TUI.Styles.Default,
+      Status_Line => Flyology_TUI.Styles.Default,
+      Dialog => Flyology_TUI.Themes.Charm_Palette.Content,
+      Control => Flyology_TUI.Themes.Charm_Palette.Content,
+      Control_Focused => Flyology_TUI.Themes.Charm_Palette.Interaction,
+      Control_Selected => Flyology_TUI.Themes.Charm_Palette.Selected,
+      Panel => (Frame => Rounded_Frame, Title => Leading_Title),
+      Window =>
+        (Frame => Single_Frame, Focused_Frame => Single_Frame,
+         Close => Glyph (16#00D7#), Resize => '+', others => <>),
+      Button => Charm_Button,
+      Choice => Charm_Choice,
+      Scrollbar => Charm_Scrollbar,
       Tabs => Charm_Tabs,
       Dock => Charm_Dock);
 
    Charm_Dark_Skin : constant Skin :=
-     (Palette => Flyology_TUI.Themes.Charm_Dark_Palette,
+      (Palette => Flyology_TUI.Themes.Charm_Dark_Palette,
       Desktop => Flyology_TUI.Styles.Default,
-      Panel => Rounded_Frame,
-      Window => (Frame => Single_Frame, Close => Glyph (16#00D7#),
-                 Resize => '+'),
+      Menu_Bar => Flyology_TUI.Styles.Default,
+      Status_Line => Flyology_TUI.Styles.Default,
+      Dialog => Flyology_TUI.Themes.Charm_Dark_Palette.Content,
+      Control => Flyology_TUI.Themes.Charm_Dark_Palette.Content,
+      Control_Focused => Flyology_TUI.Themes.Charm_Dark_Palette.Interaction,
+      Control_Selected => Flyology_TUI.Themes.Charm_Dark_Palette.Selected,
+      Panel => (Frame => Rounded_Frame, Title => Leading_Title),
+      Window =>
+        (Frame => Single_Frame, Focused_Frame => Single_Frame,
+         Close => Glyph (16#00D7#), Resize => '+', others => <>),
+      Button => Charm_Button,
+      Choice => Charm_Choice,
+      Scrollbar => Charm_Scrollbar,
       Tabs => Charm_Tabs,
       Dock => Charm_Dock);
 
    Charm_Light_Skin : constant Skin :=
-     (Palette => Flyology_TUI.Themes.Charm_Light_Palette,
+      (Palette => Flyology_TUI.Themes.Charm_Light_Palette,
       Desktop => Flyology_TUI.Styles.Default,
-      Panel => Rounded_Frame,
-      Window => (Frame => Single_Frame, Close => Glyph (16#00D7#),
-                 Resize => '+'),
+      Menu_Bar => Flyology_TUI.Styles.Default,
+      Status_Line => Flyology_TUI.Styles.Default,
+      Dialog => Flyology_TUI.Themes.Charm_Light_Palette.Content,
+      Control => Flyology_TUI.Themes.Charm_Light_Palette.Content,
+      Control_Focused => Flyology_TUI.Themes.Charm_Light_Palette.Interaction,
+      Control_Selected => Flyology_TUI.Themes.Charm_Light_Palette.Selected,
+      Panel => (Frame => Rounded_Frame, Title => Leading_Title),
+      Window =>
+        (Frame => Single_Frame, Focused_Frame => Single_Frame,
+         Close => Glyph (16#00D7#), Resize => '+', others => <>),
+      Button => Charm_Button,
+      Choice => Charm_Choice,
+      Scrollbar => Charm_Scrollbar,
       Tabs => Charm_Tabs,
       Dock => Charm_Dock);
 
    Turbo_Vision_Skin : constant Skin :=
-     (Palette => Turbo_Palette,
-      Desktop => Turbo_Palette.Content,
-      Panel => Double_Frame,
-      Window => (Frame => Double_Frame, Close => Glyph (16#25A0#),
-                 Resize => Glyph (16#25C6#)),
+      (Palette => Turbo_Palette,
+      Desktop =>
+        (Foreground => Turbo_White, Background => Turbo_Blue,
+         others => <>),
+      Menu_Bar =>
+        (Foreground => Turbo_Black, Background => Turbo_Dialog,
+         others => <>),
+      Status_Line =>
+        (Foreground => Turbo_Black, Background => Turbo_Dialog,
+         others => <>),
+      Dialog =>
+        (Foreground => Turbo_Black, Background => Turbo_Dialog,
+         others => <>),
+      Control =>
+        (Foreground => Turbo_Black, Background => Turbo_Desktop,
+         others => <>),
+      Control_Focused =>
+        (Foreground => Turbo_Yellow, Background => Turbo_Desktop,
+         others => <>),
+      Control_Selected =>
+        (Foreground => Turbo_Black, Background => Turbo_Green,
+         others => <>),
+      Panel => (Frame => Double_Frame, Title => Centered_Title),
+      Window =>
+        (Frame => Single_Frame, Focused_Frame => Double_Frame,
+         Title => Centered_Title, Close_Position => Leading_Control,
+         Close_Left => '[', Close => Glyph (16#25A0#),
+         Close_Right => ']', Resize => Glyph (16#25C6#),
+         Active_Controls_Only => True),
+      Button => Turbo_Button,
+      Choice => Turbo_Choice,
+      Scrollbar => Turbo_Scrollbar,
       Tabs => Turbo_Tabs,
       Dock => Turbo_Dock);
 end Flyology_TUI.Skins;

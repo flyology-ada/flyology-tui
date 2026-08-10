@@ -2,6 +2,7 @@ with Ada.Containers.Vectors;
 with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Events;
 with Flyology_TUI.Mouse;
+with Flyology_TUI.Skins;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
 with Flyology_TUI.Themes;
@@ -69,6 +70,19 @@ package Flyology_TUI.Components.Radio_Groups is
    function Render
      (Item      : Model;
       Look      : Appearance;
+      Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface;
+
+   function Render
+     (Item      : Model;
+      Look      : Appearance;
+      Chrome    : Flyology_TUI.Skins.Choice_Chrome;
+      Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface;
+
+   function Render
+     (Item      : Model;
+      Skin      : Flyology_TUI.Skins.Skin;
       Has_Focus : Boolean := False)
       return Flyology_TUI.Surfaces.Surface;
 

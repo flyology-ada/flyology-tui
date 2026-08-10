@@ -2,10 +2,16 @@ with Ada.Strings.Wide_Wide_Unbounded;
 with Ada.Text_IO;
 with Flyology_TUI.Color_Profiles;
 with Flyology_TUI.Colors;
+with Flyology_TUI.Components.Buttons;
+with Flyology_TUI.Components.Check_Boxes;
+with Flyology_TUI.Components.Scrollbars;
 with Flyology_TUI.Components.Tabs;
 with Flyology_TUI.Components.Windows;
+with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Layouts;
+with Flyology_TUI.Layouts.Boxes;
+with Flyology_TUI.Mouse;
 with Flyology_TUI.Skins;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
@@ -45,11 +51,11 @@ procedure Skin_Tests is
         Flyology_TUI.Skins.Resolve (Flyology_TUI.Skins.Turbo_Vision);
       ANSI_Background : constant Flyology_TUI.Colors.Color :=
         Flyology_TUI.Color_Profiles.Adapt
-          (Turbo.Palette.Content.Background,
+          (Turbo.Desktop.Background,
            Flyology_TUI.Color_Profiles.ANSI_16);
       Mono_Background : constant Flyology_TUI.Colors.Color :=
         Flyology_TUI.Color_Profiles.Adapt
-          (Turbo.Palette.Content.Background,
+          (Turbo.Desktop.Background,
            Flyology_TUI.Color_Profiles.Monochrome);
    begin
       Assert
@@ -64,13 +70,27 @@ procedure Skin_Tests is
            "Turbo Vision",
          "skin label drifted");
       Assert
-        (Turbo.Palette.Content.Background.Kind = Flyology_TUI.Colors.RGB
-         and then Turbo.Palette.Content.Background.Red_Value = 0
-         and then Turbo.Palette.Content.Background.Green_Value = 0
-         and then Turbo.Palette.Content.Background.Blue_Value = 168
-         and then Turbo.Panel.Shadow_X = 1
-         and then Turbo.Panel.Shadow_Y = 1,
-         "Turbo preset lost its desktop or hard shadow");
+        (Turbo.Desktop.Background.Kind = Flyology_TUI.Colors.RGB
+         and then Turbo.Desktop.Background.Red_Value = 0
+         and then Turbo.Desktop.Background.Green_Value = 0
+         and then Turbo.Desktop.Background.Blue_Value = 168
+         and then Turbo.Menu_Bar.Background =
+           Flyology_TUI.Colors.True_Color (168, 168, 168)
+         and then Turbo.Control.Background =
+           Flyology_TUI.Colors.True_Color (0, 168, 168)
+         and then Turbo.Palette.Content.Background =
+           Flyology_TUI.Colors.True_Color (0, 0, 168)
+         and then Turbo.Dialog.Background =
+           Flyology_TUI.Colors.True_Color (168, 168, 168)
+         and then Turbo.Palette.Title.Foreground =
+           Flyology_TUI.Colors.True_Color (0, 0, 168)
+         and then Turbo.Palette.Button_Focused.Foreground =
+           Flyology_TUI.Colors.True_Color (0, 0, 0)
+         and then Turbo.Palette.Button_Focused.Background =
+           Flyology_TUI.Colors.True_Color (0, 168, 0)
+         and then Turbo.Panel.Frame.Shadow_X = 1
+         and then Turbo.Panel.Frame.Shadow_Y = 1,
+         "Turbo preset lost its later Borland surface hierarchy");
       Assert
         (Flyology_TUI.Themes.To_Theme (Turbo.Palette).Primary =
            Turbo.Palette.Content,
@@ -94,13 +114,13 @@ procedure Skin_Tests is
             Border => Flyology_TUI.Layouts.Square,
             Appearance => Turbo.Palette.Border,
             others => <>),
-           Content, Turbo.Panel);
+           Content, Turbo.Panel.Frame);
       Intrinsic : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Render
           ((Border => Flyology_TUI.Layouts.Square,
             Appearance => Turbo.Palette.Border,
             others => <>),
-           Content, Turbo.Panel);
+           Content, Turbo.Panel.Frame);
       Oversized : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Render
           ((Width => 5, Height => 4,
@@ -109,7 +129,7 @@ procedure Skin_Tests is
             others => <>),
            Flyology_TUI.Surfaces.Create
              (20, 10, Turbo.Palette.Error),
-           Turbo.Panel);
+           Turbo.Panel.Frame);
    begin
       Assert
         (Glyph (Frame, 0, 0) =
@@ -131,9 +151,9 @@ procedure Skin_Tests is
          "intrinsic skin frame consumed content space for its shadow");
       Assert
         (Oversized.Element (4, 1).Appearance.Background =
-           Turbo.Panel.Shadow.Background
+           Turbo.Panel.Frame.Shadow.Background
          and then Oversized.Element (1, 3).Appearance.Background =
-           Turbo.Panel.Shadow.Background,
+           Turbo.Panel.Frame.Shadow.Background,
          "oversized frame content overwrote the reserved hard shadow");
    end Test_Frame_Chrome;
 
@@ -171,42 +191,119 @@ procedure Skin_Tests is
       Frame : constant Flyology_TUI.Surfaces.Surface := Tabs.Frame (Layout);
    begin
       Assert
-        (Glyph (Frame, 0, 0) =
-           [1 => Wide_Wide_Character'Val (16#00AB#)]
-         and then Glyph (Frame, 4, 0) =
-           [1 => Wide_Wide_Character'Val (16#00BB#)],
-         "skin tab active cue was not rendered");
+        (Glyph (Frame, 0, 0) = " "
+         and then Glyph (Frame, 4, 0) = " "
+         and then Frame.Element (1, 0).Appearance.Background =
+           Flyology_TUI.Colors.True_Color (0, 168, 0)
+         and then Frame.Element (7, 0).Appearance.Foreground =
+           Flyology_TUI.Colors.True_Color (168, 0, 0),
+         "skin tab active command field was not rendered");
       Assert
         (Tabs.Tab_Region (Layout, First_Tab) = (0, 0, 5, 1),
          "skin tab cue changed immutable hit geometry");
    end Test_Tab_Chrome;
 
    procedure Test_Window_Chrome is
-      Item : constant Flyology_TUI.Components.Windows.Model :=
+      Item : Flyology_TUI.Components.Windows.Model :=
         Flyology_TUI.Components.Windows.Create (1, 1, 6, 4);
       Workspace : constant Flyology_TUI.Geometry.Rectangle := (0, 0, 12, 8);
-      Frame : constant Flyology_TUI.Surfaces.Surface := Item.Render
-        ("Demo", Flyology_TUI.Surfaces.From_Text ("body"), Workspace,
-         Flyology_TUI.Skins.Turbo_Vision_Skin);
    begin
-      Assert
-        (Glyph (Frame, 1, 1) =
-           [1 => Wide_Wide_Character'Val (16#2554#)]
-         and then Glyph (Frame, 5, 1) =
-           [1 => Wide_Wide_Character'Val (16#25A0#)],
-         "skin window frame or close mark was not rendered");
-      Assert
-        (Frame.Element (7, 2).Appearance.Background =
-           Flyology_TUI.Colors.True_Color (0, 0, 0)
-         and then Frame.Element (2, 5).Appearance.Background =
-           Flyology_TUI.Colors.True_Color (0, 0, 0),
-         "skin window hard shadow was not rendered behind the frame");
+      Item.Focus;
+      declare
+         Frame : constant Flyology_TUI.Surfaces.Surface := Item.Render
+           ("Demo", Flyology_TUI.Surfaces.From_Text ("body"), Workspace,
+            Flyology_TUI.Skins.Turbo_Vision_Skin);
+      begin
+         Assert
+           (Glyph (Frame, 1, 1) =
+              [1 => Wide_Wide_Character'Val (16#2554#)]
+            and then Glyph (Frame, 2, 1) = "["
+            and then Glyph (Frame, 3, 1) =
+              [1 => Wide_Wide_Character'Val (16#25A0#)]
+            and then Glyph (Frame, 4, 1) = "]",
+            "skin window did not render its active Borland control box");
+         Assert
+           (Frame.Element (7, 2).Appearance.Background =
+              Flyology_TUI.Colors.True_Color (0, 0, 0)
+            and then Frame.Element (2, 5).Appearance.Background =
+              Flyology_TUI.Colors.True_Color (0, 0, 0),
+            "skin window hard shadow was not rendered behind the frame");
+      end;
    end Test_Window_Chrome;
+
+   procedure Test_Control_Chrome is
+      Button : Flyology_TUI.Components.Buttons.Model :=
+        Flyology_TUI.Components.Buttons.Create ("OK");
+      Check : constant Flyology_TUI.Components.Check_Boxes.Model :=
+        Flyology_TUI.Components.Check_Boxes.Create
+          ("Enabled", Flyology_TUI.Components.Check_Boxes.Checked);
+      Bar : Flyology_TUI.Components.Scrollbars.Model :=
+        Flyology_TUI.Components.Scrollbars.Create
+          (Flyology_TUI.Layouts.Boxes.Horizontal, 6);
+   begin
+      declare
+         Normal : constant Flyology_TUI.Surfaces.Surface :=
+           Button.Render (Flyology_TUI.Skins.Turbo_Vision_Skin, True);
+      begin
+         Assert
+           (Normal.Width = 7 and then Normal.Height = 2
+            and then Glyph (Normal, 2, 0) = "O"
+            and then Normal.Element (2, 0).Appearance.Background =
+              Flyology_TUI.Colors.True_Color (0, 168, 0)
+            and then Normal.Element (6, 1).Appearance.Background =
+              Flyology_TUI.Colors.True_Color (0, 0, 0),
+            "skin button lost its green body or hard drop shadow");
+      end;
+      Button.Update
+        (Flyology_TUI.Mouse.Local_Event'
+           (X => 2, Y => 0,
+          Button => Flyology_TUI.Events.Left_Button,
+          Action => Flyology_TUI.Events.Mouse_Click,
+          Modified => (others => False), others => <>));
+      declare
+         Pressed : constant Flyology_TUI.Surfaces.Surface :=
+           Button.Render (Flyology_TUI.Skins.Turbo_Vision_Skin, True);
+      begin
+         Assert
+           (Glyph (Pressed, 3, 1) = "O"
+            and then Pressed.Element (6, 1).Appearance.Background /=
+              Flyology_TUI.Colors.True_Color (0, 0, 0),
+            "skin button did not depress or remove its shadow");
+      end;
+      declare
+         Choice : constant Flyology_TUI.Surfaces.Surface :=
+           Check.Render (Flyology_TUI.Skins.Turbo_Vision_Skin, True);
+      begin
+         Assert
+           (Glyph (Choice, 1, 0) = "X"
+            and then Choice.Element (1, 0).Appearance.Background =
+              Flyology_TUI.Colors.True_Color (0, 168, 168),
+            "skin choice did not use its late Turbo field grammar");
+      end;
+      Bar.Configure (Total => 20, Page_Size => 5, First => 3);
+      declare
+         Scroll : constant Flyology_TUI.Surfaces.Surface :=
+           Bar.Render (Flyology_TUI.Skins.Turbo_Vision_Skin);
+      begin
+         Assert
+           (Glyph (Scroll, 0, 0) =
+              [1 => Wide_Wide_Character'Val (16#25C4#)]
+            and then Glyph (Scroll, 5, 0) =
+              [1 => Wide_Wide_Character'Val (16#25BA#)]
+            and then
+              (Glyph (Scroll, 1, 0) =
+                 [1 => Wide_Wide_Character'Val (16#2592#)]
+               or else Glyph (Scroll, 1, 0) =
+                 [1 => Wide_Wide_Character'Val (16#2588#)]),
+            "skin scrollbar lost its Borland arrows or textured track");
+      end;
+   end Test_Control_Chrome;
 begin
    Test_Presets;
    Test_Frame_Chrome;
    Test_Color_Inheritance;
    Test_Tab_Chrome;
    Test_Window_Chrome;
+   Test_Control_Chrome;
    Ada.Text_IO.Put_Line ("skin tests passed");
 end Skin_Tests;

@@ -70,6 +70,20 @@ package Flyology_TUI.Components.Windows is
       Workspace : Flyology_TUI.Geometry.Rectangle)
       return Flyology_TUI.Components.Interactions.Update_Result;
 
+   function Handle
+     (Item      : in out Model;
+      Event     : Flyology_TUI.Mouse.Local_Event;
+      Workspace : Flyology_TUI.Geometry.Rectangle;
+      Chrome    : Flyology_TUI.Skins.Window_Chrome)
+      return Flyology_TUI.Components.Interactions.Update_Result;
+
+   function Handle
+     (Item      : in out Model;
+      Event     : Flyology_TUI.Mouse.Local_Event;
+      Workspace : Flyology_TUI.Geometry.Rectangle;
+      Skin      : Flyology_TUI.Skins.Skin)
+      return Flyology_TUI.Components.Interactions.Update_Result;
+
    --  Alt-arrow moves, Control-arrow resizes, and Shift accelerates either.
    function Handle
      (Item      : in out Model;

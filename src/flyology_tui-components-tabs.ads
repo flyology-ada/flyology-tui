@@ -22,6 +22,7 @@ package Flyology_TUI.Components.Tabs is
       Normal   : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Active   : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Focused  : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
+      Mnemonic : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
       Disabled : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default;
    end record;
 

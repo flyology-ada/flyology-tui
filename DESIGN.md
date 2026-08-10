@@ -22,8 +22,11 @@ published regions.
   mouse, and respectful of terminal defaults.
 - Skin-coherent: presets change the complete visual grammar, not merely an
   accent color. Charm uses soft grouping and persistent state cues; the Turbo
-  Vision-inspired preset uses a blue desktop, double frames, hard shadows, and
-  compact command-oriented contrast.
+  Vision-inspired preset uses the later Borland vocabulary: a blue desktop and
+  work windows; gray menu/status bars and dialogs; cyan choice fields; green
+  commands; centered border titles; single inactive and double active frames;
+  hard offset shadows; depressed buttons; textured scrollbars; and red menu
+  mnemonics.
 
 Avoid sparse full-screen quadrants, isolated intrinsic-size cards in distant
 corners, raw implementation notes presented as content, website-like hero
