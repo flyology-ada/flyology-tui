@@ -572,9 +572,17 @@ procedure Editing_Tests is
         Flyology_TUI.Styles.With_Foreground
           (Flyology_TUI.Styles.Default,
            Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Bright_Yellow));
+      Word_Accent : constant Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.With_Foreground
+          (Flyology_TUI.Styles.Default,
+           Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Bright_Cyan));
       Look : Editors.Appearance :=
         Editors.From_Theme (Flyology_TUI.Themes.Charm);
    begin
+      --  Charm content is intentionally terminal-default. Give the token a
+      --  distinct test style so stale-cache detection does not depend on the
+      --  old accent-colored Primary role.
+      Look.Tokens (Word) := Word_Accent;
       Item.Try_Set_Text
         ("{" & Wide_Wide_Character'Val (10) & "body"
          & Wide_Wide_Character'Val (10) & "}", Success);

@@ -60,6 +60,12 @@ individual roles, and pass the value to component `Render` overloads. The
 original explicit style parameters remain available when a component needs a
 one-off treatment.
 
+`Themes.Palette` is an additive, finer-grained render-time vocabulary. It keeps
+ordinary content neutral while separating title/focus, interaction, selected,
+button, pressed, and disabled states. `Themes.To_Theme` projects it onto the
+stable `Theme` record, while high-value controls expose `From_Palette` to retain
+the additional distinctions. Neither value is retained in a model.
+
 | Component | Theme roles |
 | --- | --- |
 | Spinner | `Primary` |
@@ -71,8 +77,15 @@ one-off treatment.
 
 `Border`, `Error`, and `Success` are application-facing roles for layout and
 status presentation. Components borrow a theme only during rendering; models
-never retain it. `Themes.Default` preserves terminal defaults, while
-`Themes.Charm` is an optional restrained dark-terminal preset.
+never retain it. `Themes.Default` preserves terminal defaults. `Themes.Charm`
+keeps content background-neutral; `Themes.Charm_Dark` and
+`Themes.Charm_Light` are explicit variants for applications which know their
+terminal background.
+
+Chat message bodies and actions remain caller-owned surfaces. Selection styles
+the message header and, when conversational padding exists, its accent rail;
+it never replaces the bubble fill. Opaque text, transparent gaps, and embedded
+component appearances therefore compose without selected-background cutouts.
 
 ## Input pipeline
 

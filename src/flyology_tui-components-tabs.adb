@@ -15,6 +15,13 @@ package body Flyology_TUI.Components.Tabs is
       Focused  => Theme.Focused,
       Disabled => Theme.Muted);
 
+   function From_Palette
+     (Palette : Flyology_TUI.Themes.Palette) return Appearance is
+     (Normal   => Palette.Content,
+      Active   => Palette.Button_Focused,
+      Focused  => Palette.Interaction,
+      Disabled => Palette.Disabled);
+
    procedure Validate (Values : Item_Array) is
    begin
       if Values'Length > Capacity then
@@ -218,7 +225,11 @@ package body Flyology_TUI.Components.Tabs is
          begin
             Tab.Write
               (0, 0,
-               " " & Label (Item.Values.Element (Index - 1)) & " ",
+               (if Item.Active = Index
+                then "[" & Label (Item.Values.Element (Index - 1)) & "]"
+                elsif Has_Focus and then Item.Focused = Index
+                then ">" & Label (Item.Values.Element (Index - 1)) & " "
+                else " " & Label (Item.Values.Element (Index - 1)) & " "),
                Style);
             Result.Frame_Value.Overlay_Clipped
               (Tab, Integer (Start) - Integer (View_Start), 0);
@@ -518,7 +529,12 @@ package body Flyology_TUI.Components.Tabs is
                else Look.Normal);
          begin
             Result.Write
-              (X, 0, " " & Label (Item.Values.Element (Index - 1)) & " ",
+              (X, 0,
+               (if Item.Active = Index
+                then "[" & Label (Item.Values.Element (Index - 1)) & "]"
+                elsif Has_Focus and then Item.Focused = Index
+                then ">" & Label (Item.Values.Element (Index - 1)) & " "
+                else " " & Label (Item.Values.Element (Index - 1)) & " "),
                Style);
             X := X + Tab_Width (Item, Index);
          end;

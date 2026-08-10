@@ -19,6 +19,9 @@ package Flyology_TUI.Components.Buttons is
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance;
 
+   function From_Palette
+     (Palette : Flyology_TUI.Themes.Palette) return Appearance;
+
    type Model is tagged private;
 
    function Create

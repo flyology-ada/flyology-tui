@@ -5,6 +5,8 @@ with Ada.Text_IO;
 with Flyology_TUI.Components;
 with Flyology_TUI.Components.Chats;
 with Flyology_TUI.Components.Interactions;
+with Flyology_TUI.Color_Profiles;
+with Flyology_TUI.Colors;
 with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Mouse;
@@ -33,6 +35,8 @@ procedure Chat_Tests is
    use type Chats.Delivery_State;
    use type Chats.Message_Role;
    use type Chats.Layout_Options;
+   use type Flyology_TUI.Color_Profiles.Profile;
+   use type Flyology_TUI.Colors.Color;
    use type Flyology_TUI.Styles.Style;
 
    Empty_Messages : constant Chats.Message_Array (1 .. 0) :=
@@ -824,6 +828,86 @@ procedure Chat_Tests is
                and then Frame.Element (1, 1).Appearance =
                  Flyology_TUI.Styles.Default,
                "dense compatibility applied bubble fill or transparency");
+         end;
+      end;
+
+      declare
+         Selected : Chats.Model := Chats.Create
+           ((1 => Message (One, Alice, Chats.User)), 5);
+         Look : Chats.Appearance :=
+           Chats.From_Theme (Flyology_TUI.Themes.Charm);
+         Content : Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Surfaces.Create (4, 3);
+         Component_Style : Flyology_TUI.Styles.Style :=
+           Flyology_TUI.Styles.Default;
+      begin
+         Selected.Set_Layout (Chats.Conversational_Layout);
+         Selected.Select_Id (One);
+         Selected.Reconcile_Measurements ((1 => (One, 3, 0)));
+         Look.Selected :=
+           (Foreground => Flyology_TUI.Colors.True_Color (247, 128, 226),
+            Background => Flyology_TUI.Colors.True_Color (72, 20, 68),
+            Bold => True, others => <>);
+         Look.User_Bubble :=
+           (Background => Flyology_TUI.Colors.True_Color (30, 36, 48),
+            others => <>);
+         Component_Style :=
+           (Foreground => Flyology_TUI.Colors.True_Color (255, 253, 245),
+            Background => Flyology_TUI.Colors.True_Color (0, 122, 85),
+            Underline => True, others => <>);
+         --  Row 0 is ordinary opaque default-background text, row 1 is a
+         --  transparent blank, and row 2 stands in for a styled component.
+         Content.Write (0, 0, "text", Flyology_TUI.Styles.Default);
+         Content.Write (0, 2, "widget", Component_Style);
+         declare
+            View : constant Chats.Presentation := Selected.Present
+              ((1 => (One, Content, No_Actions)), 24, Look,
+               Has_Focus => True);
+            Frame : constant Flyology_TUI.Surfaces.Surface :=
+              Chats.Frame (View);
+            Bubble : constant Flyology_TUI.Geometry.Rectangle :=
+              Chats.Bubble_Region (View, One);
+            Header : constant Flyology_TUI.Geometry.Rectangle :=
+              Chats.Header_Region (View, One);
+            Body_Box : constant Flyology_TUI.Geometry.Rectangle :=
+              Chats.Body_Region (View, One);
+            Rail : constant Flyology_TUI.Surfaces.Cell :=
+              Frame.Element
+                (Natural (Bubble.X), Natural (Header.Y));
+         begin
+            Assert
+              (Text.To_Wide_Wide_String (Rail.Glyph) =
+                 Wide_Wide_String'(1 => Wide_Wide_Character'Val (16#258C#))
+               and then Rail.Appearance = Look.Selected,
+               "selected chat message lost its structural accent rail");
+            Assert
+              (Frame.Element
+                 (Natural (Body_Box.X), Natural (Body_Box.Y)).Appearance =
+                   Flyology_TUI.Styles.Default,
+               "selection leaked into opaque default-background body text");
+            Assert
+              (Frame.Element
+                 (Natural (Body_Box.X + 1),
+                  Natural (Body_Box.Y + 1)).Appearance = Look.User_Bubble,
+               "selection replaced the bubble behind a transparent body");
+            Assert
+              (Frame.Element
+                 (Natural (Body_Box.X),
+                  Natural (Body_Box.Y + 2)).Appearance = Component_Style,
+               "selection overwrote a caller-owned component body");
+            for Profile in Flyology_TUI.Color_Profiles.Profile loop
+               Assert
+                 (Rail.Appearance.Bold
+                  and then
+                    (if Profile = Flyology_TUI.Color_Profiles.Monochrome
+                     then Flyology_TUI.Color_Profiles.Adapt
+                       (Rail.Appearance.Foreground, Profile) =
+                         Flyology_TUI.Colors.Default
+                     else Flyology_TUI.Color_Profiles.Adapt
+                       (Rail.Appearance.Foreground, Profile) /=
+                         Flyology_TUI.Colors.Default),
+                  "chat selection rail did not survive a color profile");
+            end loop;
          end;
       end;
 

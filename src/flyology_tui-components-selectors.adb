@@ -15,6 +15,13 @@ package body Flyology_TUI.Components.Selectors is
       Focused  => Theme.Focused,
       Disabled => Theme.Muted);
 
+   function From_Palette
+     (Palette : Flyology_TUI.Themes.Palette) return Appearance is
+     (Normal   => Palette.Content,
+      Selected => Palette.Selected,
+      Focused  => Palette.Interaction,
+      Disabled => Palette.Disabled);
+
    procedure Validate (Values : Item_Array) is
    begin
       if Values'Length > Capacity then

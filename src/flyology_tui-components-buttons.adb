@@ -13,6 +13,13 @@ package body Flyology_TUI.Components.Buttons is
       Pressed  => Theme.Selected,
       Disabled => Theme.Muted);
 
+   function From_Palette
+     (Palette : Flyology_TUI.Themes.Palette) return Appearance is
+     (Normal   => Palette.Button,
+      Focused  => Palette.Button_Focused,
+      Pressed  => Palette.Button_Pressed,
+      Disabled => Palette.Disabled);
+
    function Create
      (Label   : Wide_Wide_String;
       Enabled : Boolean := True) return Model is

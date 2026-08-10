@@ -1,5 +1,6 @@
 with Ada.Strings.Wide_Wide_Unbounded;
 with Ada.Text_IO;
+with Ada.Numerics.Long_Elementary_Functions;
 with Flyology_TUI.Components;
 with Flyology_TUI.Components.Buttons;
 with Flyology_TUI.Components.Check_Boxes;
@@ -8,6 +9,8 @@ with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Components.Radio_Groups;
 with Flyology_TUI.Components.Selectors;
 with Flyology_TUI.Components.Tabs;
+with Flyology_TUI.Color_Profiles;
+with Flyology_TUI.Colors;
 with Flyology_TUI.Events;
 with Flyology_TUI.Mouse;
 with Flyology_TUI.Styles;
@@ -18,6 +21,10 @@ procedure Controls_Tests is
    package Text renames Ada.Strings.Wide_Wide_Unbounded;
    use type Flyology_TUI.Components.Check_Boxes.Check_State;
    use type Flyology_TUI.Components.Interactions.Capture_Action;
+   use type Flyology_TUI.Color_Profiles.Profile;
+   use type Flyology_TUI.Colors.ANSI_Color;
+   use type Flyology_TUI.Colors.Color;
+   use type Flyology_TUI.Colors.Color_Kind;
    use type Flyology_TUI.Styles.Style;
 
    type Choice is (Alpha, Beta, Gamma, Fourth);
@@ -64,6 +71,44 @@ procedure Controls_Tests is
          raise Program_Error with Message;
       end if;
    end Assert;
+
+   function Linear_Channel
+     (Value : Flyology_TUI.Colors.Channel) return Long_Float
+   is
+      Sample : constant Long_Float := Long_Float (Value) / 255.0;
+      Base   : Long_Float;
+   begin
+      if Sample <= 0.04045 then
+         return Sample / 12.92;
+      end if;
+      Base := (Sample + 0.055) / 1.055;
+      return Ada.Numerics.Long_Elementary_Functions.Exp
+        (2.4 * Ada.Numerics.Long_Elementary_Functions.Log (Base));
+   end Linear_Channel;
+
+   function Luminance
+     (Color : Flyology_TUI.Colors.Color) return Long_Float
+   is
+   begin
+      Assert
+        (Color.Kind = Flyology_TUI.Colors.RGB,
+         "contrast test requires an exact RGB color");
+      return
+        0.2126 * Linear_Channel (Color.Red_Value)
+        + 0.7152 * Linear_Channel (Color.Green_Value)
+        + 0.0722 * Linear_Channel (Color.Blue_Value);
+   end Luminance;
+
+   function Contrast
+     (Left, Right : Flyology_TUI.Colors.Color) return Long_Float
+   is
+      Left_Light  : constant Long_Float := Luminance (Left);
+      Right_Light : constant Long_Float := Luminance (Right);
+   begin
+      return
+        (Long_Float'Max (Left_Light, Right_Light) + 0.05)
+        / (Long_Float'Min (Left_Light, Right_Light) + 0.05);
+   end Contrast;
 
    function Key (Kind : Flyology_TUI.Events.Key_Kind)
       return Flyology_TUI.Events.Terminal_Event
@@ -625,6 +670,21 @@ procedure Controls_Tests is
         Selections.From_Theme (Theme);
       Drop_Look : constant Drops.Appearance := Drops.From_Theme (Theme);
       Tab_Look : constant Tab_Bars.Appearance := Tab_Bars.From_Theme (Theme);
+      Palette : constant Flyology_TUI.Themes.Palette :=
+        Flyology_TUI.Themes.Charm_Palette;
+      Palette_Button : constant Flyology_TUI.Components.Buttons.Appearance :=
+        Flyology_TUI.Components.Buttons.From_Palette (Palette);
+      Palette_Check : constant
+        Flyology_TUI.Components.Check_Boxes.Appearance :=
+          Flyology_TUI.Components.Check_Boxes.From_Palette (Palette);
+      Palette_Radio : constant Radios.Appearance :=
+        Radios.From_Palette (Palette);
+      Palette_Selector : constant Selections.Appearance :=
+        Selections.From_Palette (Palette);
+      Palette_Drop : constant Drops.Appearance :=
+        Drops.From_Palette (Palette);
+      Palette_Tabs : constant Tab_Bars.Appearance :=
+        Tab_Bars.From_Palette (Palette);
       Button : constant Flyology_TUI.Components.Buttons.Model :=
         Flyology_TUI.Components.Buttons.Create ("Go");
       Check : constant Flyology_TUI.Components.Check_Boxes.Model :=
@@ -634,7 +694,81 @@ procedure Controls_Tests is
         Selections.Create ((Alpha, Beta));
       Drop : constant Drops.Model := Drops.Create ((Alpha, Beta));
       Tabs : constant Tab_Bars.Model := Tab_Bars.Create ((Alpha, Beta));
+
+      procedure Assert_Button_Profile
+        (Name                : String;
+         Item                : Flyology_TUI.Themes.Palette;
+         Focused_Foreground  : Flyology_TUI.Colors.Color;
+         Focused_Background  : Flyology_TUI.Colors.Color;
+         Pressed_Foreground  : Flyology_TUI.Colors.Color;
+         Pressed_Background  : Flyology_TUI.Colors.Color;
+         Focused_ANSI_FG     : Flyology_TUI.Colors.ANSI_Color;
+         Focused_ANSI_BG     : Flyology_TUI.Colors.ANSI_Color;
+         Pressed_ANSI_FG     : Flyology_TUI.Colors.ANSI_Color;
+         Pressed_ANSI_BG     : Flyology_TUI.Colors.ANSI_Color)
+      is
+         package Profiles renames Flyology_TUI.Color_Profiles;
+         package Colors renames Flyology_TUI.Colors;
+      begin
+         Assert
+           (Item.Button_Focused.Foreground = Focused_Foreground
+            and then Item.Button_Focused.Background = Focused_Background
+            and then Item.Button_Pressed.Foreground = Pressed_Foreground
+            and then Item.Button_Pressed.Background = Pressed_Background,
+            Name & " button colors changed from their audited RGB pairs");
+         Assert
+           (Contrast
+              (Item.Button_Focused.Foreground,
+               Item.Button_Focused.Background) >= 4.5
+            and then Contrast
+              (Item.Button_Pressed.Foreground,
+               Item.Button_Pressed.Background) >= 4.5,
+            Name & " button pair fell below 4.5:1 contrast");
+         Assert
+           (Profiles.Adapt
+              (Item.Button_Focused.Foreground, Profiles.ANSI_16) =
+                Colors.Basic (Focused_ANSI_FG)
+            and then Profiles.Adapt
+              (Item.Button_Focused.Background, Profiles.ANSI_16) =
+                Colors.Basic (Focused_ANSI_BG)
+            and then Profiles.Adapt
+              (Item.Button_Pressed.Foreground, Profiles.ANSI_16) =
+                Colors.Basic (Pressed_ANSI_FG)
+            and then Profiles.Adapt
+              (Item.Button_Pressed.Background, Profiles.ANSI_16) =
+                Colors.Basic (Pressed_ANSI_BG)
+            and then Focused_ANSI_FG /= Focused_ANSI_BG
+            and then Pressed_ANSI_FG /= Pressed_ANSI_BG,
+            Name & " button colors collapsed or changed under ANSI16");
+      end Assert_Button_Profile;
    begin
+      Assert_Button_Profile
+        ("default Charm", Flyology_TUI.Themes.Charm_Palette,
+         Flyology_TUI.Colors.True_Color (35, 35, 35),
+         Flyology_TUI.Colors.True_Color (247, 128, 226),
+         Flyology_TUI.Colors.True_Color (255, 253, 245),
+         Flyology_TUI.Colors.True_Color (90, 86, 224),
+         Flyology_TUI.Colors.Black, Flyology_TUI.Colors.White,
+         Flyology_TUI.Colors.Bright_White,
+         Flyology_TUI.Colors.Bright_Black);
+      Assert_Button_Profile
+        ("dark Charm", Flyology_TUI.Themes.Charm_Dark_Palette,
+         Flyology_TUI.Colors.True_Color (35, 35, 35),
+         Flyology_TUI.Colors.True_Color (247, 128, 226),
+         Flyology_TUI.Colors.True_Color (255, 253, 245),
+         Flyology_TUI.Colors.True_Color (90, 86, 224),
+         Flyology_TUI.Colors.Black, Flyology_TUI.Colors.White,
+         Flyology_TUI.Colors.Bright_White,
+         Flyology_TUI.Colors.Bright_Black);
+      Assert_Button_Profile
+        ("light Charm", Flyology_TUI.Themes.Charm_Light_Palette,
+         Flyology_TUI.Colors.True_Color (255, 253, 245),
+         Flyology_TUI.Colors.True_Color (184, 50, 169),
+         Flyology_TUI.Colors.True_Color (255, 253, 245),
+         Flyology_TUI.Colors.True_Color (90, 86, 224),
+         Flyology_TUI.Colors.Bright_White, Flyology_TUI.Colors.Magenta,
+         Flyology_TUI.Colors.Bright_White,
+         Flyology_TUI.Colors.Bright_Black);
       Assert
         (Button_Look.Normal = Theme.Primary
          and then Button_Look.Focused = Theme.Focused
@@ -674,6 +808,48 @@ procedure Controls_Tests is
          and then Tab_Look.Disabled = Theme.Muted,
          "tab theme mapping is incorrect");
       Assert
+        (Palette_Button.Normal = Palette.Button
+         and then Palette_Button.Focused = Palette.Button_Focused
+         and then Palette_Button.Pressed = Palette.Button_Pressed
+         and then Palette_Check.Normal = Palette.Content
+         and then Palette_Check.Selected = Palette.Selected
+         and then Palette_Radio.Focused = Palette.Interaction
+         and then Palette_Selector.Selected = Palette.Selected
+         and then Palette_Drop.Highlighted = Palette.Button_Focused
+         and then Palette_Tabs.Active = Palette.Button_Focused,
+         "semantic palette mappings lost component-specific states");
+      Assert
+        (Flyology_TUI.Themes.Charm.Primary = Palette.Content
+         and then Flyology_TUI.Themes.Charm.Primary =
+           Flyology_TUI.Styles.Default
+         and then Flyology_TUI.Themes.Charm.Selected /=
+           Flyology_TUI.Themes.Charm.Focused
+         and then Flyology_TUI.Themes.Charm.Border /=
+           Flyology_TUI.Themes.Charm.Focused
+         and then Flyology_TUI.Themes.Charm_Dark.Primary /=
+           Flyology_TUI.Themes.Charm_Light.Primary,
+         "Charm profiles did not preserve neutral content and state "
+           & "hierarchy");
+      Assert
+        (not Palette.Muted.Faint
+         and then Palette.Focused.Bold
+         and then Palette.Focused.Underline
+         and then Palette.Interaction.Underline
+         and then Palette.Button_Focused.Bold
+         and then Palette.Disabled.Faint,
+         "Charm state hierarchy depends on color alone");
+      for Profile in Flyology_TUI.Color_Profiles.Profile loop
+         Assert
+           ((if Profile = Flyology_TUI.Color_Profiles.Monochrome
+             then Flyology_TUI.Color_Profiles.Adapt
+               (Palette.Focused.Foreground, Profile) =
+                 Flyology_TUI.Colors.Default
+             else Flyology_TUI.Color_Profiles.Adapt
+               (Palette.Focused.Foreground, Profile) /=
+                 Flyology_TUI.Colors.Default),
+            "Charm focus color did not degrade for a terminal profile");
+      end loop;
+      Assert
         (Button.Render (Button_Look).Element (0, 0).Appearance =
            Button_Look.Normal
          and then Check.Render (Check_Look).Element (0, 0).Appearance =
@@ -690,6 +866,12 @@ procedure Controls_Tests is
            (Tab_Look, Has_Focus => True).Element (0, 0).Appearance =
              Tab_Look.Active,
          "explicit component appearances were not used by Render");
+      Assert
+        (Text.To_Wide_Wide_String
+           (Tabs.Render (Palette_Tabs).Element (0, 0).Glyph) = "["
+         and then Tabs.Render (Palette_Tabs).Element (0, 0).Appearance =
+           Palette_Tabs.Active,
+         "active tab lost its persistent non-color cue");
    end Test_Appearances;
 
 begin

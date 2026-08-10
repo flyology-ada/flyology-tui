@@ -640,16 +640,8 @@ package body Flyology_TUI.Components.Chats is
 
    function Bubble_Style
      (Value     : Message;
-      Selected  : Boolean;
-      Focused   : Boolean;
-      Has_Focus : Boolean;
       Look      : Appearance) return Flyology_TUI.Styles.Style is
    begin
-      if Selected then
-         return Look.Selected;
-      elsif Focused and then Has_Focus then
-         return Look.Focused;
-      end if;
       return
         (case Value.Role is
             when User      => Look.User_Bubble,
@@ -772,9 +764,7 @@ package body Flyology_TUI.Components.Chats is
             Bubble : Flyology_TUI.Surfaces.Surface :=
               Flyology_TUI.Surfaces.Create
                 (Bubble_Width, Bubble_Height,
-                 Bubble_Style
-                   (Value, Item.Selected = Index, Item.Focused = Index,
-                    Has_Focus, Look));
+                 Bubble_Style (Value, Look));
             Header : Flyology_TUI.Surfaces.Surface :=
               Flyology_TUI.Surfaces.Create
                 (Inner_Width, 1, Look.Header);
@@ -821,6 +811,15 @@ package body Flyology_TUI.Components.Chats is
                   Integer (Inner_X),
                   Integer (1 + Item.Body_Heights.Element (Index - 1)),
                   Transparent_Spaces => True);
+               --  A selection cue belongs to the message chrome, not to the
+               --  caller-owned body. Use the bubble's existing padding as a
+               --  rail, after child composition, so opaque, transparent, and
+               --  component bodies retain their exact appearances.
+               if Item.Selected = Index and then Inner_X > 0 then
+                  for Y in 0 .. Bubble_Height - 1 loop
+                     Bubble.Put (0, Y, Symbol (16#258C#), Look.Selected);
+                  end loop;
+               end if;
                Result.Frame_Value.Overlay_Clipped
                  (Bubble, Integer (Bubble_X), Bubble_Y);
                Header_Region.X := Integer (Bubble_X);

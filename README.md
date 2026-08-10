@@ -113,7 +113,10 @@ Themes are ordinary values passed at render time. Components do not retain
 them, and every explicit style-based `Render` signature remains available.
 
 ```ada
-Visual : Flyology_TUI.Themes.Theme := Flyology_TUI.Themes.Charm;
+Palette : constant Flyology_TUI.Themes.Palette :=
+  Flyology_TUI.Themes.Charm_Palette;
+Visual : Flyology_TUI.Themes.Theme :=
+  Flyology_TUI.Themes.To_Theme (Palette);
 
 Visual.Primary := Flyology_TUI.Styles.With_Foreground
   (Visual.Primary, Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Cyan));
@@ -121,9 +124,17 @@ Visual.Primary := Flyology_TUI.Styles.With_Foreground
 Frame := Input.Render (Visual);
 ```
 
-`Themes.Default` leaves all roles at terminal defaults. `Themes.Charm` supplies
-the restrained dark-terminal preset used by the kitchen-sink example. An
-application can replace any role without creating a new component type.
+`Themes.Default` leaves all roles at terminal defaults. `Themes.Charm` keeps
+ordinary content at the terminal foreground and reserves its color for focus,
+interaction, selection, and status. `Themes.Charm_Dark` and
+`Themes.Charm_Light` provide explicit background-aware variants.
+
+The additive `Palette` vocabulary distinguishes content, titles, interaction,
+selection, and button states. Buttons, tabs, check boxes, radio groups,
+selectors, and dropdowns accept it through `From_Palette`; their existing
+`From_Theme`, theme-based `Render`, and explicit `Appearance` APIs remain
+available. Applications can replace any role without creating a new component
+type or storing presentation state in a model.
 
 See [docs/architecture.md](docs/architecture.md) for ownership and shutdown
 details. [examples/src/counter.adb](examples/src/counter.adb) is the compact

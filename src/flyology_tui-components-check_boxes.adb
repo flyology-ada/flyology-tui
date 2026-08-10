@@ -14,6 +14,14 @@ package body Flyology_TUI.Components.Check_Boxes is
       Pressed  => Theme.Selected,
       Disabled => Theme.Muted);
 
+   function From_Palette
+     (Palette : Flyology_TUI.Themes.Palette) return Appearance is
+     (Normal   => Palette.Content,
+      Selected => Palette.Selected,
+      Focused  => Palette.Interaction,
+      Pressed  => Palette.Button_Pressed,
+      Disabled => Palette.Disabled);
+
    function Create
      (Label   : Wide_Wide_String;
       State   : Check_State := Unchecked;

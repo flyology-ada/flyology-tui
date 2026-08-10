@@ -770,7 +770,22 @@ procedure Kitchen_Sink is
    use type Flyology_TUI.Events.Terminal_Event_Kind;
    use type Flyology_TUI.Views.Mouse_Mode;
 
-   Visual : constant Flyology_TUI.Themes.Theme := Flyology_TUI.Themes.Charm;
+   Charm_Visual : constant Flyology_TUI.Themes.Palette :=
+     Flyology_TUI.Themes.Charm_Palette;
+   Visual : constant Flyology_TUI.Themes.Theme :=
+     Flyology_TUI.Themes.To_Theme (Charm_Visual);
+   Button_Look : constant Flyology_TUI.Components.Buttons.Appearance :=
+     Flyology_TUI.Components.Buttons.From_Palette (Charm_Visual);
+   Check_Look : constant Flyology_TUI.Components.Check_Boxes.Appearance :=
+     Flyology_TUI.Components.Check_Boxes.From_Palette (Charm_Visual);
+   Radio_Look : constant Radios.Appearance :=
+     Radios.From_Palette (Charm_Visual);
+   Selector_Look : constant Selectors.Appearance :=
+     Selectors.From_Palette (Charm_Visual);
+   Dropdown_Look : constant Dropdowns.Appearance :=
+     Dropdowns.From_Palette (Charm_Visual);
+   Page_Look : constant Pages.Appearance :=
+     Pages.From_Palette (Charm_Visual);
 
    function Build_Viewport_Demo return Flyology_TUI.Surfaces.Surface is
       Content : Text.Unbounded_Wide_Wide_String;
@@ -2527,7 +2542,7 @@ procedure Kitchen_Sink is
                Previous : constant Page_Id := Current_Page (Item);
                Tabs_Layout : constant Pages.Presentation :=
                  Item.Pages.Present
-                   (Geometry.Tabs.Width, Visual,
+                   (Geometry.Tabs.Width, Page_Look,
                     Item.Focus = Page_Navigation);
             begin
                Result := Item.Pages.Handle
@@ -3199,7 +3214,7 @@ procedure Kitchen_Sink is
       use Flyology_TUI.Components.Interactions;
       Geometry : constant Layout_Snapshot := Layout (Item);
       Tabs_Layout : constant Pages.Presentation := Item.Pages.Present
-        (Geometry.Tabs.Width, Visual, Item.Focus = Page_Navigation);
+        (Geometry.Tabs.Width, Page_Look, Item.Focus = Page_Navigation);
       Tabs_Bounds : constant Flyology_TUI.Geometry.Rectangle := Geometry.Tabs;
       Point : constant Flyology_TUI.Geometry.Point :=
         (X => Integer (Event.Mouse.X), Y => Integer (Event.Mouse.Y));
@@ -3662,12 +3677,12 @@ procedure Kitchen_Sink is
       Input_Panel : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Text input", Item.Input.Render (Visual),
-           Item.Focus = Text_Field, Visual.Border, Visual.Muted,
+           Item.Focus = Text_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.First.Width, Geometry.First.Height);
       List_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Generic list", Item.Choices.Render (Visual),
-           Item.Focus = List_Field, Visual.Border, Visual.Muted,
+           Item.Focus = List_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.Third.Width, Geometry.Third.Height);
       Viewport_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
@@ -3675,13 +3690,13 @@ procedure Kitchen_Sink is
            Item.Focus in
              Viewport_Field | Vertical_Scroll_Field
                | Horizontal_Scroll_Field,
-           Visual.Border, Visual.Muted,
+           Charm_Visual.Title, Visual.Muted,
            Geometry.Second.Width, Geometry.Second.Height);
       Form_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ((if Item.Form.Submitted then "Form done" else "Form"),
            Item.Form.Render (Visual), Item.Focus = Form_Field,
-           Visual.Border, Visual.Muted,
+           Charm_Visual.Title, Visual.Muted,
            Geometry.Fourth.Width, Geometry.Fourth.Height);
    begin
       Overlay_Region (Canvas, Input_Panel, Geometry.First, Geometry);
@@ -3700,32 +3715,32 @@ procedure Kitchen_Sink is
           (Geometry.Content.Width, Geometry.Content.Height);
       Action_Content : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Vertically
-          (Item.Button.Render (Visual, Item.Focus = Button_Field),
-           Item.Check.Render (Visual, Item.Focus = Check_Field),
+          (Item.Button.Render (Button_Look, Item.Focus = Button_Field),
+           Item.Check.Render (Check_Look, Item.Focus = Check_Field),
            Gap => 1);
       Action_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Actions", Action_Content,
            Item.Focus in Button_Field | Check_Field,
-           Visual.Border, Visual.Muted,
+           Charm_Visual.Title, Visual.Muted,
            Geometry.First.Width, Geometry.First.Height);
       Radio_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Radio group",
-           Item.Radios.Render (Visual, Item.Focus = Radio_Field),
-           Item.Focus = Radio_Field, Visual.Border, Visual.Muted,
+           Item.Radios.Render (Radio_Look, Item.Focus = Radio_Field),
+           Item.Focus = Radio_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.Second.Width, Geometry.Second.Height);
       Selector_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Multi selector",
-           Item.Selector.Render (Visual, Item.Focus = Selector_Field),
-           Item.Focus = Selector_Field, Visual.Border, Visual.Muted,
+           Item.Selector.Render (Selector_Look, Item.Focus = Selector_Field),
+           Item.Focus = Selector_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.Third.Width, Geometry.Third.Height);
       Dropdown_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Dropdown",
-           Item.Dropdown.Render (Visual, Item.Focus = Dropdown_Field),
-           Item.Focus = Dropdown_Field, Visual.Border, Visual.Muted,
+           Item.Dropdown.Render (Dropdown_Look, Item.Focus = Dropdown_Field),
+           Item.Focus = Dropdown_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.Fourth.Width, Geometry.Fourth.Height);
    begin
       Overlay_Region (Canvas, Action_View, Geometry.First, Geometry);
@@ -3746,7 +3761,7 @@ procedure Kitchen_Sink is
       Work_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Work progress", Item.Work.Render (Visual),
-           Item.Focus = Telemetry_Field, Visual.Border, Visual.Muted,
+           Item.Focus = Telemetry_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.First.Width, Geometry.First.Height);
       Spark_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
@@ -3755,7 +3770,7 @@ procedure Kitchen_Sink is
              (Item.Samples,
               Inset_Panel (Geometry.Second).Width,
               Sparklines.Automatic, Visual),
-           False, Visual.Border, Visual.Muted,
+           False, Charm_Visual.Title, Visual.Muted,
            Geometry.Second.Width, Geometry.Second.Height);
       Aggregate : constant Work_Progress.Fraction :=
         Item.Work.Weighted_Total;
@@ -3797,7 +3812,7 @@ procedure Kitchen_Sink is
       Indicator_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Immediate indicators", Indicator_Content,
-           False, Visual.Border, Visual.Muted,
+           False, Charm_Visual.Title, Visual.Muted,
            Geometry.Third.Width, Geometry.Third.Height);
    begin
       Overlay_Region (Canvas, Work_View, Geometry.First, Geometry);
@@ -3818,19 +3833,19 @@ procedure Kitchen_Sink is
           ("Breadcrumbs",
            Item.Breadcrumb.Render
              (Visual, Item.Focus = Breadcrumb_Field),
-           Item.Focus = Breadcrumb_Field, Visual.Border, Visual.Muted,
+           Item.Focus = Breadcrumb_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.First.Width, Geometry.First.Height);
       Table_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Sortable typed table",
            Item.Table.Render (Visual, Item.Focus = Table_Field),
-           Item.Focus = Table_Field, Visual.Border, Visual.Muted,
+           Item.Focus = Table_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.Third.Width, Geometry.Third.Height);
       Tree_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Collapsible tree",
            Item.Tree.Render (Visual, Item.Focus = Tree_Field),
-           Item.Focus = Tree_Field, Visual.Border, Visual.Muted,
+           Item.Focus = Tree_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.Second.Width, Geometry.Second.Height);
       Accordion_Layout : constant Accordions.Presentation :=
         Accordion_Presentation (Item, Inset_Panel (Geometry.Fourth).Width);
@@ -3838,7 +3853,7 @@ procedure Kitchen_Sink is
         Panel
           ("External accordion bodies",
            Accordions.Frame (Accordion_Layout),
-           Item.Focus = Accordion_Field, Visual.Border, Visual.Muted,
+           Item.Focus = Accordion_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.Fourth.Width, Geometry.Fourth.Height);
    begin
       Overlay_Region (Canvas, Breadcrumb_View, Geometry.First, Geometry);
@@ -3882,13 +3897,13 @@ procedure Kitchen_Sink is
         Panel
           ("Text area · no wrap",
            Item.Text_Area.Render (Text_Area_Look),
-           Item.Focus = Text_Area_Field, Visual.Border, Visual.Muted,
+           Item.Focus = Text_Area_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.Left_Full.Width, Geometry.Left_Full.Height);
       Code_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           ("Syntax editor · soft wrap",
            Item.Syntax.Render (Syntax_Look),
-           Item.Focus = Syntax_Field, Visual.Border, Visual.Muted,
+           Item.Focus = Syntax_Field, Charm_Visual.Title, Visual.Muted,
            Geometry.Right_Full.Width, Geometry.Right_Full.Height);
    begin
       if Geometry.Right_Full.Width > 0 then
@@ -4400,12 +4415,12 @@ procedure Kitchen_Sink is
         Flyology_TUI.Layouts.Join_Horizontally
           (Item.Spinner.Render (Visual),
            Flyology_TUI.Surfaces.From_Text
-             ("Flyology TUI kitchen sink", Visual.Primary),
+             ("Flyology TUI kitchen sink", Charm_Visual.Title),
            Gap => 1);
       Meter : constant Flyology_TUI.Surfaces.Surface :=
         Item.Progress.Render (Visual);
       Tabs_Layout : constant Pages.Presentation := Item.Pages.Present
-        (Geometry.Tabs.Width, Visual, Item.Focus = Page_Navigation);
+        (Geometry.Tabs.Width, Page_Look, Item.Focus = Page_Navigation);
       Page_Bar : constant Flyology_TUI.Surfaces.Surface :=
         Pages.Frame (Tabs_Layout);
       Page : constant Flyology_TUI.Surfaces.Surface :=
