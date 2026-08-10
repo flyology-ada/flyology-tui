@@ -819,6 +819,7 @@ procedure Kitchen_Sink is
    use type Chat_Streams.Stream_State;
    use type Docking.Dock_Side;
    use type Docking.Pane_Placement;
+   use type Flyology_TUI.Components.Check_Boxes.Check_State;
    use type Flyology_TUI.Components.Interactions.Capture_Action;
    use type Flyology_TUI.Colors.Color;
    use type Flyology_TUI.Events.Key_Kind;
@@ -939,14 +940,33 @@ procedure Kitchen_Sink is
    function Text_Area_Look (Item : Model)
      return Flyology_TUI.Components.Text_Areas.Appearance;
 
-   function Inset_Panel
-     (Region : Flyology_TUI.Geometry.Rectangle)
+   function Panel_Content
+     (Item   : Model;
+      Region : Flyology_TUI.Geometry.Rectangle)
       return Flyology_TUI.Geometry.Rectangle
    is
-     ((X      => Region.X + Integer (Natural'Min (2, Region.Width)),
-       Y      => Region.Y + Integer (Natural'Min (4, Region.Height)),
-       Width  => (if Region.Width > 4 then Region.Width - 4 else 0),
-       Height => (if Region.Height > 5 then Region.Height - 5 else 0)));
+      Skin : constant Flyology_TUI.Skins.Skin := Active_Skin (Item);
+      Left : constant Natural := 2;
+      Centered : constant Boolean :=
+        Skin.Panel.Title = Flyology_TUI.Skins.Centered_Title;
+      Top : constant Natural := (if Centered then 2 else 4);
+      Right : constant Natural :=
+        (if Centered then 2 + Skin.Panel.Frame.Shadow_X else 2);
+      Bottom : constant Natural :=
+        (if Centered then 2 + Skin.Panel.Frame.Shadow_Y else 1);
+      Horizontal : constant Natural := Left + Right;
+      Vertical : constant Natural := Top + Bottom;
+   begin
+      return
+        (X      => Region.X + Integer (Natural'Min (Left, Region.Width)),
+         Y      => Region.Y + Integer (Natural'Min (Top, Region.Height)),
+         Width  =>
+           (if Region.Width > Horizontal
+            then Region.Width - Horizontal else 0),
+         Height =>
+           (if Region.Height > Vertical
+            then Region.Height - Vertical else 0));
+   end Panel_Content;
 
    function Origin
      (Region : Flyology_TUI.Geometry.Rectangle)
@@ -999,18 +1019,19 @@ procedure Kitchen_Sink is
           Y      => Geometry.Dropdown_Origin.Y,
           Width  => Item.Dropdown.Width,
           Height => Item.Dropdown.Height),
-         Inset_Panel (Geometry.Fourth)));
+         Panel_Content (Item, Geometry.Fourth)));
 
    procedure Editor_Regions
-     (Geometry : Layout_Snapshot;
+     (Item : Model;
+      Geometry : Layout_Snapshot;
       Text_Region, Syntax_Region : out Flyology_TUI.Geometry.Rectangle) is
    begin
       if Geometry.Right_Full.Width > 0 then
-         Text_Region := Inset_Panel (Geometry.Left_Full);
-         Syntax_Region := Inset_Panel (Geometry.Right_Full);
+         Text_Region := Panel_Content (Item, Geometry.Left_Full);
+         Syntax_Region := Panel_Content (Item, Geometry.Right_Full);
       else
-         Text_Region := Inset_Panel (Geometry.Top_Full);
-         Syntax_Region := Inset_Panel (Geometry.Bottom_Full);
+         Text_Region := Panel_Content (Item, Geometry.Top_Full);
+         Syntax_Region := Panel_Content (Item, Geometry.Bottom_Full);
       end if;
    end Editor_Regions;
 
@@ -1290,13 +1311,13 @@ procedure Kitchen_Sink is
       Result.Top_Full := Result.First;
       Result.Bottom_Full := Result.Third;
 
-      Result.Text_Content := Inset_Panel (Result.First);
+      Result.Text_Content := Panel_Content (Item, Result.First);
       Result.Text_Content.Height :=
         Natural'Min (1, Result.Text_Content.Height);
-      Result.List_Content := Inset_Panel (Result.Third);
+      Result.List_Content := Panel_Content (Item, Result.Third);
       declare
          Viewport_Frame : constant Flyology_TUI.Geometry.Rectangle :=
-           Inset_Panel (Result.Second);
+           Panel_Content (Item, Result.Second);
          Has_Bars : constant Boolean :=
            Viewport_Frame.Width >= 3 and then Viewport_Frame.Height >= 3;
          Viewport_Width : constant Natural :=
@@ -1324,24 +1345,34 @@ procedure Kitchen_Sink is
          Result.Horizontal_Scroll_Origin :=
            Origin (Result.Horizontal_Scroll_Region);
       end;
-      Result.Form_Content := Inset_Panel (Result.Fourth);
-      Result.Button_Origin := Origin (Inset_Panel (Result.First));
+      Result.Form_Content := Panel_Content (Item, Result.Fourth);
+      Result.Button_Origin := Origin (Panel_Content (Item, Result.First));
       Result.Check_Origin :=
-        (X => Result.Button_Origin.X, Y => Result.Button_Origin.Y + 2);
-      Result.Radio_Origin := Origin (Inset_Panel (Result.Second));
-      Result.Selector_Origin := Origin (Inset_Panel (Result.Third));
-      Result.Dropdown_Origin := Origin (Inset_Panel (Result.Fourth));
-      Result.Telemetry_Origin := Origin (Inset_Panel (Result.First));
-      Result.Breadcrumb_Origin := Origin (Inset_Panel (Result.First));
-      Result.Table_Origin := Origin (Inset_Panel (Result.Third));
-      Result.Tree_Origin := Origin (Inset_Panel (Result.Second));
-      Result.Accordion_Origin := Origin (Inset_Panel (Result.Fourth));
+        (X => Result.Button_Origin.X,
+         Y => Result.Button_Origin.Y
+           + Integer
+               (Flyology_TUI.Surfaces.Height
+                  (Item.Button.Render
+                     (Active_Skin (Item), Item.Focus = Button_Field)))
+           + 1);
+      Result.Radio_Origin := Origin (Panel_Content (Item, Result.Second));
+      Result.Selector_Origin := Origin (Panel_Content (Item, Result.Third));
+      Result.Dropdown_Origin := Origin (Panel_Content (Item, Result.Fourth));
+      Result.Telemetry_Origin := Origin (Panel_Content (Item, Result.First));
+      Result.Breadcrumb_Origin := Origin (Panel_Content (Item, Result.First));
+      Result.Table_Origin := Origin (Panel_Content (Item, Result.Third));
+      Result.Tree_Origin := Origin (Panel_Content (Item, Result.Second));
+      Result.Accordion_Origin := Origin (Panel_Content (Item, Result.Fourth));
       if Result.Right_Full.Width > 0 then
-         Result.Text_Area_Origin := Origin (Inset_Panel (Result.Left_Full));
-         Result.Syntax_Origin := Origin (Inset_Panel (Result.Right_Full));
+         Result.Text_Area_Origin :=
+           Origin (Panel_Content (Item, Result.Left_Full));
+         Result.Syntax_Origin :=
+           Origin (Panel_Content (Item, Result.Right_Full));
       else
-         Result.Text_Area_Origin := Origin (Inset_Panel (Result.Top_Full));
-         Result.Syntax_Origin := Origin (Inset_Panel (Result.Bottom_Full));
+         Result.Text_Area_Origin :=
+           Origin (Panel_Content (Item, Result.Top_Full));
+         Result.Syntax_Origin :=
+           Origin (Panel_Content (Item, Result.Bottom_Full));
       end if;
       if Result.Chat_Frame.Width > 0 then
          Result.Chat_Origin := Origin (Result.Chat_Frame);
@@ -1435,7 +1466,7 @@ procedure Kitchen_Sink is
       Footer_Height : constant Natural := Chat_Footer_Height (Geometry);
       Result : Chat_Streams.Operation_Result;
    begin
-      Editor_Regions (Geometry, Editor_Region, Syntax_Region);
+      Editor_Regions (Item, Geometry, Editor_Region, Syntax_Region);
       if Editor_Region.Width > 0 and then Editor_Region.Height > 0 then
          Item.Text_Area.Set_Size
            (Positive (Editor_Region.Width), Positive (Editor_Region.Height));
@@ -2705,7 +2736,7 @@ procedure Kitchen_Sink is
             declare
                Presentation : constant Accordions.Presentation :=
                  Accordion_Presentation
-                   (Item, Inset_Panel (Geometry.Fourth).Width);
+                   (Item, Panel_Content (Item, Geometry.Fourth).Width);
             begin
                Result := Item.Accordion.Handle
                  (Flyology_TUI.Mouse.Relative
@@ -2894,11 +2925,11 @@ procedure Kitchen_Sink is
       Geometry : Layout_Snapshot) is
       use Flyology_TUI.Components.Interactions;
       First_Content : constant Flyology_TUI.Geometry.Rectangle :=
-        Inset_Panel (Geometry.First);
+        Panel_Content (Item, Geometry.First);
       Second_Content : constant Flyology_TUI.Geometry.Rectangle :=
-        Inset_Panel (Geometry.Second);
+        Panel_Content (Item, Geometry.Second);
       Third_Content : constant Flyology_TUI.Geometry.Rectangle :=
-        Inset_Panel (Geometry.Third);
+        Panel_Content (Item, Geometry.Third);
       Button_Bounds : constant Flyology_TUI.Geometry.Rectangle := Intersect
         ((X => Geometry.Button_Origin.X,
           Y => Geometry.Button_Origin.Y,
@@ -2971,7 +3002,7 @@ procedure Kitchen_Sink is
             Y => Geometry.Telemetry_Origin.Y,
             Width => Flyology_TUI.Surfaces.Width (Work_View),
             Height => Flyology_TUI.Surfaces.Height (Work_View)),
-           Inset_Panel (Geometry.First));
+           Panel_Content (Item, Geometry.First));
       Point : constant Flyology_TUI.Geometry.Point :=
         (X => Integer (Event.X), Y => Integer (Event.Y));
       Result : Update_Result;
@@ -2996,23 +3027,24 @@ procedure Kitchen_Sink is
             Y      => Geometry.Breadcrumb_Origin.Y,
             Width  => Item.Breadcrumb.Width,
             Height => (if Item.Breadcrumb.Is_Empty then 0 else 1)),
-           Inset_Panel (Geometry.First));
+           Panel_Content (Item, Geometry.First));
       Table_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
         Intersect
           ((X      => Geometry.Table_Origin.X,
             Y      => Geometry.Table_Origin.Y,
             Width  => Item.Table.Width,
             Height => Item.Table.Height),
-           Inset_Panel (Geometry.Third));
+           Panel_Content (Item, Geometry.Third));
       Tree_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
         Intersect
           ((X      => Geometry.Tree_Origin.X,
             Y      => Geometry.Tree_Origin.Y,
             Width  => Item.Tree.Width,
             Height => Item.Tree.Height),
-           Inset_Panel (Geometry.Second));
+           Panel_Content (Item, Geometry.Second));
       Presentation : constant Accordions.Presentation :=
-        Accordion_Presentation (Item, Inset_Panel (Geometry.Fourth).Width);
+        Accordion_Presentation
+          (Item, Panel_Content (Item, Geometry.Fourth).Width);
       Accordion_Frame : constant Flyology_TUI.Surfaces.Surface :=
         Accordions.Frame (Presentation);
       Accordion_Bounds : constant Flyology_TUI.Geometry.Rectangle :=
@@ -3021,7 +3053,7 @@ procedure Kitchen_Sink is
             Y      => Geometry.Accordion_Origin.Y,
             Width  => Accordion_Frame.Width,
             Height => Accordion_Frame.Height),
-           Inset_Panel (Geometry.Fourth));
+           Panel_Content (Item, Geometry.Fourth));
       Result : Update_Result;
    begin
       if Flyology_TUI.Geometry.Contains (Breadcrumb_Bounds, Point) then
@@ -3059,7 +3091,7 @@ procedure Kitchen_Sink is
       Text_Bounds, Syntax_Bounds : Flyology_TUI.Geometry.Rectangle;
       Result : Update_Result;
    begin
-      Editor_Regions (Geometry, Text_Region, Syntax_Region);
+      Editor_Regions (Item, Geometry, Text_Region, Syntax_Region);
       Text_Bounds := Intersect
         ((X      => Geometry.Text_Area_Origin.X,
           Y      => Geometry.Text_Area_Origin.Y,
@@ -3771,6 +3803,9 @@ procedure Kitchen_Sink is
         and then Event.Terminal.Key.Number = 6
       then
          Item.Skin := Flyology_TUI.Skins.Next (Item.Skin);
+         Resize_Components (Item, Layout (Item));
+         Reconcile_Chat (Item);
+         Normalize_Focus (Item);
       elsif Event.Terminal.Kind = Flyology_TUI.Events.Key_Press
         and then Event.Terminal.Key.Kind = Flyology_TUI.Events.Tab_Key
         and then not Item.Dropdown.Is_Open
@@ -3884,7 +3919,7 @@ procedure Kitchen_Sink is
       return Flyology_TUI.Surfaces.Surface
    is
       Frame : constant Flyology_TUI.Geometry.Rectangle :=
-        Inset_Panel (Geometry.Second);
+        Panel_Content (Item, Geometry.Second);
       Result : Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Surfaces.Create (Frame.Width, Frame.Height);
    begin
@@ -4069,7 +4104,7 @@ procedure Kitchen_Sink is
            Gradient_Marks
              (Sparklines.Render
                 (Item.Samples,
-                 Inset_Panel (Geometry.Second).Width,
+                 Panel_Content (Item, Geometry.Second).Width,
                  Sparklines.Automatic, Theme),
               Item.Deep_Gradient),
            False, Palette.Title, Theme.Muted,
@@ -4102,18 +4137,19 @@ procedure Kitchen_Sink is
               ("paused tests", Indicators.Normal, Indicators.Warning_Tone),
             Indicators.Make_Segment
               ("ring:32", Indicators.Low, Indicators.Neutral)],
-           Inset_Panel (Geometry.Third).Width,
+           Panel_Content (Item, Geometry.Third).Width,
            Theme);
       Indicator_Content : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Join_Vertically
           (Indicators.Divider
-             (Inset_Panel (Geometry.Third).Width, "telemetry", Theme),
+             (Panel_Content (Item, Geometry.Third).Width,
+              "telemetry", Theme),
            Flyology_TUI.Layouts.Join_Vertically
              (Summary,
               Flyology_TUI.Layouts.Join_Vertically
                 (Gradient_Marks
                    (Item.Work.Render_Segments
-                      (Inset_Panel (Geometry.Third).Width, Theme),
+                      (Panel_Content (Item, Geometry.Third).Width, Theme),
                     Item.Deep_Gradient),
                  Status),
               Gap => 1));
@@ -4160,7 +4196,8 @@ procedure Kitchen_Sink is
            Item.Focus = Tree_Field, Palette.Title, Theme.Muted,
            Geometry.Second.Width, Geometry.Second.Height);
       Accordion_Layout : constant Accordions.Presentation :=
-        Accordion_Presentation (Item, Inset_Panel (Geometry.Fourth).Width);
+        Accordion_Presentation
+          (Item, Panel_Content (Item, Geometry.Fourth).Width);
       Accordion_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
           (Active_Skin (Item), "External accordion bodies",
@@ -4846,7 +4883,7 @@ procedure Kitchen_Sink is
           (Geometry.Width, Geometry.Height, Active_Skin (Item).Desktop);
       Result : Flyology_TUI.Views.View;
    begin
-      Editor_Regions (Geometry, Text_Region, Syntax_Region);
+      Editor_Regions (Item, Geometry, Text_Region, Syntax_Region);
       if Geometry.Header.Height > 0 then
          Canvas.Overlay_Clipped (Header, Geometry.Header.X, Geometry.Header.Y);
          Canvas.Overlay_Clipped
@@ -5143,9 +5180,67 @@ procedure Kitchen_Sink is
               (Pages.Frame (Skin_Tabs).Element (0, 0).Glyph) = " "
             and then Pages.Frame (Skin_Tabs).Element
               (1, 0).Appearance.Background =
-                Flyology_TUI.Colors.True_Color (0, 168, 0),
+                Flyology_TUI.Colors.True_Color (0, 0, 168)
+            and then Pages.Frame (Skin_Tabs).Element
+              (1, 0).Appearance.Reverse_Video,
             "kitchen skin switch did not change structural tab chrome");
       end;
+      Activate_Page (Item, Controls_Page);
+      Geometry := Layout (Item);
+      Frame := Present (Item);
+      Assert
+        (Text.To_Wide_Wide_String
+           (Frame.Frame.Element
+              (Natural (Geometry.Check_Origin.X),
+               Natural (Geometry.Check_Origin.Y)).Glyph) = "[",
+         "Turbo check hit origin did not match its rendered row");
+      Handle_Mouse
+        (Item,
+         (Kind  => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Pointer
+            (Natural (Geometry.Check_Origin.X),
+             Natural (Geometry.Check_Origin.Y))));
+      Handle_Mouse
+        (Item,
+         (Kind  => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Pointer
+            (Natural (Geometry.Check_Origin.X),
+             Natural (Geometry.Check_Origin.Y),
+             Flyology_TUI.Events.Mouse_Release)));
+      Assert
+        (Item.Check.State = Flyology_TUI.Components.Check_Boxes.Checked
+         and then Item.Focus = Check_Field
+         and then Item.Capture = No_Capture,
+         "Turbo check did not respond at its rendered mouse position");
+
+      Activate_Page (Item, Navigation_Page);
+      Set_Terminal_Size (Item, 112, 30);
+      Geometry := Layout (Item);
+      Frame := Present (Item);
+      Assert
+        (Text.To_Wide_Wide_String
+           (Frame.Frame.Element
+              (Natural (Geometry.Tree_Origin.X),
+               Natural (Geometry.Tree_Origin.Y)).Glyph) =
+           [1 => Wide_Wide_Character'Val (16#25BE#)],
+         "Turbo tree hit origin did not match its rendered row");
+      Handle_Mouse
+        (Item,
+         (Kind  => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Pointer
+            (Natural (Geometry.Tree_Origin.X),
+             Natural (Geometry.Tree_Origin.Y + 1))));
+      Assert
+        (Item.Tree.Selected_Id = Source_Node
+         and then Item.Focus = Tree_Field,
+         "Turbo tree mouse routing did not select the rendered row");
+      Handle_Focused_Key
+        (Item,
+         Terminal_Key (Flyology_TUI.Events.Arrow_Down_Key), Geometry);
+      Assert
+        (Item.Tree.Selected_Id = Components_Node,
+         "Turbo tree keyboard navigation did not advance selection");
+
       Update (Item, Skin_Key, Next);
       Assert
         (Item.Skin = Flyology_TUI.Skins.Charm_Default,
@@ -5197,7 +5292,7 @@ procedure Kitchen_Sink is
                      declare
                         Viewport_Frame : constant
                           Flyology_TUI.Geometry.Rectangle :=
-                            Inset_Panel (Geometry.Second);
+                            Panel_Content (Item, Geometry.Second);
                         Has_Bars : constant Boolean :=
                           Viewport_Frame.Width >= 3
                             and then Viewport_Frame.Height >= 3;
@@ -5368,7 +5463,7 @@ procedure Kitchen_Sink is
          "bound viewport did not request thumb-drag motion events");
       declare
          Viewport_Frame : constant Flyology_TUI.Geometry.Rectangle :=
-           Inset_Panel (Geometry.Second);
+           Panel_Content (Item, Geometry.Second);
          Bound : constant Flyology_TUI.Surfaces.Surface :=
            Bound_Viewport_View (Item, Geometry);
          Vertical : constant Flyology_TUI.Surfaces.Surface :=
