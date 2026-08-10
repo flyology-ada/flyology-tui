@@ -100,6 +100,12 @@ package Flyology_TUI.Components.Chats is
      (Item : in out Model; Options : Layout_Options);
    function Layout (Item : Model) return Layout_Options;
 
+   --  Maximum width available to a caller-owned message body after applying
+   --  the current frame percentage, absolute limit, and horizontal padding.
+   --  A zero result means that the frame can publish no body cells.
+   function Body_Width_Limit
+     (Item : Model; Frame_Width : Natural) return Natural;
+
    --  Replacement validates capacity and duplicate ids before mutation.
    --  Measurements, focus, and selection follow surviving stable ids.
    --  New ids increment Unread_Count only while follow-tail is disabled.

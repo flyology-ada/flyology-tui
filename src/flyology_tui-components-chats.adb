@@ -689,6 +689,19 @@ package body Flyology_TUI.Components.Chats is
             Natural'Min (Options.Maximum_Message_Width, Percent_Width)));
    end Message_Width_Limit;
 
+   function Body_Width_Limit
+     (Item : Model; Frame_Width : Natural) return Natural
+   is
+      Limit : constant Natural :=
+        Message_Width_Limit (Frame_Width, Item.Options);
+      Padding : constant Natural :=
+        (if Item.Options.Mode = Dense_Transcript
+         then 0
+         else Natural'Min (Item.Options.Horizontal_Padding, Limit / 2));
+   begin
+      return Limit - 2 * Padding;
+   end Body_Width_Limit;
+
    function Present_Core
      (Item      : Model;
       Bodies    : Body_Array;

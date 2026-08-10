@@ -707,6 +707,11 @@ procedure Chat_Tests is
         (Item.Layout = Chats.Dense_Layout,
          "chat did not preserve dense layout compatibility");
       Item.Set_Layout (Chats.Conversational_Layout);
+      Assert
+        (Item.Body_Width_Limit (40) = 26
+         and then Item.Body_Width_Limit (3) = 0
+         and then Item.Body_Width_Limit (1) = 1,
+         "body width query disagrees with conversational padding policy");
       Item.Reconcile_Measurements (((One, 1, 0), (Two, 1, 0)));
       declare
          Plan : constant Chats.Layout_Plan := Item.Plan (40);
