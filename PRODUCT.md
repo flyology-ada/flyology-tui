@@ -71,4 +71,3 @@ small reusable primitives. It is not a visual copy of the Charm website.
   color-vision deficiency do not erase hierarchy.
 - Essential actions retain textual labels; decorative Unicode glyphs never
   replace their meaning.
-

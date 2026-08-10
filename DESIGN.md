@@ -46,4 +46,3 @@ should remain distinguishable under common color-vision deficiencies by also
 varying lightness and terminal attributes. Unicode glyphs require ASCII-safe
 spacing and correct cell-width accounting; they may decorate but not replace
 essential labels.
-
