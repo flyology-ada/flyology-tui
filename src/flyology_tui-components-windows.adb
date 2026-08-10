@@ -5,11 +5,23 @@ package body Flyology_TUI.Components.Windows is
    use type Flyology_TUI.Events.Terminal_Event_Kind;
    use type Flyology_TUI.Geometry.Rectangle;
 
+   function Chrome_Style
+     (Value : Flyology_TUI.Styles.Style) return Flyology_TUI.Styles.Style
+   is
+      Result : Flyology_TUI.Styles.Style := Value;
+   begin
+      Result.Italic := False;
+      Result.Underline := False;
+      Result.Blink := False;
+      Result.Strikethrough := False;
+      return Result;
+   end Chrome_Style;
+
    function From_Theme
      (Theme : Flyology_TUI.Themes.Theme) return Appearance
    is
-     (Frame         => Theme.Border,
-      Focused_Frame => Theme.Focused,
+     (Frame         => Chrome_Style (Theme.Border),
+      Focused_Frame => Chrome_Style (Theme.Focused),
       Title         => Theme.Primary,
       Focused_Title => Theme.Focused,
       Close         => Theme.Error,

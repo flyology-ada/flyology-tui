@@ -1,5 +1,6 @@
 with Ada.Strings.Wide_Wide_Unbounded;
 with Ada.Text_IO;
+with Flyology_TUI.Colors;
 with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Components.Scrollbars;
 with Flyology_TUI.Components.Split_Panes;
@@ -15,6 +16,7 @@ with Flyology_TUI.Themes;
 procedure Window_Components_Tests is
    package Text renames Ada.Strings.Wide_Wide_Unbounded;
    use type Flyology_TUI.Components.Interactions.Capture_Action;
+   use type Flyology_TUI.Colors.Color;
    use type Flyology_TUI.Geometry.Point;
    use type Flyology_TUI.Geometry.Rectangle;
    use type Flyology_TUI.Layouts.Boxes.Direction;
@@ -383,6 +385,71 @@ procedure Window_Components_Tests is
          and then Cell_Text (Framed, 5, 0) = "┐",
          "external title or content overwrote the window frame");
    end Test_Window_Render;
+
+   procedure Test_Window_Chrome_Theme_Mapping is
+      Decorated : constant Flyology_TUI.Styles.Style :=
+        (Foreground    =>
+           Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Bright_Magenta),
+         Background    =>
+           Flyology_TUI.Colors.Basic (Flyology_TUI.Colors.Black),
+         Bold          => True,
+         Faint         => True,
+         Italic        => True,
+         Underline     => True,
+         Blink         => True,
+         Reverse_Video => True,
+         Strikethrough => True);
+      Theme : constant Flyology_TUI.Themes.Theme :=
+        (Primary     => Flyology_TUI.Styles.Default,
+         Muted       => Flyology_TUI.Styles.Default,
+         Selected    => Flyology_TUI.Styles.Default,
+         Focused     => Decorated,
+         Border      => Decorated,
+         Input       => Flyology_TUI.Styles.Default,
+         Placeholder => Flyology_TUI.Styles.Default,
+         Error       => Flyology_TUI.Styles.Default,
+         Success     => Flyology_TUI.Styles.Default);
+      Mapped : constant Flyology_TUI.Components.Windows.Appearance :=
+        Flyology_TUI.Components.Windows.From_Theme (Theme);
+      Window : Flyology_TUI.Components.Windows.Model :=
+        Flyology_TUI.Components.Windows.Create
+          (X => 0, Y => 0, Width => 8, Height => 4);
+      Rendered : Flyology_TUI.Surfaces.Surface;
+      Explicit : Flyology_TUI.Components.Windows.Appearance := Mapped;
+   begin
+      Assert
+        (Mapped.Frame.Foreground = Decorated.Foreground
+         and then Mapped.Frame.Background = Decorated.Background
+         and then Mapped.Frame.Bold
+         and then Mapped.Frame.Faint
+         and then Mapped.Frame.Reverse_Video
+         and then not Mapped.Frame.Italic
+         and then not Mapped.Frame.Underline
+         and then not Mapped.Frame.Blink
+         and then not Mapped.Frame.Strikethrough,
+         "window theme mapping leaked text decoration into frame chrome");
+      Assert
+        (Mapped.Focused_Frame = Mapped.Frame
+         and then Mapped.Focused_Title = Decorated,
+         "window theme mapping removed title emphasis or frame color");
+
+      Window.Focus;
+      Rendered := Window.Render
+        ("focused", Flyology_TUI.Surfaces.Create (0, 0),
+         (X => 0, Y => 0, Width => 8, Height => 4), Theme);
+      Assert
+        (not Rendered.Element (0, 1).Appearance.Underline
+         and then Rendered.Element (2, 0).Appearance = Decorated,
+         "focused theme render decorated the border or flattened the title");
+
+      Explicit.Focused_Frame := Decorated;
+      Rendered := Window.Render
+        ("focused", Flyology_TUI.Surfaces.Create (0, 0),
+         (X => 0, Y => 0, Width => 8, Height => 4), Explicit);
+      Assert
+        (Rendered.Element (0, 1).Appearance = Decorated,
+         "explicit window appearance lost caller-controlled decoration");
+   end Test_Window_Chrome_Theme_Mapping;
 
    procedure Test_Split_Panes is
       use Flyology_TUI.Components.Split_Panes;
@@ -772,6 +839,7 @@ begin
    Test_Window_Clamping_And_Keyboard;
    Test_Window_Workspace_Constrain;
    Test_Window_Render;
+   Test_Window_Chrome_Theme_Mapping;
    Test_Split_Panes;
    Test_Scrollbars;
    Test_Disabled_And_Interrupted_Capture;
