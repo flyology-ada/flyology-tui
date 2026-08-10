@@ -34,7 +34,7 @@ case "$documentation_output" in
 esac
 
 cd "$project_root"
-"$alr" build --stop-after=generation
+"$alr" build
 rm -rf "$documentation_output"
 node "$website_kit/scripts/render-gnatdoc-theme.mjs" \
   "$project_root/docs/gnatdoc-theme.json" \
