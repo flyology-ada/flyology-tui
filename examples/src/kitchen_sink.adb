@@ -11,6 +11,7 @@ with Flyology_TUI.Components.Buttons;
 with Flyology_TUI.Components.Check_Boxes;
 with Flyology_TUI.Components.Chats;
 with Flyology_TUI.Components.Dropdowns;
+with Flyology_TUI.Components.Dock_Workspaces;
 with Flyology_TUI.Components.Forms;
 with Flyology_TUI.Components.Help;
 with Flyology_TUI.Components.Interactions;
@@ -162,6 +163,7 @@ procedure Kitchen_Sink is
       Menus_Page,
       Color_Page,
       Panels_Page,
+      Docking_Page,
       Windows_Page);
 
    function Page_Identity (Item : Page_Id) return Page_Id is (Item);
@@ -178,6 +180,7 @@ procedure Kitchen_Sink is
          when Menus_Page     => "Menus",
          when Color_Page     => "Color",
          when Panels_Page    => "Panels",
+         when Docking_Page   => "Docking",
          when Windows_Page   => "Windows");
 
    package Pages is new Flyology_TUI.Components.Tabs
@@ -186,6 +189,21 @@ procedure Kitchen_Sink is
       Id_Of     => Page_Identity,
       Label     => Page_Label,
       Capacity  => 12);
+
+   type Dock_Pane_Id is
+     (Explorer_Dock, Inspector_Dock, Output_Dock, Activity_Dock);
+
+   function Dock_Label (Id : Dock_Pane_Id) return Wide_Wide_String is
+     (case Id is
+         when Explorer_Dock  => "Explorer",
+         when Inspector_Dock => "Inspector",
+         when Output_Dock    => "Output",
+         when Activity_Dock  => "Activity");
+
+   package Docking is new Flyology_TUI.Components.Dock_Workspaces
+     (Pane_Id        => Dock_Pane_Id,
+      Maximum_Panes => 4,
+      Label          => Dock_Label);
 
    type Demo_Menu_Id is (File_Menu, View_Menu, Density_Menu, Help_Menu);
    type Demo_Menu_Item_Id is
@@ -538,6 +556,7 @@ procedure Kitchen_Sink is
       Menu_Field,
       Horizontal_Group_Field,
       Vertical_Group_Field,
+      Dock_Field,
       Window_Field,
       Split_Field,
       Vertical_Scroll_Field,
@@ -560,6 +579,7 @@ procedure Kitchen_Sink is
       Chat_Send_Capture,
       Horizontal_Group_Capture,
       Vertical_Group_Capture,
+      Dock_Capture,
       First_Window_Capture,
       Second_Window_Capture,
       Split_Capture,
@@ -592,6 +612,8 @@ procedure Kitchen_Sink is
       Vertical_Group_Origin : Flyology_TUI.Geometry.Point;
       Horizontal_Group_Region : Flyology_TUI.Geometry.Rectangle;
       Vertical_Group_Region : Flyology_TUI.Geometry.Rectangle;
+      Dock_Region : Flyology_TUI.Geometry.Rectangle;
+      Dock_Origin : Flyology_TUI.Geometry.Point;
       Split_Region : Flyology_TUI.Geometry.Rectangle;
       Split_Origin : Flyology_TUI.Geometry.Point;
    end record;
@@ -615,6 +637,7 @@ procedure Kitchen_Sink is
             Menus_Page,
             Color_Page,
             Panels_Page,
+            Docking_Page,
             Windows_Page]);
       Input    : Flyology_TUI.Components.Text_Inputs.Model :=
         Flyology_TUI.Components.Text_Inputs.Create
@@ -732,6 +755,34 @@ procedure Kitchen_Sink is
            [1 => (Minimum_Span => 2, Initial_Span => 3, Weight => 1),
             2 => (Minimum_Span => 2, Initial_Span => 3, Weight => 2),
             3 => (Minimum_Span => 2, Initial_Span => 2, Weight => 1)]);
+      Dock_Workspace : Docking.Model := Docking.Create
+        ([1 =>
+           (Id => Explorer_Dock, Side => Docking.Dock_Left,
+            Dock_Extent => 24, Minimum_Extent => 10,
+            Float_X => 3, Float_Y => 2,
+            Float_Width => 30, Float_Height => 12,
+            others => <>),
+         2 =>
+           (Id => Inspector_Dock, Side => Docking.Dock_Right,
+            Dock_Extent => 24, Minimum_Extent => 10,
+            Float_X => 66, Float_Y => 3,
+            Float_Width => 30, Float_Height => 12,
+            Initially_Collapsed => True,
+            others => <>),
+         3 =>
+           (Id => Output_Dock, Side => Docking.Dock_Bottom,
+            Dock_Extent => 7, Minimum_Extent => 3,
+            Float_X => 20, Float_Y => 18,
+            Float_Width => 48, Float_Height => 9,
+            others => <>),
+         4 =>
+           (Id => Activity_Dock, Side => Docking.Dock_Top,
+            Dock_Extent => 6, Minimum_Extent => 3,
+            Float_X => 34, Float_Y => 5,
+            Float_Width => 38, Float_Height => 11,
+            Initially_Floating => True,
+            others => <>)],
+         Fallback_Terminal_Width, Fallback_Content_Height);
       Split : Flyology_TUI.Components.Split_Panes.Model :=
         Flyology_TUI.Components.Split_Panes.Create
           (Flyology_TUI.Layouts.Boxes.Horizontal,
@@ -763,6 +814,8 @@ procedure Kitchen_Sink is
    package Transitions is new Flyology_TUI.Transitions (Command);
    use type Events.Event_Kind;
    use type Chat_Streams.Stream_State;
+   use type Docking.Dock_Side;
+   use type Docking.Pane_Placement;
    use type Flyology_TUI.Components.Interactions.Capture_Action;
    use type Flyology_TUI.Events.Key_Kind;
    use type Flyology_TUI.Events.Mouse_Action;
@@ -786,6 +839,9 @@ procedure Kitchen_Sink is
      Dropdowns.From_Palette (Charm_Visual);
    Page_Look : constant Pages.Appearance :=
      Pages.From_Palette (Charm_Visual);
+
+   function Dock_Presentation
+     (Item : Model; Geometry : Layout_Snapshot) return Docking.Presentation;
 
    function Build_Viewport_Demo return Flyology_TUI.Surfaces.Surface is
       Content : Text.Unbounded_Wide_Wide_String;
@@ -1171,6 +1227,11 @@ procedure Kitchen_Sink is
                   Frame.Y + Integer (Top_Height + Gap + Bottom_Height / 2),
                   Frame.Width, Bottom_Height - Bottom_Height / 2);
             end if;
+         when Docking_Page =>
+            Result.Dock_Region :=
+              Centered (132, Natural'Min (34, Result.Content.Height));
+            Result.Dock_Origin := Origin (Result.Dock_Region);
+            Frame := Result.Dock_Region;
          when Windows_Page =>
             Frame := Centered (120, Natural'Min (34, Result.Content.Height));
             Result.Window_Workspace :=
@@ -1393,6 +1454,8 @@ procedure Kitchen_Sink is
       Item.Vertical_Group.Resize
         (Geometry.Vertical_Group_Region.Width,
          Geometry.Vertical_Group_Region.Height);
+      Item.Dock_Workspace.Resize
+        (Geometry.Dock_Region.Width, Geometry.Dock_Region.Height);
    end Resize_Components;
 
    procedure Set_Terminal_Size
@@ -1889,6 +1952,7 @@ procedure Kitchen_Sink is
       Item.Chat_Composer.Blur;
       Item.Horizontal_Group.Blur;
       Item.Vertical_Group.Blur;
+      Item.Dock_Workspace.Blur;
       Item.Focus := Target;
       case Item.Focus is
          when Text_Field => Item.Input.Focus;
@@ -1922,6 +1986,7 @@ procedure Kitchen_Sink is
          when Chat_Composer_Field => Item.Chat_Composer.Focus;
          when Horizontal_Group_Field => Item.Horizontal_Group.Focus;
          when Vertical_Group_Field => Item.Vertical_Group.Focus;
+         when Dock_Field => Item.Dock_Workspace.Focus;
          when others => null;
       end case;
    end Activate;
@@ -2334,6 +2399,11 @@ procedure Kitchen_Sink is
                    when Split_Field => Page_Navigation,
                    when others => Horizontal_Group_Field));
          end if;
+      when Docking_Page =>
+         Activate
+           (Item,
+            (if Item.Focus = Page_Navigation
+             then Dock_Field else Page_Navigation));
       when Windows_Page =>
          if Item.Focus not in Page_Navigation | Window_Field then
             Activate
@@ -2449,6 +2519,10 @@ procedure Kitchen_Sink is
                 | Split_Field
             then
                Activate (Item, Horizontal_Group_Field);
+            end if;
+         when Docking_Page =>
+            if Item.Focus not in Page_Navigation | Dock_Field then
+               Activate (Item, Dock_Field);
             end if;
          when Windows_Page =>
             if Item.Focus not in Page_Navigation | Window_Field then
@@ -2717,6 +2791,16 @@ procedure Kitchen_Sink is
                  (Event, Geometry.Vertical_Group_Origin));
             Apply_Result
               (Item, Vertical_Group_Field, Vertical_Group_Capture, Result);
+         when Dock_Capture =>
+            declare
+               Presentation : constant Docking.Presentation :=
+                 Dock_Presentation (Item, Geometry);
+            begin
+               Result := Item.Dock_Workspace.Handle
+                 (Presentation,
+                  Flyology_TUI.Mouse.Relative (Event, Geometry.Dock_Origin));
+               Apply_Result (Item, Dock_Field, Dock_Capture, Result);
+            end;
          when First_Window_Capture =>
             Page_Event :=
               Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
@@ -3052,6 +3136,36 @@ procedure Kitchen_Sink is
       Apply_Result (Item, Chat_Field, No_Capture, Result);
    end Handle_Chat_Mouse;
 
+   function Dock_Children return Docking.Surface_Array is
+     [Explorer_Dock =>
+        Flyology_TUI.Surfaces.From_Text
+          ("  src" & Wide_Wide_Character'Val (10)
+           & "    components" & Wide_Wide_Character'Val (10)
+           & "    examples" & Wide_Wide_Character'Val (10)
+           & "  tests", Visual.Primary),
+      Inspector_Dock =>
+        Flyology_TUI.Surfaces.From_Text
+          ("selection: workspace" & Wide_Wide_Character'Val (10)
+           & "layout: bounded" & Wide_Wide_Character'Val (10)
+           & "owner: application", Visual.Primary),
+      Output_Dock =>
+        Flyology_TUI.Surfaces.From_Text
+          ("build  ready" & Wide_Wide_Character'Val (10)
+           & "tests  green" & Wide_Wide_Character'Val (10)
+           & "mouse  captured only while dragging", Visual.Primary),
+      Activity_Dock =>
+        Flyology_TUI.Surfaces.From_Text
+          ("Floating tool window" & Wide_Wide_Character'Val (10)
+           & "Drag this header to an edge to dock." &
+             Wide_Wide_Character'Val (10)
+           & "Click v or press F to return to its dock.", Visual.Primary)];
+
+   function Dock_Presentation
+     (Item : Model; Geometry : Layout_Snapshot) return Docking.Presentation
+   is
+     (Item.Dock_Workspace.Present
+        (Dock_Children, Docking.From_Theme (Visual)));
+
    procedure Handle_Windows_Mouse
      (Item  : in out Model;
       Event : Flyology_TUI.Events.Mouse_Event;
@@ -3130,6 +3244,21 @@ procedure Kitchen_Sink is
          Apply_Result (Item, Split_Field, Split_Capture, Result);
       end if;
    end Handle_Panels_Mouse;
+
+   procedure Handle_Docking_Mouse
+     (Item : in out Model;
+      Event : Flyology_TUI.Events.Mouse_Event;
+      Geometry : Layout_Snapshot)
+   is
+      Result : Flyology_TUI.Components.Interactions.Update_Result;
+      Presentation : constant Docking.Presentation :=
+        Dock_Presentation (Item, Geometry);
+   begin
+      Result := Item.Dock_Workspace.Handle
+        (Presentation,
+         Flyology_TUI.Mouse.Relative (Event, Geometry.Dock_Origin));
+      Apply_Result (Item, Dock_Field, Dock_Capture, Result);
+   end Handle_Docking_Mouse;
 
    procedure Handle_Markdown_Mouse
      (Item : in out Model;
@@ -3353,6 +3482,8 @@ procedure Kitchen_Sink is
          null;
       when Panels_Page =>
          Handle_Panels_Mouse (Item, Event.Mouse, Geometry);
+      when Docking_Page =>
+         Handle_Docking_Mouse (Item, Event.Mouse, Geometry);
       when Windows_Page =>
          Handle_Windows_Mouse (Item, Event.Mouse, Geometry);
       end case;
@@ -3489,6 +3620,9 @@ procedure Kitchen_Sink is
             Result := Item.Vertical_Group.Handle (Event);
             Apply_Result
               (Item, Vertical_Group_Field, Vertical_Group_Capture, Result);
+         when Dock_Field =>
+            Result := Item.Dock_Workspace.Handle (Event);
+            Apply_Result (Item, Dock_Field, Dock_Capture, Result);
          when Window_Field =>
             if Item.Focused_Window = Window_A
               and then Item.Window_A_Visible
@@ -3581,13 +3715,17 @@ procedure Kitchen_Sink is
         and then not Item.Dropdown.Is_Open
         and then not Item.Menu.Is_Open
       then
-         if Current_Page (Item) = Panels_Page
-           and then Item.Focus in
-             Horizontal_Group_Field | Vertical_Group_Field
-           and then not Event.Terminal.Key.Modified.Control
+         if not Event.Terminal.Key.Modified.Control
+           and then
+             ((Current_Page (Item) = Panels_Page
+               and then Item.Focus in
+                 Horizontal_Group_Field | Vertical_Group_Field)
+              or else
+                (Current_Page (Item) = Docking_Page
+                 and then Item.Focus = Dock_Field))
          then
-            --  A focused panel group owns plain Tab for divider selection.
-            --  Control-Tab remains the application's focus traversal gesture.
+            --  Focused panel and dock workspaces own plain Tab internally.
+            --  Control-Tab remains application focus traversal.
             Handle_Focused_Key (Item, Event.Terminal, Layout (Item));
          else
             Next_Focus (Item, Event.Terminal.Key.Modified.Shift);
@@ -4170,6 +4308,58 @@ procedure Kitchen_Sink is
       return Canvas;
    end Panels_View;
 
+   function Docking_View
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Presentation : constant Docking.Presentation :=
+        Dock_Presentation (Item, Geometry);
+      Center : constant Flyology_TUI.Geometry.Rectangle :=
+        Docking.Center_Region (Presentation);
+      Workspace : Flyology_TUI.Surfaces.Surface :=
+        Docking.Frame (Presentation);
+      Center_Content : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Center.Width, Center.Height, Visual.Input);
+      Canvas : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Geometry.Content.Width, Geometry.Content.Height);
+   begin
+      if Center.Width > 0 and then Center.Height > 0 then
+         Center_Content.Write
+           (Natural'Min (2, Center.Width - 1),
+            Natural'Min (1, Center.Height - 1),
+            "DOCK WORKSPACE", Charm_Visual.Title);
+         if Center.Height > 3 then
+            Center_Content.Write
+              (Natural'Min (2, Center.Width - 1), 3,
+               "F float / dock   Enter collapse   Shift+arrow dock edge",
+               Visual.Primary);
+         end if;
+         if Center.Height > 5 then
+            Center_Content.Write
+              (Natural'Min (2, Center.Width - 1), 5,
+               "Mouse: click - or ^/v; drag a floating header to an edge",
+               Visual.Muted);
+         end if;
+         if Center.Height > 8 then
+            Center_Content.Write
+              (Natural'Min (2, Center.Width - 1), 8,
+               "The application still owns every child model and event.",
+               Visual.Primary);
+            Center_Content.Write
+              (Natural'Min (2, Center.Width - 1), 9,
+               "Docking stores placement, geometry, focus, and z-order only.",
+               Visual.Muted);
+         end if;
+         Workspace.Overlay_Clipped
+           (Center_Content, Center.X, Center.Y);
+      end if;
+      Overlay_Region
+        (Canvas, Workspace, Geometry.Dock_Region, Geometry);
+      return Canvas;
+   end Docking_View;
+
    function Windows_View
      (Item : Model; Geometry : Layout_Snapshot)
       return Flyology_TUI.Surfaces.Surface
@@ -4486,11 +4676,12 @@ procedure Kitchen_Sink is
             when Menus_Page      => Menus_View (Item, Geometry),
             when Color_Page      => Color_View (Item, Geometry),
             when Panels_Page     => Panels_View (Item, Geometry),
+            when Docking_Page    => Docking_View (Item, Geometry),
             when Windows_Page   => Windows_View (Item, Geometry));
       Help : constant Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Components.Help.Render
           ([(Key => U
-               ((if Current_Page (Item) = Panels_Page
+               ((if Current_Page (Item) in Panels_Page | Docking_Page
                  then "ctrl-tab" else "tab")),
              Description => U ("focus"), Enabled => True),
             (Key => U ("arrows"),
@@ -4524,7 +4715,8 @@ procedure Kitchen_Sink is
       Result := Flyology_TUI.Views.From_Surface (Canvas);
       Result.Alternate_Screen := True;
       Result.Mouse :=
-        (if Current_Page (Item) in Basics_Page | Panels_Page | Windows_Page
+        (if Current_Page (Item) in
+          Basics_Page | Panels_Page | Docking_Page | Windows_Page
          then Flyology_TUI.Views.Cell_Motion
          else Flyology_TUI.Views.Button_Events);
       Result.Report_Focus := True;
@@ -4921,6 +5113,12 @@ procedure Kitchen_Sink is
                        (Geometry.Vertical_Group_Region,
                         Geometry.Split_Region),
                      "panel regions escaped or overlapped");
+               when Docking_Page =>
+                  Assert
+                    (Fits (Geometry.Content, Geometry.Dock_Region)
+                     and then Geometry.Dock_Region.Width <= 132
+                     and then Geometry.Dock_Region.Height <= 34,
+                     "dock workspace escaped or exceeded its bound");
                when Windows_Page =>
                   Assert
                     (Geometry.Window_Workspace.Width <= 120
@@ -5564,6 +5762,66 @@ procedure Kitchen_Sink is
          Assert
            (Item.Split.First_Span /= Before_Split,
             "split divider did not move through kitchen mouse routing");
+      end;
+
+      Activate_Page (Item, Docking_Page);
+      Set_Terminal_Size (Item, 100, 30);
+      Activate (Item, Dock_Field);
+      Frame := Present (Item);
+      Assert
+        (Frame.Mouse = Flyology_TUI.Views.Cell_Motion
+         and then Item.Dock_Workspace.Is_Collapsed (Inspector_Dock),
+         "docking page did not expose drag mode and a collapsed rail");
+      Transitions.Reset (Next);
+      Update (Item, Key, Next);
+      Assert
+        (Item.Focus = Dock_Field
+         and then Item.Dock_Workspace.Focused_Pane /= Explorer_Dock,
+         "plain Tab did not stay inside the dock workspace");
+      Transitions.Reset (Next);
+      Update (Item, Key (Control => True), Next);
+      Assert
+        (Item.Focus = Page_Navigation,
+         "Control-Tab did not leave the dock workspace");
+      Activate (Item, Dock_Field);
+      Item.Dock_Workspace.Focus_Pane (Activity_Dock);
+      Geometry := Layout (Item);
+      declare
+         Presentation : constant Docking.Presentation :=
+           Dock_Presentation (Item, Geometry);
+         Header : constant Flyology_TUI.Geometry.Rectangle :=
+           Docking.Header_Region (Presentation, Activity_Dock);
+         Press_X : constant Natural :=
+           Natural (Geometry.Dock_Origin.X + Header.X + 4);
+         Press_Y : constant Natural :=
+           Natural (Geometry.Dock_Origin.Y + Header.Y);
+         Drop_X : constant Natural := Press_X;
+         Drop_Y : constant Natural := Natural (Geometry.Dock_Origin.Y);
+      begin
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer (Press_X, Press_Y)));
+         Assert
+           (Item.Capture = Dock_Capture,
+            "floating dock header did not acquire kitchen capture");
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (Drop_X, Drop_Y, Flyology_TUI.Events.Mouse_Drag)));
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (Drop_X, Drop_Y, Flyology_TUI.Events.Mouse_Release)));
+         Assert
+           (Item.Capture = No_Capture
+            and then Item.Dock_Workspace.Placement (Activity_Dock) =
+              Docking.Docked
+            and then Item.Dock_Workspace.Side (Activity_Dock) =
+              Docking.Dock_Top,
+            "floating dock did not return on edge release");
       end;
 
       Activate_Page (Item, Windows_Page);

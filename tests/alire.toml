@@ -26,6 +26,7 @@ executables = [
   "menubar_tests",
   "gradient_tests",
   "responsive_geometry_tests",
+  "dock_workspace_tests",
 ]
 
 [[depends-on]]

@@ -182,12 +182,17 @@ The examples and test suite are nested Alire crates pinned to the parent
 library, keeping their build state outside the published dependency set. The
 kitchen sink occupies the complete terminal, recomputes one layout snapshot on
 every resize, and uses that snapshot for rendering, mouse routing, and cursor
-projection. Its dedicated Markdown, Menus, Chat, Panels, Windows, and Color
-pages use centered, page-specific bounds. Narrow terminals stack or simplify
-regions instead of retaining a sparse wide arrangement. The Chat page includes
-a persistent multiline composer and Send action. The Color page identifies the
-active profile, compares palette fallbacks, and renders identical stops with
-sRGB-channel and linear-light interpolation.
+projection. Its dedicated Markdown, Menus, Chat, Panels, Docking, Windows, and
+Color pages use centered, page-specific bounds. Narrow terminals stack or
+simplify regions instead of retaining a sparse wide arrangement. The Chat page
+includes a persistent multiline composer and Send action. The Color page
+identifies the active profile, compares palette fallbacks, and renders identical
+stops with sRGB-channel and linear-light interpolation. The Docking page uses
+the optional generic `Components.Dock_Workspaces` layer: stable pane IDs can
+occupy one of four edge docks, collapse to a persistent rail, float as movable
+and resizable windows, and dock again by command or by releasing a header at a
+free edge.
+Child surfaces and their input remain application-owned.
 
 ## Platform boundary
 

@@ -33,6 +33,14 @@ Cards fill their assigned region, with one-cell internal padding and one- or
 two-cell gutters. Readable prose and chat messages are capped near 72 cells.
 Geometry that becomes empty is not focusable or clickable.
 
+Dock workspaces are an optional composition layer above ordinary panels and
+windows, not a global manager. At most one pane occupies each edge; collapsed
+docks retain a visible rail, floating panes retain their return edge, and the
+remaining center is a caller-owned region. One immutable presentation supplies
+the rendered frame, child regions, chrome hits, and floating z-order. Dropping
+a floating header on a free edge and the equivalent keyboard command perform
+the same state transition.
+
 ## Interaction and accessibility
 
 Persistent glyphs, borders, labels, and inverse/attribute changes accompany
