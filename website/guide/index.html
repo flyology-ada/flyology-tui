@@ -17,7 +17,7 @@ type Model is limited record
 end record;
 
 package Events is new Flyology_TUI.Application_Events (Message);
-package Transitions is new Flyology_TUI.Transitions (Command);</code></pre></figure><div class="callout"><p>The model has one serial owner. The runner queues a detached command value. The command worker executes it and can return a typed application message. The command contains no reference to the live model.</p></div></section>
+package Transitions is new Flyology_TUI.Transitions (Command);</code></pre></figure><div class="callout"><p>The application has one model owner and processes events serially. A detached command value contains no reference to the live model or component state. The runner queues that value for the command worker, which can return a typed application message.</p></div></section>
 <section id="update"><span class="step-label">Step 03</span><h2>Handle one event at a time.</h2><p>Update the model for terminal input or application messages. When a resize event arrives, update the dimensions before the next presentation.</p><figure class="code-panel"><figcaption>Update procedure</figcaption><button class="copy-button" type="button" data-copy>Copy</button><pre><code class="language-ada">procedure Update
   (Item  : in out Model;
    Event : Events.Event;
@@ -37,7 +37,7 @@ begin
    end case;
 end Update;</code></pre></figure></section>
 <section id="present"><span class="step-label">Step 04</span><h2>Return the complete desired view.</h2><p>Create styled cells with <a data-api="Flyology_TUI.Surfaces"><code>Flyology_TUI.Surfaces</code></a>. Compose them with <a data-api="Flyology_TUI.Layouts"><code>Flyology_TUI.Layouts</code></a>. Return terminal policy and the root surface through <a data-api="Flyology_TUI.Views"><code>Flyology_TUI.Views</code></a>.</p><p>Presentation does not write terminal bytes. The renderer compares the view with the previous frame and emits changed cells.</p></section>
-<section id="run"><span class="step-label">Step 05</span><h2>Instantiate and run the owner.</h2><p><a data-api="Flyology_TUI.Runners"><code>Flyology_TUI.Runners</code></a> supplies bounded input and command orchestration. <a data-api="Flyology_TUI.Backends.POSIX"><code>Flyology_TUI.Backends.POSIX</code></a> owns terminal mode and reports resize events.</p><figure class="code-panel"><figcaption>Runner instance</figcaption><button class="copy-button" type="button" data-copy>Copy</button><pre><code class="language-ada">package Runtime is new Flyology_TUI.Runners
+<section id="run"><span class="step-label">Step 05</span><h2>Instantiate the runner and start the application loop.</h2><p><a data-api="Flyology_TUI.Runners"><code>Flyology_TUI.Runners</code></a> supplies bounded input and command orchestration. <a data-api="Flyology_TUI.Backends.POSIX"><code>Flyology_TUI.Backends.POSIX</code></a> owns terminal mode and reports resize events.</p><figure class="code-panel"><figcaption>Runner instance</figcaption><button class="copy-button" type="button" data-copy>Copy</button><pre><code class="language-ada">package Runtime is new Flyology_TUI.Runners
   (Events      => Events,
    Transitions => Transitions,
    Model_Type  => Model,

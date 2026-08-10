@@ -62,6 +62,16 @@ async function verifyCatalog() {
       `component catalog mismatch; missing=[${missing}], extra=[${extra}]`
     );
   }
+  const missingCaptures = components
+    .filter((item) => !capturePage.has(item.slug))
+    .map((item) => item.slug);
+  const extraCaptures = [...capturePage.keys()]
+    .filter((slug) => !components.some((item) => item.slug === slug));
+  if (missingCaptures.length || extraCaptures.length) {
+    throw new Error(
+      `capture catalog mismatch; missing=[${missingCaptures}], extra=[${extraCaptures}]`
+    );
+  }
 }
 
 function navigation(prefix, current) {
@@ -140,14 +150,15 @@ function skinSwitcher(item) {
 }
 
 function integrationSteps(item) {
-  if (item.foundation) return [
-    "Call the component handler and keep the returned result as a detached value.",
-    "Apply any focus or capture request in the application model owner.",
-    "Present the next frame from the updated component and application state."
+  if (item.integration) return item.integration;
+  if (item.kind === "gradient") return [
+    "Create the fixed-capacity gradient model and replace its strictly ordered color stops atomically.",
+    "Apply the gradient to a caller-owned surface region with the selected direction, interpolation, and foreground or background mode.",
+    "Place the modified surface in the current layout; terminal color-profile adaptation occurs during rendering."
   ];
   if (item.passive) return [
     "Create or update the caller-owned values that the renderer reads.",
-    "Borrow the current appearance, width, and other presentation values for one render call.",
+    "Borrow the values and appearance required by the selected render function.",
     "Place the returned surface in the current layout. Do not route input to this component."
   ];
   if (item.container) return [
@@ -184,8 +195,8 @@ function componentPage(item, apiHref) {
       ${skinSwitcher(item)}
       <section><h2>When to use it</h2><p>${escapeHtml(item.use)}</p></section>
       <section><h2>State and ownership</h2><p>The <a href="../../api/${apiHref}"><code>${packageId}</code></a> package defines this component.</p><p>${escapeHtml(item.model)}</p><ul>${item.ownership.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul></section>
-      ${item.interaction ? `<section><h2>Input and updates</h2><p>${escapeHtml(item.interaction)}</p></section>` : ""}
-      <section><h2>Integration sequence</h2><ol>${integrationSteps(item).map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol><p>Use the linked package reference for exact parameter, result, capacity, and exception contracts.</p></section>
+      ${item.interaction ? `<section><h2>${item.passive ? "Behavior" : "Input and updates"}</h2><p>${escapeHtml(item.interaction)}</p></section>` : ""}
+      <section><h2>Integration sequence</h2><ol>${integrationSteps(item).map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol><p>See the linked package reference for its exact declarations and contracts.</p></section>
       <section><h2>Responsive and accessible behavior</h2><ul><li>Use dimensions and regions from the current layout or presentation value.</li>${item.passive ? "" : "<li>When a component owns mouse capture, route its matching release even when the pointer leaves the original bounds.</li>"}<li>Retain a glyph, label, border, or text-attribute cue when the terminal reduces color.</li></ul></section>
       <nav class="component-pager" aria-label="Adjacent components">${adjacentLinks(item)}</nav>
     </article>
@@ -230,6 +241,7 @@ await writeFile(join(componentsRoot, "index.html"), componentsIndex());
 const captureRoot = join(siteRoot, "assets/captures");
 for (const page of new Set(capturePage.values())) {
   const pageRoot = join(captureRoot, page);
+  const pageCaptures = [];
   await mkdir(pageRoot, { recursive: true });
   for (const skin of skins) {
     const output = join(pageRoot, `${skin.id}.svg`);
@@ -238,7 +250,25 @@ for (const page of new Set(capturePage.values())) {
       `--docs-skin=${skin.id}`,
       `--docs-output=${output}`
     ], { stdio: "inherit" });
+    const capture = await readFile(output, "utf8");
+    if (!capture.startsWith("<svg") ||
+        !capture.includes("<rect") ||
+        !capture.includes("<text")) {
+      throw new Error(`invalid ${skin.id} Ada capture for ${page}`);
+    }
+    pageCaptures.push(capture);
   }
+  if (new Set(pageCaptures).size !== skins.length) {
+    throw new Error(`skin captures are not distinct for ${page}`);
+  }
+}
+
+const charmWindow = await readFile(
+  join(captureRoot, "windows/charm-default.svg"), "utf8");
+const turboWindow = await readFile(
+  join(captureRoot, "windows/turbo-vision.svg"), "utf8");
+if (!charmWindow.includes("─") || !turboWindow.includes("─")) {
+  throw new Error("window captures do not preserve Unicode frame glyphs");
 }
 
 for (const item of components) {

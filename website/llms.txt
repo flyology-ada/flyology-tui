@@ -1,9 +1,9 @@
 # Flyology TUI
 
-Flyology TUI is an experimental Ada terminal UI toolkit. It uses one serial
-Elm-style owner, bounded component state, Unicode-aware surfaces, responsive
-layout snapshots, mouse capture, terminal color profiles, and render-time
-skins.
+Flyology TUI is an experimental Ada terminal UI toolkit. It uses one
+application model owner with serial event dispatch, bounded component state,
+Unicode-aware surfaces, responsive layout snapshots, mouse capture, terminal
+color profiles, and render-time skins.
 
 Canonical site: https://tui.flyology.org/
 Guide: https://tui.flyology.org/guide/
@@ -19,10 +19,11 @@ Important boundaries:
 - Components own bounded local state and no hidden task or callback.
 - Applications own focus, overlay order, modal routing, and heterogeneous
   child models.
-- The same immutable responsive geometry should drive render and hit testing.
+- The same immutable responsive geometry must drive rendering and hit testing.
 - Themes and skins are borrowed render-time values.
 - Backends own terminal lifecycle. Renderers own frame differencing.
 
 Every public Flyology_TUI.Components child package has one generated page under
 https://tui.flyology.org/components/. Each page links to its exact GNATdoc
-compilation unit and includes generated previews for all maintained skins.
+compilation unit and includes build-generated Ada gallery captures for all
+maintained skins.

@@ -1,5 +1,5 @@
 const commonOwnership = [
-  "The application owns the model and applies updates in its serial event loop.",
+  "The application model owner applies updates during serial event dispatch.",
   "Appearance and skin values are borrowed only while the component renders."
 ];
 
@@ -35,8 +35,8 @@ export const components = [
   }),
   component({
     slug: "chats", title: "Chats", group: "Content",
-    summary: "Render only the visible subset of heterogeneous messages, actions, a footer, and a composer.",
-    use: "Use Chats for ordinary conversations or AI transcripts whose message bodies can be any caller-owned component surface.",
+    summary: "Render only the visible subset of heterogeneous messages, actions, a footer, and an input composer.",
+    use: "Use a chat for ordinary conversations or AI transcripts whose message bodies can be any caller-owned component surface. The input composer is the caller-owned input area below the transcript.",
     model: "The chat owns stable message metadata, measurements, viewport state, selection, automatic tail-following state, and unread counts. Bodies remain external.",
     interaction: "Route input to visible child body and action regions before transcript scrolling. The application owns input-area submission.",
     kind: "chat",
@@ -60,18 +60,22 @@ export const components = [
   component({
     slug: "dropdowns", title: "Dropdowns", group: "Controls",
     summary: "Choose one stable-ID item from a bounded popup list.",
-    use: "Use a dropdown when one choice must fit in a compact closed control. Prefer radios when all choices you want all choices to remain visible.",
+    use: "Use a dropdown when one choice must fit in a compact closed control. Prefer radio buttons when you want all choices to remain visible.",
     model: "The model retains selected ID, highlight, open state, focus, and capture. Item labels are supplied by the generic instance.",
-    interaction: "Enter or Space opens and commits. Escape and outside click dismiss. Arrow keys and wheel movement change the highlight.",
+    interaction: "Enter or Space opens a closed dropdown. In an open dropdown, either key commits the highlighted item. Escape or a click outside the popup closes it without changing the selection. Arrow keys and wheel movement change the highlight.",
     kind: "dropdown",
   }),
   component({
     slug: "forms", title: "Forms", group: "Content",
-    container: true,
-    summary: "Lay out labels and caller-owned field surfaces in bounded rows.",
-    use: "Use Forms to align related input fields and values. Field interaction and validation remain in each child model.",
-    model: "The form retains responsive width and label-column geometry, not the child field models or their values.",
-    interaction: "The application routes events to child regions returned by the form layout and owns focus traversal.",
+    summary: "Own and align a bounded set of labeled single-line text inputs.",
+    use: "Use a form to collect several related text values with aligned labels and one active field.",
+    model: "The form owns each text-input child model, active field, submitted and cancelled status, and responsive input width. Field values remain available by index.",
+    interaction: "The form routes keyboard and local mouse input to its active text input. Enter submits, Escape cancels, and Tab changes the active field.",
+    integration: [
+      "Create the form from bounded field definitions and a responsive input width.",
+      "Pass terminal keyboard or form-local mouse events to Update; read submitted, cancelled, field-value, and cursor queries from the form model.",
+      "Render the form with the current appearance, and place its returned surface in the application layout."
+    ],
     kind: "form",
   }),
   component({
@@ -89,7 +93,7 @@ export const components = [
     passive: true,
     ownership: ["Help retains no model state.", "The caller supplies bindings, width, orientation, and appearance for each render."],
     summary: "Render compact key and command hints horizontally or vertically.",
-    use: "Use Help for persistent shortcuts near the surface they affect. Keep long explanations in guide text.",
+    use: "Use help text for persistent shortcuts near the surface they affect. Keep long explanations in guide text.",
     model: "Help is stateless. The caller supplies bounded bindings and explicit key and detail styles.",
     interaction: "Help renders labels only and never consumes input.",
     kind: "help",
@@ -112,14 +116,24 @@ export const components = [
     use: "Use the common result vocabulary when an application coordinates several components without callbacks.",
     model: "A component update result is a detached value. Capture actions explicitly acquire or release application-owned mouse capture.",
     interaction: "Applications inspect the result after Update, mutate their own domain state, then schedule another render.",
+    integration: [
+      "Receive Update_Result from an interactive component handler; this package defines the result vocabulary rather than a handler of its own.",
+      "Inspect handled, changed, activated, rejected, focus, and capture fields and apply the requested application-owned state changes.",
+      "Present the next frame from the updated component and application state."
+    ],
     kind: "interaction",
   }),
   component({
     slug: "lists", title: "Lists", group: "Navigation",
     summary: "Navigate a bounded vertical list with responsive viewport geometry.",
-    use: "Use Lists for simple homogeneous rows. Use Tables for columns and Trees for hierarchy.",
+    use: "Use a list for simple homogeneous rows. Use a table for columns and a tree for hierarchy.",
     model: "The model retains focus, selected row, top row, and configured dimensions. Content surfaces remain external.",
     interaction: "Arrows, Page Up, Page Down, Home, End, wheel, and row clicks clamp the visible selection at numeric limits.",
+    integration: [
+      "Instantiate the generic with the item type and label function, then create the bounded-size model and set its items.",
+      "Pass terminal keyboard or list-local mouse events to Update and read the selected index or item from the model.",
+      "Render the list with the current appearance and place the returned surface in the current layout."
+    ],
     kind: "list",
   }),
   component({
@@ -134,7 +148,7 @@ export const components = [
     slug: "markdown-viewers", sourceSlug: "markdown_viewers", title: "Markdown viewers", group: "Content",
     summary: "Parse and present a bounded read-only Markdown subset incrementally.",
     use: "Use a Markdown viewer for documentation, help, or message bodies that need links and structured text without web rendering.",
-    model: "The viewer owns bounded source, line, link, parse, scroll, and selection state. Parsing and rendering advance under caller budgets.",
+    model: "The viewer owns bounded source, line, link, parse, scroll, and selection state. A caller-selected line budget limits how many lines one parse or render call processes.",
     interaction: "Keyboard and mouse activate typed link IDs. Stale presentation snapshots are rejected after source replacement.",
     kind: "markdown",
   }),
@@ -143,7 +157,7 @@ export const components = [
     summary: "Present typed top-level, popup, and nested application commands.",
     use: "Use a menubar for global commands that need mnemonics, shortcuts, check items, radio items, and bounded submenus.",
     model: "The model validates the complete menu graph before changing state and preserves mutable state by stable ID. Presentation revisions reject stale overlay input.",
-    interaction: "Menus take modal routing priority while open. Keyboard mnemonics, arrows, Escape, mouse hover, and complete click gestures have parity.",
+    interaction: "While open, the menubar takes modal routing priority. Keyboard mnemonics and arrows move focus; Enter or Space activates the focused item; Escape closes one menu level. Mouse movement highlights visible items, and a complete press and release activates one.",
     kind: "menubar",
   }),
   component({
@@ -183,7 +197,7 @@ export const components = [
   component({
     slug: "scrollbars", title: "Scrollbars", group: "Navigation",
     summary: "Bind a viewport offset to arrow, track, wheel, and thumb input.",
-    use: "Use Scrollbars beside a real scrollable region. The application owns the two-way synchronization with content offsets.",
+    use: "Use a scrollbar beside a real scrollable region. The application owns the two-way synchronization with content offsets.",
     model: "The model retains orientation, range, page size, first item, focus, and capture. It does not own the scrolled content.",
     interaction: "Arrows move one unit, track clicks move one page, wheel moves by signed magnitude, and thumb drag uses captured motion.",
     kind: "scrollbar",
@@ -191,7 +205,7 @@ export const components = [
   component({
     slug: "selectors", title: "Selectors", group: "Controls",
     summary: "Select one or several stable-ID items from a visible list.",
-    use: "Use a selector when choices you want all choices to remain visible and multi-selection may be required.",
+    use: "Use a selector when choices must remain visible or when users can select multiple items.",
     model: "Single and multiple modes share bounded item storage. The model validates the complete replacement before it changes the selection.",
     interaction: "Arrows move focus. Space and mouse release toggle according to the configured selection mode.",
     kind: "selector",
@@ -201,7 +215,7 @@ export const components = [
     passive: true,
     ownership: ["The caller owns the bounded numeric series.", "The renderer borrows the series, scale, width, and appearance for one call."],
     summary: "Render a bounded numeric suffix as a compact bar series.",
-    use: "Use Sparklines when trend and shape matter more than exact axis labels.",
+    use: "Use a sparkline when trend and shape matter more than exact axis labels.",
     model: "The caller supplies a fixed-capacity numeric series. Automatic or fixed scaling validates finite values before glyph selection.",
     interaction: "Sparklines are read-only and take no focus.",
     kind: "sparkline",
@@ -226,24 +240,24 @@ export const components = [
   }),
   component({
     slug: "streaming-texts", sourceSlug: "streaming_texts", title: "Streaming texts", group: "Content",
-    summary: "Append bounded output with automatic tail-following and unseen-chunk state.",
+    summary: "Append bounded output with automatic tail-following and an unseen-chunk count.",
     use: "Use streaming text for logs, command output, or AI response text that arrives in chunks.",
-    model: "Fixed code-point, line, and viewport-cell capacities bound retained output. Append can reject or trim complete old lines and clusters.",
+    model: "Fixed code-point, line, and viewport-cell capacities bound retained output. Append can reject or trim complete old lines and complete grapheme clusters. An unseen chunk is an accepted nonempty append received while the viewport is not following the tail.",
     interaction: "Keyboard and wheel input scroll. The caller appends chunks and explicitly finishes, fails, or cancels the stream.",
     kind: "stream",
   }),
   component({
     slug: "syntax-editors", sourceSlug: "syntax_editors", title: "Syntax editors", group: "Editing",
-    summary: "Compose bounded multiline editing with token highlighting with a caller-selected line limit.",
+    summary: "Edit bounded multiline text with token highlighting and a caller-selected line limit.",
     use: "Use a syntax editor when source text needs responsive editing plus a deterministic external lexer.",
-    model: "One text-area state machine owns editing. A bounded per-line token cache stores validated cluster-boundary spans and lexer state.",
+    model: "One text-area state machine owns editing. A bounded per-line token cache stores lexer state and validated token spans that start and end at grapheme boundaries.",
     interaction: "Editing behavior matches a text area. The caller advances highlighting under an explicit line budget.",
     kind: "syntax",
   }),
   component({
     slug: "tables", title: "Tables", group: "Data",
     summary: "Render typed columns, stable rows, sorting, selection, and viewport state.",
-    use: "Use Tables for homogeneous records whose columns need independent widths and sort behavior.",
+    use: "Use a table for homogeneous records whose columns need independent widths and sort behavior.",
     model: "Source order and display order stay separate. Stable row IDs preserve selection and focus through reorder and stable sorting.",
     interaction: "Header focus controls three-state sorting. Row focus controls selection and vertical navigation; wheel input changes the viewport.",
     kind: "table",
@@ -251,7 +265,7 @@ export const components = [
   component({
     slug: "tabs", title: "Tabs", group: "Navigation",
     summary: "Switch stable-ID pages with responsive clipping and persistent active state.",
-    use: "Use Tabs for sibling views at one hierarchy level. Keep application-wide commands in a menubar.",
+    use: "Use tabs for sibling views at one hierarchy level. Keep application-wide commands in a menubar.",
     model: "The model retains active and focused IDs. An immutable presentation maps visible tab regions after clipping.",
     interaction: "Arrows move focus, Enter and Space activate, and matching mouse release activates the pressed tab.",
     kind: "tabs",
@@ -266,32 +280,42 @@ export const components = [
   }),
   component({
     slug: "text-inputs", sourceSlug: "text_inputs", title: "Text inputs", group: "Editing",
-    summary: "Edit one bounded Unicode line with cursor and selection state.",
+    summary: "Edit one bounded Unicode line with a retained cursor and horizontal viewport.",
     use: "Use a text input for names, filters, paths, and short commands that must remain on one line.",
-    model: "The model retains bounded value, cursor, selection, horizontal viewport, focus, and capture. Labels and appearance remain external.",
-    interaction: "Keyboard editing, paste, pointer placement, and drag selection operate on grapheme boundaries.",
+    model: "The model retains bounded content, cursor, visible columns, focus, placeholder, and horizontal viewport. Appearance remains external.",
+    interaction: "Keyboard editing and paste operate on grapheme boundaries. A local left click focuses the input and places its cursor; the component does not implement drag selection or mouse capture.",
+    integration: [
+      "Create the input with a bounded visible width and optional placeholder, then set or read its retained value through the model.",
+      "Pass terminal keyboard or input-local left-click events to Update; use Cursor_Column to place the terminal cursor when focused.",
+      "Render the input with content and placeholder appearances and place the returned one-row surface in the current layout."
+    ],
     kind: "textinput",
   }),
   component({
     slug: "trees", title: "Trees", group: "Data",
     summary: "Navigate a validated bounded preorder tree with stable expansion state.",
-    use: "Use Trees for hierarchical data whose children can expand and collapse in place.",
+    use: "Use a tree for hierarchical data whose children can expand and collapse in place.",
     model: "The model validates the complete preorder depth sequence before it changes state. Expansion, selection, focus, and viewport survive replacement by stable ID.",
     interaction: "Left collapses or moves to the parent. Right expands or moves to the first child. Rows also support mouse and wheel input.",
     kind: "tree",
   }),
   component({
     slug: "viewports", title: "Viewports", group: "Layout",
-    summary: "Clip a caller-owned surface and expose bounded horizontal and vertical offsets.",
-    use: "Use Viewports when content can exceed its visible region. Pair them with Scrollbars when users need persistent position affordances.",
-    model: "The viewport retains visible size and offsets, not the content surface. Offset setters clamp to current content bounds.",
-    interaction: "Arrows, Page keys, and wheel input move offsets. The application synchronizes any attached scrollbar models.",
+    summary: "Retain and clip a surface at bounded horizontal and vertical offsets.",
+    use: "Use a viewport when content can exceed its visible region. Pair it with scrollbars when users need persistent position affordances.",
+    model: "The viewport retains the content surface, visible size, and horizontal and vertical offsets. Set_Content replaces the retained surface; Resize changes the visible region; Scroll applies signed movement and clamps it to the content bounds.",
+    interaction: "Arrow keys, Page keys, and wheel input scroll the retained surface. The application synchronizes any attached scrollbar models.",
+    integration: [
+      "Create the viewport at the current visible size, set its retained content surface, and resize it when layout dimensions change.",
+      "Pass terminal keyboard or viewport-local wheel events to Update, or call Scroll for application-driven movement.",
+      "Render the clipped surface and synchronize X_Offset and Y_Offset with any caller-owned scrollbar models."
+    ],
     kind: "viewport",
   }),
   component({
     slug: "windows", title: "Windows", group: "Layout",
     summary: "Move, resize, focus, close, and layer in-terminal surfaces.",
-    use: "Use Windows for floating work surfaces inside a terminal workspace. The application still owns z-order and modal routing.",
+    use: "Use a window for a floating work surface inside a terminal workspace. The application still owns z-order and modal routing.",
     model: "The model retains bounds, minima, enabled state, focus, and capture. Titles, content, appearance, and child models stay external.",
     interaction: "Drag the header to move and any border or corner to resize. Alt+Arrow keys move the window; Ctrl+Arrow keys resize it; close returns a typed request.",
     kind: "window",

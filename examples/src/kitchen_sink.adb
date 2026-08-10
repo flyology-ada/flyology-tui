@@ -5018,23 +5018,48 @@ procedure Kitchen_Sink is
       type RGB_Value is record
          Red, Green, Blue : Natural;
       end record;
-      Basic_RGB : constant array (Flyology_TUI.Colors.ANSI_Color) of RGB_Value :=
+      Basic_RGB : constant array
+        (Flyology_TUI.Colors.ANSI_Color) of RGB_Value :=
         [Flyology_TUI.Colors.Black          => (0, 0, 0),
-         Flyology_TUI.Colors.Red            => (168, 0, 0),
-         Flyology_TUI.Colors.Green          => (0, 168, 0),
-         Flyology_TUI.Colors.Yellow         => (168, 84, 0),
-         Flyology_TUI.Colors.Blue           => (0, 0, 168),
-         Flyology_TUI.Colors.Magenta        => (168, 0, 168),
-         Flyology_TUI.Colors.Cyan           => (0, 168, 168),
-         Flyology_TUI.Colors.White          => (168, 168, 168),
-         Flyology_TUI.Colors.Bright_Black   => (84, 84, 84),
-         Flyology_TUI.Colors.Bright_Red     => (255, 85, 85),
-         Flyology_TUI.Colors.Bright_Green   => (85, 255, 85),
-         Flyology_TUI.Colors.Bright_Yellow  => (255, 255, 85),
-         Flyology_TUI.Colors.Bright_Blue    => (85, 85, 255),
-         Flyology_TUI.Colors.Bright_Magenta => (255, 85, 255),
-         Flyology_TUI.Colors.Bright_Cyan    => (85, 255, 255),
+         Flyology_TUI.Colors.Red            => (128, 0, 0),
+         Flyology_TUI.Colors.Green          => (0, 128, 0),
+         Flyology_TUI.Colors.Yellow         => (128, 128, 0),
+         Flyology_TUI.Colors.Blue           => (0, 0, 128),
+         Flyology_TUI.Colors.Magenta        => (128, 0, 128),
+         Flyology_TUI.Colors.Cyan           => (0, 128, 128),
+         Flyology_TUI.Colors.White          => (192, 192, 192),
+         Flyology_TUI.Colors.Bright_Black   => (128, 128, 128),
+         Flyology_TUI.Colors.Bright_Red     => (255, 0, 0),
+         Flyology_TUI.Colors.Bright_Green   => (0, 255, 0),
+         Flyology_TUI.Colors.Bright_Yellow  => (255, 255, 0),
+         Flyology_TUI.Colors.Bright_Blue    => (0, 0, 255),
+         Flyology_TUI.Colors.Bright_Magenta => (255, 0, 255),
+         Flyology_TUI.Colors.Bright_Cyan    => (0, 255, 255),
          Flyology_TUI.Colors.Bright_White   => (255, 255, 255)];
+      Cube_Levels : constant array (Natural range 0 .. 5) of Natural :=
+        [0, 95, 135, 175, 215, 255];
+
+      function Indexed_RGB
+        (Index : Flyology_TUI.Colors.Channel) return RGB_Value
+      is
+         Offset : Natural;
+         Level  : Natural;
+      begin
+         if Index < 16 then
+            return Basic_RGB
+              (Flyology_TUI.Colors.ANSI_Color'Val (Natural (Index)));
+         elsif Index < 232 then
+            Offset := Natural (Index) - 16;
+            return
+              (Red   => Cube_Levels (Offset / 36),
+               Green => Cube_Levels ((Offset / 6) mod 6),
+               Blue  => Cube_Levels (Offset mod 6));
+         else
+            Level := 8 + 10 * (Natural (Index) - 232);
+            return (others => Level);
+         end if;
+      end Indexed_RGB;
+
       Resolved : RGB_Value;
    begin
       case Value.Kind is
@@ -5043,7 +5068,7 @@ procedure Kitchen_Sink is
          when Flyology_TUI.Colors.ANSI =>
             Resolved := Basic_RGB (Value.Name);
          when Flyology_TUI.Colors.Indexed =>
-            Resolved := (Value.Index, Value.Index, Value.Index);
+            Resolved := Indexed_RGB (Value.Index);
          when Flyology_TUI.Colors.RGB =>
             Resolved :=
               (Value.Red_Value, Value.Green_Value, Value.Blue_Value);
@@ -5063,8 +5088,10 @@ procedure Kitchen_Sink is
       Cell_Width  : constant Natural := 10;
       Cell_Height : constant Natural := 20;
       Margin      : constant Natural := 18;
-      Width       : constant Natural := Frame.Width * Cell_Width + Margin * 2;
-      Height      : constant Natural := Frame.Height * Cell_Height + Margin * 2;
+      Width       : constant Natural :=
+        Frame.Width * Cell_Width + Margin * 2;
+      Height      : constant Natural :=
+        Frame.Height * Cell_Height + Margin * 2;
       Foreground  : constant String :=
         (if Skin = Flyology_TUI.Skins.Charm_Dark
          then "#fffdf5" else "#232323");
@@ -5180,7 +5207,8 @@ procedure Kitchen_Sink is
       elsif Value = "windows" then Windows_Page
       else raise Constraint_Error with "unknown documentation page");
 
-   function Skin_From_Name (Value : String) return Flyology_TUI.Skins.Skin_Id is
+   function Skin_From_Name
+     (Value : String) return Flyology_TUI.Skins.Skin_Id is
      (if Value = "charm-default" then Flyology_TUI.Skins.Charm_Default
       elsif Value = "charm-dark" then Flyology_TUI.Skins.Charm_Dark
       elsif Value = "charm-light" then Flyology_TUI.Skins.Charm_Light
@@ -5196,6 +5224,11 @@ procedure Kitchen_Sink is
       Skin : constant Flyology_TUI.Skins.Skin_Id :=
         Skin_From_Name (Skin_Name);
    begin
+      if Color_CSS (Flyology_TUI.Colors.Palette (196), "") /=
+        "rgb(255,0,0)"
+      then
+         raise Program_Error with "documentation ANSI-256 decoding failed";
+      end if;
       Initialize (Item, Next);
       Item.Skin := Skin;
       Activate_Page (Item, Page);
@@ -6391,10 +6424,16 @@ begin
      and then Ada.Command_Line.Argument (3)'Length > 14
      and then Ada.Command_Line.Argument (3) (1 .. 14) = "--docs-output="
    then
-      Run_Documentation_Capture
-        (Ada.Command_Line.Argument (1) (16 .. Ada.Command_Line.Argument (1)'Last),
-         Ada.Command_Line.Argument (2) (13 .. Ada.Command_Line.Argument (2)'Last),
-         Ada.Command_Line.Argument (3) (15 .. Ada.Command_Line.Argument (3)'Last));
+      declare
+         Capture : constant String := Ada.Command_Line.Argument (1);
+         Skin    : constant String := Ada.Command_Line.Argument (2);
+         Output  : constant String := Ada.Command_Line.Argument (3);
+      begin
+         Run_Documentation_Capture
+           (Capture (16 .. Capture'Last),
+            Skin (13 .. Skin'Last),
+            Output (15 .. Output'Last));
+      end;
    elsif Ada.Command_Line.Argument_Count = 1
      and then Ada.Command_Line.Argument (1) = "--responsive-self-test"
    then
