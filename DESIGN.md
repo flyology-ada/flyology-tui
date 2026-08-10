@@ -64,6 +64,10 @@ the same state transition.
 - Build sortable and reorderable list, table, tree, and panel adapters on that
   substrate. Stable IDs survive reorder, and a drop commits atomically to
   caller-owned data only after the target accepts it.
+- Add a dedicated streaming-text kitchen-sink card. Demonstrate append,
+  follow-tail, unseen chunks, trim and reject policies, terminal states,
+  scrolling, and responsive wrapping without requiring users to infer the
+  component from the Chat page.
 
 ## Interaction and accessibility
 
