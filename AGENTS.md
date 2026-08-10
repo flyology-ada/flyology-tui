@@ -39,6 +39,37 @@
   descriptor-flag ABI mechanisms. Parsing, rendering, timeout policy, retries,
   and cleanup order remain in Ada.
 
+## Charm visual language
+
+- Treat Charm as an interaction language, not a purple color scheme. Establish
+  hierarchy first with composition, compact spacing, readable grouping, and a
+  restrained number of borders; color enriches that structure but never
+  substitutes for it.
+- Give every persistent state a persistent non-color cue. Active tabs keep a
+  fixed-width bracket shape, selected messages use a header plus structural
+  rail, focused controls retain glyph or text cues, and docked/collapsed/
+  floating panes expose distinct chrome. A brief color flash is not state.
+- Keep ordinary content on the terminal's default foreground/background when
+  possible. Use accent fills sparingly for small, high-value targets. Muted
+  text must remain readable; reserve faint treatment for placeholders and
+  disabled content.
+- Preserve caller-owned body styling. Containers may paint their own header,
+  rail, border, divider, or padding, but must not flood opaque, transparent, or
+  heterogeneous child surfaces with selection or focus backgrounds.
+- Derive component appearances from semantic palette roles. Keep explicit
+  `Appearance` values as the low-level escape hatch and never branch on theme
+  identity or retain a palette/theme in model state.
+- Design truecolor and gradients as progressive enhancement. Renderer profile
+  adaptation must preserve distinct foreground/background identities and
+  structural cues in ANSI-256, ANSI-16, monochrome, `NO_COLOR`, and unknown
+  terminal backgrounds.
+- Render and hit-test the same immutable geometry snapshot. Responsive zero-
+  area controls are hidden and unfocusable; clipped chrome must not retain
+  invisible modal or capture behavior.
+- Kitchen-sink pages are reference interfaces, not packing tests. Center and
+  bound the working area, align related cards, leave deliberate breathing
+  room, and demonstrate keyboard/mouse parity plus responsive degradation.
+
 ## Workflow
 
 - Run `git status --short --branch` before editing.
