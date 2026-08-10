@@ -584,6 +584,8 @@ procedure Kitchen_Sink is
       Chat_Frame, Markdown_Frame, Menu_Frame, Gradient_Frame :
         Flyology_TUI.Geometry.Rectangle;
       Window_Workspace : Flyology_TUI.Geometry.Rectangle;
+      Vertical_Scroll_Region : Flyology_TUI.Geometry.Rectangle;
+      Horizontal_Scroll_Region : Flyology_TUI.Geometry.Rectangle;
       Vertical_Scroll_Origin : Flyology_TUI.Geometry.Point;
       Horizontal_Scroll_Origin : Flyology_TUI.Geometry.Point;
       Horizontal_Group_Origin : Flyology_TUI.Geometry.Point;
@@ -769,6 +771,68 @@ procedure Kitchen_Sink is
    use type Flyology_TUI.Views.Mouse_Mode;
 
    Visual : constant Flyology_TUI.Themes.Theme := Flyology_TUI.Themes.Charm;
+
+   function Build_Viewport_Demo return Flyology_TUI.Surfaces.Surface is
+      Content : Text.Unbounded_Wide_Wide_String;
+
+      procedure Add_Line
+        (Value : Wide_Wide_String;
+         Final : Boolean := False) is
+      begin
+         Text.Append (Content, Value);
+         if not Final then
+            Text.Append (Content, Wide_Wide_Character'Val (10));
+         end if;
+      end Add_Line;
+   begin
+      Add_Line
+        ("BOUND VIEWPORT · content and scrollbars share these offsets "
+         & "----------------------------------------------------");
+      Add_Line
+        ("Arrow keys move the content; both thumbs follow. "
+         & "                                                       | 110");
+      Add_Line
+        ("Wheel over the content moves the vertical thumb. "
+         & "                                                      | 110");
+      Add_Line
+        ("Shift-wheel moves horizontally; the lower thumb follows. "
+         & "                                                 | 110");
+      Add_Line
+        ("Scrollbar arrows update this same viewport. "
+         & "                                                           | 110");
+      Add_Line
+        ("Track clicks page through the same content. "
+         & "                                        "
+         & "                    | 110");
+      Add_Line
+        ("Drag either thumb and watch these cells move. "
+         & "                                                           | 110");
+      Add_Line
+        ("Home, End, Page Up, and Page Down stay synchronized. "
+         & "                                                  | 110");
+      Add_Line
+        ("The application owns this binding; components stay generic. "
+         & "                                               | 110");
+      Add_Line
+        ("Resize recomputes page sizes from one layout snapshot. "
+         & "                                                  | 110");
+      for Row in 11 .. 23 loop
+         Add_Line
+           ("Scrollable row " & Natural'Wide_Wide_Image (Row)
+            & " ------------------------------------------------"
+            & "------------------------------------------ | 110");
+      end loop;
+      Add_Line
+        ("End of the shared scrollable surface. "
+         & "----------------------------------------"
+         & "------------------------ | 110",
+         Final => True);
+      return Flyology_TUI.Surfaces.From_Text
+        (Text.To_Wide_Wide_String (Content));
+   end Build_Viewport_Demo;
+
+   Viewport_Demo_Content : constant Flyology_TUI.Surfaces.Surface :=
+     Build_Viewport_Demo;
 
    function Current_Page (Item : Model) return Page_Id is
      (Item.Pages.Active_Id);
@@ -1110,7 +1174,36 @@ procedure Kitchen_Sink is
       Result.Text_Content.Height :=
         Natural'Min (1, Result.Text_Content.Height);
       Result.List_Content := Inset_Panel (Result.Third);
-      Result.Viewport_Content := Inset_Panel (Result.Second);
+      declare
+         Viewport_Frame : constant Flyology_TUI.Geometry.Rectangle :=
+           Inset_Panel (Result.Second);
+         Has_Bars : constant Boolean :=
+           Viewport_Frame.Width >= 3 and then Viewport_Frame.Height >= 3;
+         Viewport_Width : constant Natural :=
+           Viewport_Frame.Width - (if Has_Bars then 1 else 0);
+         Viewport_Height : constant Natural :=
+           Viewport_Frame.Height - (if Has_Bars then 1 else 0);
+      begin
+         Result.Viewport_Content :=
+           (Viewport_Frame.X, Viewport_Frame.Y,
+            Viewport_Width, Viewport_Height);
+         if Has_Bars then
+            Result.Vertical_Scroll_Region :=
+              (X => Viewport_Frame.X + Integer (Viewport_Width),
+               Y => Viewport_Frame.Y,
+               Width => 1,
+               Height => Viewport_Height);
+            Result.Horizontal_Scroll_Region :=
+              (X => Viewport_Frame.X,
+               Y => Viewport_Frame.Y + Integer (Viewport_Height),
+               Width => Viewport_Width,
+               Height => 1);
+         end if;
+         Result.Vertical_Scroll_Origin :=
+           Origin (Result.Vertical_Scroll_Region);
+         Result.Horizontal_Scroll_Origin :=
+           Origin (Result.Horizontal_Scroll_Region);
+      end;
       Result.Form_Content := Inset_Panel (Result.Fourth);
       Result.Button_Origin := Origin (Inset_Panel (Result.First));
       Result.Check_Origin :=
@@ -1139,11 +1232,6 @@ procedure Kitchen_Sink is
             Width => Result.Content.Width, Height => Result.Content.Height);
          Result.Windows_Origin := Origin (Result.Content);
       end if;
-      Result.Vertical_Scroll_Origin :=
-        (X => Integer'Max (0, Integer (Result.Content.Width) - 1), Y => 0);
-      Result.Horizontal_Scroll_Origin :=
-        (X => 0,
-         Y => Integer'Max (0, Integer (Result.Content.Height) - 1));
       if Result.Horizontal_Group_Region.Width = 0 then
          Result.Horizontal_Group_Region := Result.Top_Full;
          Result.Vertical_Group_Region := Result.Bottom_Full;
@@ -1164,6 +1252,9 @@ procedure Kitchen_Sink is
         or else not Fits (Result.Right_Full)
         or else not Fits (Result.Top_Full)
         or else not Fits (Result.Bottom_Full)
+        or else not Fits (Result.Viewport_Content)
+        or else not Fits (Result.Vertical_Scroll_Region)
+        or else not Fits (Result.Horizontal_Scroll_Region)
       then
          raise Program_Error with "responsive layout escaped terminal bounds";
       end if;
@@ -1182,15 +1273,36 @@ procedure Kitchen_Sink is
      (Item : Model; Geometry : Layout_Snapshot) return Natural is
      (Item.Chat.Body_Width_Limit (Geometry.Chat_Frame.Width));
 
+   procedure Sync_Scrollbars_From_Viewport
+     (Item : in out Model; Geometry : Layout_Snapshot) is
+   begin
+      Item.Vertical_Scroll.Resize (Geometry.Vertical_Scroll_Region.Height);
+      Item.Vertical_Scroll.Configure
+        (Total => Viewport_Demo_Content.Height,
+         Page_Size => Geometry.Viewport_Content.Height,
+         First => Item.Viewport.Y_Offset);
+      Item.Horizontal_Scroll.Resize
+        (Geometry.Horizontal_Scroll_Region.Width);
+      Item.Horizontal_Scroll.Configure
+        (Total => Viewport_Demo_Content.Width,
+         Page_Size => Geometry.Viewport_Content.Width,
+         First => Item.Viewport.X_Offset);
+   end Sync_Scrollbars_From_Viewport;
+
+   procedure Sync_Viewport_From_Scrollbars (Item : in out Model) is
+      Delta_X : constant Integer :=
+        Integer (Item.Horizontal_Scroll.First)
+          - Integer (Item.Viewport.X_Offset);
+      Delta_Y : constant Integer :=
+        Integer (Item.Vertical_Scroll.First)
+          - Integer (Item.Viewport.Y_Offset);
+   begin
+      Item.Viewport.Scroll (Delta_X, Delta_Y);
+   end Sync_Viewport_From_Scrollbars;
+
    procedure Resize_Components
      (Item : in out Model; Geometry : Layout_Snapshot)
    is
-      function Scrollable_Total
-        (Page_Size, Minimum : Natural) return Natural is
-        (if Page_Size > Natural'Last / 3
-         then Natural'Last
-         else Natural'Max (Minimum, Page_Size * 3));
-
       use type Chat_Streams.Operation_Result;
       Editor_Region, Syntax_Region : Flyology_TUI.Geometry.Rectangle;
       Stream_Height : constant Natural := Chat_Stream_Height (Item);
@@ -1257,18 +1369,7 @@ procedure Kitchen_Sink is
       end if;
       Item.Split.Resize
         (Geometry.Split_Region.Width, Geometry.Split_Region.Height);
-      Item.Vertical_Scroll.Resize (Geometry.Window_Workspace.Height);
-      Item.Horizontal_Scroll.Resize (Geometry.Window_Workspace.Width);
-      Item.Vertical_Scroll.Configure
-        (Total => Scrollable_Total
-           (Geometry.Window_Workspace.Height, 100),
-         Page_Size => Geometry.Window_Workspace.Height,
-         First => Item.Vertical_Scroll.First);
-      Item.Horizontal_Scroll.Configure
-        (Total => Scrollable_Total
-           (Geometry.Window_Workspace.Width, 180),
-         Page_Size => Geometry.Window_Workspace.Width,
-         First => Item.Horizontal_Scroll.First);
+      Sync_Scrollbars_From_Viewport (Item, Geometry);
       Item.Window_A_Model.Constrain_To (Geometry.Window_Workspace);
       Item.Window_B_Model.Constrain_To (Geometry.Window_Workspace);
       Item.Horizontal_Group.Resize
@@ -1822,17 +1923,7 @@ procedure Kitchen_Sink is
           U ("Headless tests"),
           U ("POSIX backend"),
           U ("Windows boundary")]);
-      Item.Viewport.Set_Content
-        (Flyology_TUI.Surfaces.From_Text
-           ("Arrow keys scroll this viewport." & Wide_Wide_Character'Val (10)
-            & "The content is a styled cell surface." &
-              Wide_Wide_Character'Val (10)
-            & "Rendering compares the next frame" &
-              Wide_Wide_Character'Val (10)
-            & "with the previous frame and emits" &
-              Wide_Wide_Character'Val (10)
-            & "only changed terminal cells." & Wide_Wide_Character'Val (10)
-            & "No application ANSI strings."));
+      Item.Viewport.Set_Content (Viewport_Demo_Content);
       Item.Form := Flyology_TUI.Components.Forms.Create
         ([(Label       => U ("Name"),
            Initial     => U (""),
@@ -1858,12 +1949,6 @@ procedure Kitchen_Sink is
          Work => Work_Progress.Paused);
       Item.Work.Add_Indeterminate
         (Deploy_Work, "Deploy", Relative_Weight => 1.0);
-      Item.Vertical_Scroll.Configure
-        (Total => 100, Page_Size => 20, First => 18);
-      Item.Horizontal_Scroll.Configure
-        (Total => 180,
-         Page_Size => Fallback_Terminal_Width,
-         First => 42);
       declare
          Accepted : Boolean;
       begin
@@ -1957,6 +2042,7 @@ procedure Kitchen_Sink is
       Item.Chat.Set_Layout (Chats.Conversational_Layout);
       Item.Chat_Composer.Set_Wrap
         (Flyology_TUI.Components.Text_Areas.Soft_Wrap);
+      Resize_Components (Item, Layout (Item));
       Transitions.Run (Next, Wait_For_Tick);
    end Initialize;
 
@@ -1966,18 +2052,25 @@ procedure Kitchen_Sink is
       Markdown_Preview_Visible : constant Boolean :=
         Flyology_TUI.Components.Markdown_Editors.Has_Preview
           (Item.Markdown.Layout);
+      Focus_Geometry : constant Layout_Snapshot := Layout (Item);
       Chat_Frame : constant Flyology_TUI.Geometry.Rectangle :=
-        Layout (Item).Chat_Frame;
+        Focus_Geometry.Chat_Frame;
       Chat_Transcript_Visible : constant Boolean :=
         Chat_Frame.Width > 0 and then Item.Chat.Viewport_Rows > 0;
       Chat_Composer_Visible : constant Boolean :=
         Chat_Frame.Width > 0 and then Chat_Frame.Height > 0;
       Chat_Send_Visible : constant Boolean :=
         Chat_Frame.Width > 0 and then Chat_Frame.Height > 4;
+      Viewport_Bars_Visible : constant Boolean :=
+        Focus_Geometry.Vertical_Scroll_Region.Height > 0
+          and then Focus_Geometry.Horizontal_Scroll_Region.Width > 0;
    begin
       case Current_Page (Item) is
       when Basics_Page =>
-         if Item.Focus not in Page_Navigation .. Form_Field then
+         if Item.Focus not in
+           Page_Navigation .. Form_Field
+             | Vertical_Scroll_Field | Horizontal_Scroll_Field
+         then
             Activate (Item, Text_Field);
             return;
          end if;
@@ -1989,7 +2082,11 @@ procedure Kitchen_Sink is
                    when Text_Field      => Page_Navigation,
                    when List_Field      => Text_Field,
                    when Viewport_Field  => List_Field,
-                   when Form_Field      => Viewport_Field,
+                   when Vertical_Scroll_Field => Viewport_Field,
+                   when Horizontal_Scroll_Field => Vertical_Scroll_Field,
+                   when Form_Field      =>
+                     (if Viewport_Bars_Visible
+                      then Horizontal_Scroll_Field else Viewport_Field),
                    when others          => Text_Field));
          else
             Activate
@@ -1998,7 +2095,11 @@ procedure Kitchen_Sink is
                    when Page_Navigation => Text_Field,
                    when Text_Field      => List_Field,
                    when List_Field      => Viewport_Field,
-                   when Viewport_Field  => Form_Field,
+                   when Viewport_Field  =>
+                     (if Viewport_Bars_Visible
+                      then Vertical_Scroll_Field else Form_Field),
+                   when Vertical_Scroll_Field => Horizontal_Scroll_Field,
+                   when Horizontal_Scroll_Field => Form_Field,
                    when Form_Field      => Page_Navigation,
                    when others          => Text_Field));
          end if;
@@ -2236,9 +2337,23 @@ procedure Kitchen_Sink is
    begin
       case Current_Page (Item) is
          when Basics_Page =>
-            if Item.Focus not in Page_Navigation .. Form_Field then
-               Activate (Item, Text_Field);
-            end if;
+            declare
+               Geometry : constant Layout_Snapshot := Layout (Item);
+               Bars_Visible : constant Boolean :=
+                 Geometry.Vertical_Scroll_Region.Height > 0
+                   and then Geometry.Horizontal_Scroll_Region.Width > 0;
+            begin
+               if Item.Focus not in
+                 Page_Navigation .. Form_Field
+                   | Vertical_Scroll_Field | Horizontal_Scroll_Field
+                 or else
+                   (Item.Focus in
+                      Vertical_Scroll_Field | Horizontal_Scroll_Field
+                    and then not Bars_Visible)
+               then
+                  Activate (Item, Text_Field);
+               end if;
+            end;
          when Controls_Page =>
             if Item.Focus not in
               Page_Navigation | Button_Field .. Dropdown_Field
@@ -2605,23 +2720,21 @@ procedure Kitchen_Sink is
             Result := Item.Split.Handle (Page_Event);
             Apply_Result (Item, Split_Field, Split_Capture, Result);
          when Vertical_Scroll_Capture =>
-            Page_Event :=
-              Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
             Result := Item.Vertical_Scroll.Handle
               (Flyology_TUI.Mouse.Relative
-                 (Page_Event, Geometry.Vertical_Scroll_Origin));
+                 (Event, Geometry.Vertical_Scroll_Origin));
             Apply_Result
               (Item, Vertical_Scroll_Field,
                Vertical_Scroll_Capture, Result);
+            Sync_Viewport_From_Scrollbars (Item);
          when Horizontal_Scroll_Capture =>
-            Page_Event :=
-              Flyology_TUI.Mouse.Relative (Event, Geometry.Windows_Origin);
             Result := Item.Horizontal_Scroll.Handle
               (Flyology_TUI.Mouse.Relative
-                 (Page_Event, Geometry.Horizontal_Scroll_Origin));
+                 (Event, Geometry.Horizontal_Scroll_Origin));
             Apply_Result
               (Item, Horizontal_Scroll_Field,
                Horizontal_Scroll_Capture, Result);
+            Sync_Viewport_From_Scrollbars (Item);
       end case;
    end Route_Captured_Mouse;
 
@@ -3161,7 +3274,29 @@ procedure Kitchen_Sink is
             end if;
          end if;
 
-         if Flyology_TUI.Geometry.Contains (Geometry.Text_Content, Point) then
+         if Flyology_TUI.Geometry.Contains
+           (Geometry.Vertical_Scroll_Region, Point)
+         then
+            Result := Item.Vertical_Scroll.Handle
+              (Flyology_TUI.Mouse.Relative
+                 (Event.Mouse, Geometry.Vertical_Scroll_Origin));
+            Apply_Result
+              (Item, Vertical_Scroll_Field,
+               Vertical_Scroll_Capture, Result);
+            Sync_Viewport_From_Scrollbars (Item);
+         elsif Flyology_TUI.Geometry.Contains
+           (Geometry.Horizontal_Scroll_Region, Point)
+         then
+            Result := Item.Horizontal_Scroll.Handle
+              (Flyology_TUI.Mouse.Relative
+                 (Event.Mouse, Geometry.Horizontal_Scroll_Origin));
+            Apply_Result
+              (Item, Horizontal_Scroll_Field,
+               Horizontal_Scroll_Capture, Result);
+            Sync_Viewport_From_Scrollbars (Item);
+         elsif Flyology_TUI.Geometry.Contains
+           (Geometry.Text_Content, Point)
+         then
             Item.Input.Update
               (Flyology_TUI.Mouse.Localize
                  (Event, Mouse_Region (Geometry.Text_Content)));
@@ -3177,6 +3312,7 @@ procedure Kitchen_Sink is
             Item.Viewport.Update
               (Flyology_TUI.Mouse.Localize
                  (Event, Mouse_Region (Geometry.Viewport_Content)));
+            Sync_Scrollbars_From_Viewport (Item, Geometry);
          elsif Flyology_TUI.Geometry.Contains
            (Geometry.Form_Content, Point)
          then
@@ -3229,7 +3365,9 @@ procedure Kitchen_Sink is
             end;
          when Text_Field => Item.Input.Update (Event);
          when List_Field => Item.Choices.Update (Event);
-         when Viewport_Field => Item.Viewport.Update (Event);
+         when Viewport_Field =>
+            Item.Viewport.Update (Event);
+            Sync_Scrollbars_From_Viewport (Item, Geometry);
          when Form_Field => Item.Form.Update (Event);
          when Button_Field =>
             Result := Item.Button.Handle (Event);
@@ -3370,11 +3508,13 @@ procedure Kitchen_Sink is
             Apply_Result
               (Item, Vertical_Scroll_Field,
                Vertical_Scroll_Capture, Result);
+            Sync_Viewport_From_Scrollbars (Item);
          when Horizontal_Scroll_Field =>
             Result := Item.Horizontal_Scroll.Handle (Event);
             Apply_Result
               (Item, Horizontal_Scroll_Field,
                Horizontal_Scroll_Capture, Result);
+            Sync_Viewport_From_Scrollbars (Item);
       end case;
       Normalize_Focus (Item);
    end Handle_Focused_Key;
@@ -3489,6 +3629,30 @@ procedure Kitchen_Sink is
          Region.Y - Geometry.Content.Y);
    end Overlay_Region;
 
+   function Bound_Viewport_View
+     (Item : Model; Geometry : Layout_Snapshot)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Frame : constant Flyology_TUI.Geometry.Rectangle :=
+        Inset_Panel (Geometry.Second);
+      Result : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (Frame.Width, Frame.Height);
+   begin
+      Result.Overlay_Clipped
+        (Item.Viewport.Render,
+         Geometry.Viewport_Content.X - Frame.X,
+         Geometry.Viewport_Content.Y - Frame.Y);
+      Result.Overlay_Clipped
+        (Item.Vertical_Scroll.Render (Visual),
+         Geometry.Vertical_Scroll_Region.X - Frame.X,
+         Geometry.Vertical_Scroll_Region.Y - Frame.Y);
+      Result.Overlay_Clipped
+        (Item.Horizontal_Scroll.Render (Visual),
+         Geometry.Horizontal_Scroll_Region.X - Frame.X,
+         Geometry.Horizontal_Scroll_Region.Y - Frame.Y);
+      return Result;
+   end Bound_Viewport_View;
+
    function Basics_View
      (Item : Model; Geometry : Layout_Snapshot)
       return Flyology_TUI.Surfaces.Surface is
@@ -3507,8 +3671,11 @@ procedure Kitchen_Sink is
            Geometry.Third.Width, Geometry.Third.Height);
       Viewport_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
-          ("Viewport", Item.Viewport.Render,
-           Item.Focus = Viewport_Field, Visual.Border, Visual.Muted,
+          ("Bound viewport", Bound_Viewport_View (Item, Geometry),
+           Item.Focus in
+             Viewport_Field | Vertical_Scroll_Field
+               | Horizontal_Scroll_Field,
+           Visual.Border, Visual.Muted,
            Geometry.Second.Width, Geometry.Second.Height);
       Form_View : constant Flyology_TUI.Surfaces.Surface :=
         Panel
@@ -4291,7 +4458,7 @@ procedure Kitchen_Sink is
       Result := Flyology_TUI.Views.From_Surface (Canvas);
       Result.Alternate_Screen := True;
       Result.Mouse :=
-        (if Current_Page (Item) in Panels_Page | Windows_Page
+        (if Current_Page (Item) in Basics_Page | Panels_Page | Windows_Page
          then Flyology_TUI.Views.Cell_Motion
          else Flyology_TUI.Views.Button_Events);
       Result.Report_Focus := True;
@@ -4395,6 +4562,19 @@ procedure Kitchen_Sink is
          Modified => (others => False),
          Wheel_X  => 0,
          Wheel_Y  => 0);
+
+      function Wheel
+        (X, Y : Natural;
+         Wheel_X, Wheel_Y : Integer)
+         return Flyology_TUI.Events.Mouse_Event
+      is
+        (X        => X,
+         Y        => Y,
+         Button   => Flyology_TUI.Events.No_Button,
+         Action   => Flyology_TUI.Events.Mouse_Wheel,
+         Modified => (others => False),
+         Wheel_X  => Wheel_X,
+         Wheel_Y  => Wheel_Y);
 
       function Key
         (Control : Boolean := False)
@@ -4505,6 +4685,53 @@ procedure Kitchen_Sink is
                      and then not Overlaps
                        (Geometry.Third, Geometry.Fourth),
                      "gallery cards overlap");
+                  if Page = Basics_Page then
+                     declare
+                        Viewport_Frame : constant
+                          Flyology_TUI.Geometry.Rectangle :=
+                            Inset_Panel (Geometry.Second);
+                        Has_Bars : constant Boolean :=
+                          Viewport_Frame.Width >= 3
+                            and then Viewport_Frame.Height >= 3;
+                     begin
+                        Assert
+                          (Fits
+                             (Viewport_Frame,
+                              Geometry.Viewport_Content),
+                           "bound viewport geometry escaped its card");
+                        if Has_Bars then
+                           Assert
+                             (Fits
+                                (Viewport_Frame,
+                                 Geometry.Vertical_Scroll_Region)
+                              and then Fits
+                                (Viewport_Frame,
+                                 Geometry.Horizontal_Scroll_Region)
+                              and then Geometry.Viewport_Content.Width + 1
+                                = Viewport_Frame.Width
+                              and then
+                                Geometry.Viewport_Content.Height + 1
+                                  = Viewport_Frame.Height
+                              and then
+                                Geometry.Vertical_Scroll_Region.X
+                                  = Geometry.Viewport_Content.X
+                                    + Integer
+                                        (Geometry.Viewport_Content.Width)
+                              and then
+                                Geometry.Horizontal_Scroll_Region.Y
+                                  = Geometry.Viewport_Content.Y
+                                    + Integer
+                                        (Geometry.Viewport_Content.Height),
+                              "responsive bars did not share viewport edges");
+                        else
+                           Assert
+                             (Geometry.Vertical_Scroll_Region.Width = 0
+                              and then
+                                Geometry.Horizontal_Scroll_Region.Height = 0,
+                              "undersized viewport retained orphan bars");
+                        end if;
+                     end;
+                  end if;
                when Navigation_Page =>
                   Assert
                     (Fits (Geometry.Content, Geometry.First)
@@ -4592,6 +4819,160 @@ procedure Kitchen_Sink is
          and then Geometry.First.Width + Geometry.Second.Width + 2 = 112
          and then Geometry.First.Height + Geometry.Third.Height + 2 = 23,
          "wide gallery was not centered at its maximum working size");
+      Assert
+        (Geometry.Vertical_Scroll_Region.Height > 2
+         and then Geometry.Horizontal_Scroll_Region.Width > 2
+         and then Viewport_Demo_Content.Width
+           > Geometry.Viewport_Content.Width
+         and then Viewport_Demo_Content.Height
+           > Geometry.Viewport_Content.Height
+         and then Item.Vertical_Scroll.Maximum_First > 0
+         and then Item.Horizontal_Scroll.Maximum_First > 0
+         and then Item.Vertical_Scroll.Thumb_Region.Height
+           < Geometry.Vertical_Scroll_Region.Height - 2
+         and then Item.Horizontal_Scroll.Thumb_Region.Width
+           < Geometry.Horizontal_Scroll_Region.Width - 2,
+         "bound viewport did not expose two genuinely scrollable thumbs");
+      Frame := Present (Item);
+      Assert
+        (Frame.Mouse = Flyology_TUI.Views.Cell_Motion,
+         "bound viewport did not request thumb-drag motion events");
+      declare
+         Viewport_Frame : constant Flyology_TUI.Geometry.Rectangle :=
+           Inset_Panel (Geometry.Second);
+         Bound : constant Flyology_TUI.Surfaces.Surface :=
+           Bound_Viewport_View (Item, Geometry);
+         Vertical : constant Flyology_TUI.Surfaces.Surface :=
+           Item.Vertical_Scroll.Render (Visual);
+         Horizontal : constant Flyology_TUI.Surfaces.Surface :=
+           Item.Horizontal_Scroll.Render (Visual);
+      begin
+         Assert
+           (Bound.Width = Viewport_Frame.Width
+            and then Bound.Height = Viewport_Frame.Height
+            and then Text.To_Wide_Wide_String
+              (Bound.Element
+                 (Natural
+                    (Geometry.Vertical_Scroll_Region.X
+                     - Viewport_Frame.X),
+                  0).Glyph)
+              = Text.To_Wide_Wide_String (Vertical.Element (0, 0).Glyph)
+            and then Text.To_Wide_Wide_String
+              (Bound.Element
+                 (0,
+                  Natural
+                    (Geometry.Horizontal_Scroll_Region.Y
+                     - Viewport_Frame.Y)).Glyph)
+              = Text.To_Wide_Wide_String (Horizontal.Element (0, 0).Glyph),
+            "bound viewport omitted its interactive scrollbar renderings");
+      end;
+
+      Activate (Item, Viewport_Field);
+      Handle_Focused_Key
+        (Item, Terminal_Key (Flyology_TUI.Events.Arrow_Right_Key), Geometry);
+      Handle_Focused_Key
+        (Item, Terminal_Key (Flyology_TUI.Events.Arrow_Down_Key), Geometry);
+      Assert
+        (Item.Viewport.X_Offset = 1
+         and then Item.Viewport.Y_Offset = 1
+         and then Item.Horizontal_Scroll.First = 1
+         and then Item.Vertical_Scroll.First = 1,
+         "viewport keyboard movement did not update both scrollbar models");
+      Handle_Mouse
+        (Item,
+         (Kind => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Wheel
+            (Natural (Geometry.Viewport_Content.X),
+             Natural (Geometry.Viewport_Content.Y), 0, -1)));
+      Assert
+        (Item.Viewport.Y_Offset = 4
+         and then Item.Vertical_Scroll.First = 4,
+         "viewport wheel movement did not update the vertical thumb");
+
+      declare
+         Before_X : constant Natural := Item.Viewport.X_Offset;
+         Before_Y : constant Natural := Item.Viewport.Y_Offset;
+      begin
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (Natural (Geometry.Vertical_Scroll_Region.X),
+                Natural
+                  (Geometry.Vertical_Scroll_Region.Y
+                   + Integer (Geometry.Vertical_Scroll_Region.Height - 1)))));
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (Natural
+                  (Geometry.Horizontal_Scroll_Region.X
+                   + Integer
+                       (Geometry.Horizontal_Scroll_Region.Width - 1)),
+                Natural (Geometry.Horizontal_Scroll_Region.Y))));
+         Assert
+           (Item.Viewport.X_Offset = Before_X + 1
+            and then Item.Viewport.Y_Offset = Before_Y + 1
+            and then Item.Horizontal_Scroll.First = Item.Viewport.X_Offset
+            and then Item.Vertical_Scroll.First = Item.Viewport.Y_Offset,
+            "scrollbar arrow clicks did not move the shared viewport");
+      end;
+
+      Activate (Item, Vertical_Scroll_Field);
+      Handle_Focused_Key
+        (Item, Terminal_Key (Flyology_TUI.Events.Home_Key), Geometry);
+      declare
+         Thumb : constant Flyology_TUI.Geometry.Rectangle :=
+           Item.Vertical_Scroll.Thumb_Region;
+         Thumb_X : constant Natural :=
+           Natural (Geometry.Vertical_Scroll_Origin.X + Thumb.X);
+         Thumb_Y : constant Natural :=
+           Natural (Geometry.Vertical_Scroll_Origin.Y + Thumb.Y);
+         Drag_Y : constant Natural :=
+           Natural
+             (Geometry.Vertical_Scroll_Region.Y
+              + Integer (Geometry.Vertical_Scroll_Region.Height - 2));
+      begin
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer (Thumb_X, Thumb_Y)));
+         Assert
+           (Item.Capture = Vertical_Scroll_Capture,
+            "vertical thumb did not acquire application capture");
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (Thumb_X, Drag_Y, Flyology_TUI.Events.Mouse_Drag)));
+         Handle_Mouse
+           (Item,
+            (Kind => Flyology_TUI.Events.Mouse_Input,
+             Mouse => Pointer
+               (Thumb_X, Drag_Y, Flyology_TUI.Events.Mouse_Release)));
+         Assert
+           (Item.Capture = No_Capture
+            and then Item.Viewport.Y_Offset
+              = Item.Vertical_Scroll.Maximum_First
+            and then Item.Vertical_Scroll.First = Item.Viewport.Y_Offset,
+            "captured thumb drag did not move the shared viewport to its end");
+      end;
+
+      Activate (Item, Horizontal_Scroll_Field);
+      Handle_Focused_Key
+        (Item, Terminal_Key (Flyology_TUI.Events.End_Key), Geometry);
+      Handle_Mouse
+        (Item,
+         (Kind => Flyology_TUI.Events.Mouse_Input,
+          Mouse => Wheel
+            (Natural (Geometry.Horizontal_Scroll_Region.X),
+             Natural (Geometry.Horizontal_Scroll_Region.Y), 0, 1)));
+      Assert
+        (Item.Viewport.X_Offset + 1
+           = Item.Horizontal_Scroll.Maximum_First
+         and then Item.Horizontal_Scroll.First = Item.Viewport.X_Offset,
+         "horizontal scrollbar keyboard and wheel input diverged "
+         & "from content");
 
       Activate_Page (Item, Chat_Page);
       Set_Terminal_Size (Item, 190, 55);
