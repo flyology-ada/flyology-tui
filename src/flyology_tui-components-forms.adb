@@ -19,14 +19,24 @@ package body Flyology_TUI.Components.Forms is
 
    procedure Check_Input_Width (Item : Model; Width : Natural) is
       Labels : constant Natural := Label_Width (Item);
+      Rows   : constant Natural := Natural (Item.Fields.Length);
    begin
-      if not Item.Fields.Is_Empty
-        and then
-          (Labels > Natural'Last - 2
-           or else Width > Natural'Last - Labels - 2)
-      then
-         raise Flyology_TUI.Components.Capacity_Error with
-           "form width exceeds addressable cell capacity";
+      if Rows /= 0 then
+         if Labels > Natural'Last - 2
+           or else Width > Natural'Last - Labels - 2
+         then
+            raise Flyology_TUI.Components.Capacity_Error with
+              "form width exceeds addressable cell capacity";
+         end if;
+
+         declare
+            Columns : constant Natural := Labels + 2 + Width;
+         begin
+            if Rows > Natural'Last / Columns then
+               raise Flyology_TUI.Components.Capacity_Error with
+                 "form dimensions exceed addressable cell capacity";
+            end if;
+         end;
       end if;
    end Check_Input_Width;
 

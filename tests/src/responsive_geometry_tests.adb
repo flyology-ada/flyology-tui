@@ -79,6 +79,19 @@ procedure Responsive_Geometry_Tests is
          Wheel_X  => 0,
          Wheel_Y  => 0));
 
+   function Wheel (X, Y : Natural; Amount : Integer)
+      return Flyology_TUI.Events.Terminal_Event
+   is
+     (Kind  => Flyology_TUI.Events.Mouse_Input,
+      Mouse =>
+        (X        => X,
+         Y        => Y,
+         Button   => Flyology_TUI.Events.No_Button,
+         Action   => Flyology_TUI.Events.Mouse_Wheel,
+         Modified => (others => False),
+         Wheel_X  => 0,
+         Wheel_Y  => Amount));
+
    function Pointer
      (X, Y   : Integer;
       Action : Flyology_TUI.Events.Mouse_Action)
@@ -154,6 +167,17 @@ procedure Responsive_Geometry_Tests is
       Assert
         (Item.Selected_Index = Before,
          "mouse did not select the sole visible retained row");
+      Item.Set_Size (0, Natural'Last);
+      Item.Update (Key (Flyology_TUI.Events.Page_Down_Key));
+      Assert
+        (Item.Selected_Index = 2,
+         "page-down overflowed instead of saturating with a huge height");
+      Item.Update (Key (Flyology_TUI.Events.Home_Key));
+      Item.Set_Size (1, Natural'Last);
+      Item.Update (Wheel (0, 0, Integer'First));
+      Assert
+        (Item.Selected_Index = 2,
+         "minimum wheel delta overflowed instead of saturating");
       Raised := False;
       begin
          declare
@@ -194,6 +218,16 @@ procedure Responsive_Geometry_Tests is
          and then Frame.Height = 2 and then Item.Field_Value (1) = "Ada",
          "zero-width form inputs changed values or outer geometry");
       Item.Set_Input_Width (3);
+      begin
+         Item.Set_Input_Width (Natural'Last / 2);
+      exception
+         when Flyology_TUI.Components.Capacity_Error => Raised := True;
+      end;
+      Assert
+        (Raised and then Item.Input_Width = 3
+         and then Item.Field_Value (2) = "Paris",
+         "overflowing form cell product was not rejected atomically");
+      Raised := False;
       begin
          Item.Set_Input_Width (Natural'Last);
       exception
@@ -240,6 +274,49 @@ procedure Responsive_Geometry_Tests is
       Assert
         (Group.Width = Natural'Last and then Group.Length = 1,
          "large progress group width changed entries");
+      declare
+         Raised : Boolean := False;
+      begin
+         begin
+            Group.Add_Determinate (2, "link", Value => 0.25);
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+         Assert
+           (Raised and then Group.Width = Natural'Last
+            and then Group.Length = 1 and then Group.Value (1) = 0.5,
+            "overflowing progress row insertion was not atomic");
+      end;
+      Group.Set_Width (2);
+      Group.Add_Indeterminate (2, "link");
+      declare
+         Raised : Boolean := False;
+      begin
+         begin
+            Group.Set_Width (Natural'Last);
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+         Assert
+           (Raised and then Group.Width = 2 and then Group.Length = 2,
+            "overflowing progress group resize was not atomic");
+      end;
+
+      declare
+         Other : Work_Groups.Model := Work_Groups.Create (Natural'Last);
+         Raised : Boolean := False;
+      begin
+         Other.Add_Indeterminate (1, "scan");
+         begin
+            Other.Add_Indeterminate (2, "index");
+         exception
+            when Flyology_TUI.Components.Capacity_Error => Raised := True;
+         end;
+         Assert
+           (Raised and then Other.Width = Natural'Last
+            and then Other.Length = 1,
+            "overflowing indeterminate row insertion was not atomic");
+      end;
    end Test_Progress;
 
    procedure Test_Tabs is

@@ -58,16 +58,32 @@ package body Flyology_TUI.Components.Lists is
    end Set_Items;
 
    procedure Move (Item : in out Model; Amount : Integer) is
-      Last : constant Integer := Integer (Item.Values.Length) - 1;
+      Last : Natural;
    begin
       if Item.Values.Is_Empty then
          return;
       end if;
-      Item.Selected := Natural
-        (Integer'Max
-           (0, Integer'Min (Last, Integer (Item.Selected) + Amount)));
+      Last := Natural (Item.Values.Length) - 1;
+      if Amount < 0 then
+         if Amount = Integer'First
+           or else Natural (-Amount) >= Item.Selected
+         then
+            Item.Selected := 0;
+         else
+            Item.Selected := Item.Selected - Natural (-Amount);
+         end if;
+      elsif Amount > 0 then
+         if Natural (Amount) >= Last - Item.Selected then
+            Item.Selected := Last;
+         else
+            Item.Selected := Item.Selected + Natural (Amount);
+         end if;
+      end if;
       Keep_Visible (Item);
    end Move;
+
+   function Safe_Negate (Value : Integer) return Integer is
+     (if Value = Integer'First then Integer'Last else -Value);
 
    procedure Update
      (Item  : in out Model;
@@ -95,7 +111,7 @@ package body Flyology_TUI.Components.Lists is
          elsif Event.Mouse.Action = Flyology_TUI.Events.Mouse_Wheel
            and then Event.Mouse.Wheel_Y /= 0
          then
-            Move (Item, -Event.Mouse.Wheel_Y);
+            Move (Item, Safe_Negate (Event.Mouse.Wheel_Y));
          end if;
          return;
       elsif Event.Kind /= Flyology_TUI.Events.Key_Press then

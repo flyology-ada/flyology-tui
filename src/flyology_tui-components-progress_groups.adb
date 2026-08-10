@@ -30,8 +30,17 @@ package body Flyology_TUI.Components.Progress_Groups is
       return Result;
    end Create;
 
+   procedure Check_Size (Width, Height : Natural) is
+   begin
+      if Width /= 0 and then Height > Natural'Last / Width then
+         raise Flyology_TUI.Components.Capacity_Error with
+           "progress group dimensions exceed addressable cell capacity";
+      end if;
+   end Check_Size;
+
    procedure Set_Width (Item : in out Model; Width : Natural) is
    begin
+      Check_Size (Width, Item.Count);
       Item.Columns := Width;
    end Set_Width;
 
@@ -80,6 +89,7 @@ package body Flyology_TUI.Components.Progress_Groups is
       if Value /= Value then
          raise Flyology_TUI.Components.Structure_Error;
       end if;
+      Check_Size (Item.Columns, Item.Count + 1);
       New_Entry :=
         (Id              => Id,
          Label           => Text.To_Unbounded_Wide_Wide_String (Label),
@@ -105,6 +115,7 @@ package body Flyology_TUI.Components.Progress_Groups is
       New_Entry : Row_Entry;
    begin
       Validate_New (Item, Id, Relative_Weight);
+      Check_Size (Item.Columns, Item.Count + 1);
       New_Entry :=
         (Id              => Id,
          Label           => Text.To_Unbounded_Wide_Wide_String (Label),
