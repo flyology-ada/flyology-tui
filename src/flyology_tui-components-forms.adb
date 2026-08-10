@@ -205,7 +205,7 @@ package body Flyology_TUI.Components.Forms is
          Result : Flyology_TUI.Surfaces.Surface :=
            Flyology_TUI.Surfaces.Create
              (Labels + 2 + Input_Width,
-              Natural (Item.Fields.Length));
+              Natural (Item.Fields.Length), Label_Appearance);
       begin
          for Index in Item.Fields.First_Index .. Item.Fields.Last_Index loop
             declare

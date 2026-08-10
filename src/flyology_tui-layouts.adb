@@ -1,4 +1,15 @@
+with Flyology_TUI.Components;
+
 package body Flyology_TUI.Layouts is
+
+   function Checked_Add (Left, Right : Natural) return Natural is
+   begin
+      if Right > Natural'Last - Left then
+         raise Flyology_TUI.Components.Capacity_Error with
+           "layout chrome exceeds surface capacity";
+      end if;
+      return Left + Right;
+   end Checked_Add;
 
    function Horizontal_Offset
      (Outer, Inner : Natural;
@@ -58,9 +69,29 @@ package body Flyology_TUI.Layouts is
       end case;
    end Border_Glyphs;
 
+   function Default_Chrome (Kind : Border_Kind)
+      return Flyology_TUI.Skins.Frame_Chrome
+   is
+      TL, H, TR, V, BL, BR : Wide_Wide_Character;
+   begin
+      Border_Glyphs (Kind, TL, H, TR, V, BL, BR);
+      return
+        (Border =>
+           (Top_Left => TL, Horizontal => H, Top_Right => TR,
+            Vertical => V, Bottom_Left => BL, Bottom_Right => BR),
+         others => <>);
+   end Default_Chrome;
+
    function Render
      (Item    : Block;
       Content : Flyology_TUI.Surfaces.Surface)
+      return Flyology_TUI.Surfaces.Surface is
+     (Render (Item, Content, Default_Chrome (Item.Border)));
+
+   function Render
+     (Item    : Block;
+      Content : Flyology_TUI.Surfaces.Surface;
+      Chrome  : Flyology_TUI.Skins.Frame_Chrome)
       return Flyology_TUI.Surfaces.Surface
    is
       Border_Size : constant Natural :=
@@ -71,23 +102,45 @@ package body Flyology_TUI.Layouts is
       Natural_Height : constant Natural :=
         Flyology_TUI.Surfaces.Height (Content)
         + Item.Padding.Top + Item.Padding.Bottom + Border_Size;
+      Shadow_Width : constant Natural :=
+        (if Item.Border = No_Border then 0 else Chrome.Shadow_X);
+      Shadow_Height : constant Natural :=
+        (if Item.Border = No_Border then 0 else Chrome.Shadow_Y);
       Result_Width : constant Natural :=
-        (if Item.Width = 0 then Natural_Width else Item.Width);
+        (if Item.Width = 0
+         then Checked_Add (Natural_Width, Shadow_Width)
+         else Item.Width);
       Result_Height : constant Natural :=
-        (if Item.Height = 0 then Natural_Height else Item.Height);
+        (if Item.Height = 0
+         then Checked_Add (Natural_Height, Shadow_Height)
+         else Item.Height);
+      Frame_Width : constant Natural :=
+        Result_Width -
+          Natural'Min
+            (Result_Width,
+             Shadow_Width);
+      Frame_Height : constant Natural :=
+        Result_Height -
+          Natural'Min
+            (Result_Height,
+             Shadow_Height);
       Result : Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Surfaces.Create
           (Result_Width, Result_Height, Item.Appearance);
+      Frame : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create
+          (Frame_Width, Frame_Height, Item.Appearance);
       Inset : constant Natural :=
         (if Item.Border = No_Border then 0 else 1);
       Inner_Width : constant Natural :=
-        Result_Width
+        Frame_Width
         - Natural'Min
-            (Result_Width, Item.Padding.Left + Item.Padding.Right + 2 * Inset);
+            (Frame_Width,
+             Item.Padding.Left + Item.Padding.Right + 2 * Inset);
       Inner_Height : constant Natural :=
-        Result_Height
+        Frame_Height
         - Natural'Min
-            (Result_Height,
+            (Frame_Height,
              Item.Padding.Top + Item.Padding.Bottom + 2 * Inset);
       Content_X : constant Natural :=
         Inset + Item.Padding.Left
@@ -102,34 +155,63 @@ package body Flyology_TUI.Layouts is
              Flyology_TUI.Surfaces.Height (Content),
              Item.Vertical);
    begin
+      if Item.Border /= No_Border then
+         if Frame_Width < Result_Width and then Result_Height > 0 then
+            for X in Frame_Width .. Result_Width - 1 loop
+               for Y in Natural'Min (Chrome.Shadow_Y, Result_Height - 1)
+                 .. Result_Height - 1
+               loop
+                  Result.Put (X, Y, " ", Chrome.Shadow);
+               end loop;
+            end loop;
+         end if;
+         if Frame_Height < Result_Height and then Result_Width > 0 then
+            for Y in Frame_Height .. Result_Height - 1 loop
+               for X in Natural'Min (Chrome.Shadow_X, Result_Width - 1)
+                 .. Result_Width - 1
+               loop
+                  Result.Put (X, Y, " ", Chrome.Shadow);
+               end loop;
+            end loop;
+         end if;
+      end if;
+
       if Item.Border /= No_Border
-        and then Result_Width >= 2
-        and then Result_Height >= 2
+        and then Frame_Width >= 2
+        and then Frame_Height >= 2
       then
          declare
-            TL, H, TR, V, BL, BR : Wide_Wide_Character;
+            Glyphs : constant Flyology_TUI.Skins.Border_Glyphs :=
+              Chrome.Border;
          begin
-            Border_Glyphs (Item.Border, TL, H, TR, V, BL, BR);
-            Result.Put (0, 0, (1 => TL), Item.Appearance);
-            Result.Put (Result_Width - 1, 0, (1 => TR), Item.Appearance);
-            Result.Put (0, Result_Height - 1, (1 => BL), Item.Appearance);
-            Result.Put
-              (Result_Width - 1,
-               Result_Height - 1,
-               (1 => BR),
+            Frame.Put (0, 0, (1 => Glyphs.Top_Left), Item.Appearance);
+            Frame.Put
+              (Frame_Width - 1, 0, (1 => Glyphs.Top_Right), Item.Appearance);
+            Frame.Put
+              (0, Frame_Height - 1,
+               (1 => Glyphs.Bottom_Left), Item.Appearance);
+            Frame.Put
+              (Frame_Width - 1,
+               Frame_Height - 1,
+               (1 => Glyphs.Bottom_Right),
                Item.Appearance);
-            for X in 1 .. Result_Width - 2 loop
-               Result.Put (X, 0, (1 => H), Item.Appearance);
-               Result.Put (X, Result_Height - 1, (1 => H), Item.Appearance);
+            for X in 1 .. Frame_Width - 2 loop
+               Frame.Put (X, 0, (1 => Glyphs.Horizontal), Item.Appearance);
+               Frame.Put
+                 (X, Frame_Height - 1,
+                  (1 => Glyphs.Horizontal), Item.Appearance);
             end loop;
-            for Y in 1 .. Result_Height - 2 loop
-               Result.Put (0, Y, (1 => V), Item.Appearance);
-               Result.Put (Result_Width - 1, Y, (1 => V), Item.Appearance);
+            for Y in 1 .. Frame_Height - 2 loop
+               Frame.Put (0, Y, (1 => Glyphs.Vertical), Item.Appearance);
+               Frame.Put
+                 (Frame_Width - 1, Y,
+                  (1 => Glyphs.Vertical), Item.Appearance);
             end loop;
          end;
       end if;
 
-      Result.Overlay (Content, Content_X, Content_Y);
+      Frame.Overlay (Content, Content_X, Content_Y);
+      Result.Overlay (Frame, 0, 0);
       return Result;
    end Render;
 

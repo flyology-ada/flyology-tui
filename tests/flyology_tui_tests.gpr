@@ -22,7 +22,8 @@ project Flyology_Tui_Tests is
       "menubar_tests.adb",
       "gradient_tests.adb",
       "responsive_geometry_tests.adb",
-      "dock_workspace_tests.adb");
+      "dock_workspace_tests.adb",
+      "skin_tests.adb");
 
    package Compiler is
       for Default_Switches ("Ada") use

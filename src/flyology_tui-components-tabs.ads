@@ -3,6 +3,7 @@ with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Mouse;
+with Flyology_TUI.Skins;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
 with Flyology_TUI.Themes;
@@ -62,6 +63,19 @@ package Flyology_TUI.Components.Tabs is
    function Present
      (Item      : Model;
       Width     : Natural;
+      Look      : Appearance;
+      Chrome    : Flyology_TUI.Skins.Tab_Chrome;
+      Has_Focus : Boolean := False) return Presentation;
+
+   function Present
+     (Item      : Model;
+      Width     : Natural;
+      Skin      : Flyology_TUI.Skins.Skin;
+      Has_Focus : Boolean := False) return Presentation;
+
+   function Present
+     (Item      : Model;
+      Width     : Natural;
       Theme     : Flyology_TUI.Themes.Theme;
       Has_Focus : Boolean := False) return Presentation;
 
@@ -107,6 +121,19 @@ package Flyology_TUI.Components.Tabs is
    function Render
      (Item      : Model;
       Look      : Appearance;
+      Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface;
+
+   function Render
+     (Item      : Model;
+      Look      : Appearance;
+      Chrome    : Flyology_TUI.Skins.Tab_Chrome;
+      Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface;
+
+   function Render
+     (Item      : Model;
+      Skin      : Flyology_TUI.Skins.Skin;
       Has_Focus : Boolean := False)
       return Flyology_TUI.Surfaces.Surface;
 

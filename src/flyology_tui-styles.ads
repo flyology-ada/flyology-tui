@@ -24,4 +24,8 @@ package Flyology_TUI.Styles is
       Color : Flyology_TUI.Colors.Color) return Style;
 
    function Emphasized (Item : Style) return Style;
+
+   --  Fill only unset foreground/background channels from Parent. Explicit
+   --  child colors and every child text attribute remain unchanged.
+   function Inherit_Colors (Item, Parent : Style) return Style;
 end Flyology_TUI.Styles;

@@ -30,6 +30,13 @@ package Flyology_TUI.Surfaces is
    function Element (Item : Surface; X, Y : Natural) return Cell
      with Pre => X < Width (Item) and then Y < Height (Item);
 
+   --  Return a copy whose unset foreground/background channels inherit from
+   --  Parent. Explicit child colors, attributes, glyphs, and continuations
+   --  are preserved.
+   function Inherit_Colors
+     (Item   : Surface;
+      Parent : Flyology_TUI.Styles.Style) return Surface;
+
    procedure Clear
      (Item : in out Surface;
       Fill : Flyology_TUI.Styles.Style := Flyology_TUI.Styles.Default);

@@ -165,7 +165,8 @@ package body Flyology_TUI.Components.Lists is
       Marker : constant Wide_Wide_String :=
         (1 => Wide_Wide_Character'Val (16#203A#), 2 => ' ');
       Result : Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Surfaces.Create (Item.Columns, Item.Rows);
+        Flyology_TUI.Surfaces.Create
+          (Item.Columns, Item.Rows, Appearance);
    begin
       if Item.Columns = 0 or else Item.Rows = 0 then
          return Result;

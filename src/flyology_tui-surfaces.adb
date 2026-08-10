@@ -71,6 +71,26 @@ package body Flyology_TUI.Surfaces is
    function Element (Item : Surface; X, Y : Natural) return Cell is
      (Item.Cells.Element (Index_Of (Item, X, Y)));
 
+   function Inherit_Colors
+     (Item   : Surface;
+      Parent : Flyology_TUI.Styles.Style) return Surface
+   is
+      Result : Surface := Item;
+   begin
+      if not Result.Cells.Is_Empty then
+         for Index in Result.Cells.First_Index .. Result.Cells.Last_Index loop
+            declare
+               Value : Cell := Result.Cells.Element (Index);
+            begin
+               Value.Appearance := Flyology_TUI.Styles.Inherit_Colors
+                 (Value.Appearance, Parent);
+               Result.Cells.Replace_Element (Index, Value);
+            end;
+         end loop;
+      end if;
+      return Result;
+   end Inherit_Colors;
+
    procedure Clear_Cell (Item : in out Surface; X, Y : Natural) is
       Index : Natural;
       Value : Cell;

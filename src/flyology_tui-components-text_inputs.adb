@@ -232,7 +232,7 @@ package body Flyology_TUI.Components.Text_Inputs is
       return Flyology_TUI.Surfaces.Surface
    is
       Result : Flyology_TUI.Surfaces.Surface :=
-        Flyology_TUI.Surfaces.Create (Item.Columns, 1);
+        Flyology_TUI.Surfaces.Create (Item.Columns, 1, Appearance);
       Current : constant Wide_Wide_String := Value (Item);
       First, Cursor_Cell : Natural;
    begin

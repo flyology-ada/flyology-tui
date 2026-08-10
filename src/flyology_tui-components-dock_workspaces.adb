@@ -482,7 +482,8 @@ package body Flyology_TUI.Components.Dock_Workspaces is
       Geometry   : Pane_Geometry_Array;
       Index      : Slot_Index;
       Content    : Flyology_TUI.Surfaces.Surface;
-      Look       : Appearance)
+      Look       : Appearance;
+      Chrome     : Flyology_TUI.Skins.Dock_Chrome)
    is
       State : Pane_State renames Item.Panes (Index);
       Area  : Pane_Geometry renames Geometry (Index);
@@ -504,7 +505,7 @@ package body Flyology_TUI.Components.Dock_Workspaces is
         (Area.Region.Width, Area.Region.Height,
          (if State.Collapsed then Rail_Style else Look.Dock));
       if State.Collapsed then
-         Layer.Put (0, 0, "+", Rail_Style);
+         Layer.Put (0, 0, (1 => Chrome.Expand), Rail_Style);
          if State.Dock in Dock_Left | Dock_Right then
             declare
                Name : constant Wide_Wide_String := Label (State.Id);
@@ -530,13 +531,15 @@ package body Flyology_TUI.Components.Dock_Workspaces is
            (Area.Header.Width, Area.Header.Height, Header_Style);
          if Area.Header.Width > 0 and then Area.Header.Height > 0 then
             if State.Collapsible then
-               Header.Put (0, 0, "-", Look.Action);
+               Header.Put (0, 0, (1 => Chrome.Collapse), Look.Action);
             end if;
             if Area.Header.Width > 2 then
                Header.Write (2, 0, Label (State.Id), Header_Style);
             end if;
             if Area.Header.Width > 1 and then State.Floatable then
-               Header.Put (Area.Header.Width - 1, 0, "^", Look.Action);
+               Header.Put
+                 (Area.Header.Width - 1, 0, (1 => Chrome.Float),
+                  Look.Action);
             end if;
             Layer.Overlay_Clipped (Header, 0, 0);
          end if;
@@ -555,14 +558,15 @@ package body Flyology_TUI.Components.Dock_Workspaces is
       Geometry : Pane_Geometry_Array;
       Index    : Slot_Index;
       Content  : Flyology_TUI.Surfaces.Surface;
-      Look     : Appearance)
+      Look     : Appearance;
+      Skin     : Flyology_TUI.Skins.Skin)
    is
       Area : constant Flyology_TUI.Geometry.Rectangle :=
         Geometry (Index).Region;
       Window : constant Flyology_TUI.Surfaces.Surface :=
         Item.Panes (Index).Window.Render
           (Label (Item.Panes (Index).Id), Content, Area,
-           Look.Floating_Window);
+           Look.Floating_Window, Skin.Window);
    begin
       Result.Overlay_Clipped (Window, Area.X, Area.Y);
       if Geometry (Index).Float_Action.Width > 0
@@ -573,14 +577,16 @@ package body Flyology_TUI.Components.Dock_Workspaces is
       then
          Result.Put
            (Natural (Geometry (Index).Float_Action.X),
-            Natural (Geometry (Index).Float_Action.Y), "v", Look.Action);
+            Natural (Geometry (Index).Float_Action.Y),
+            (1 => Skin.Dock.Dock), Look.Action);
       end if;
    end Paint_Floating;
 
    procedure Paint_Drop_Target
      (Result : in out Flyology_TUI.Surfaces.Surface;
       Side   : Dock_Side;
-      Style  : Flyology_TUI.Styles.Style)
+      Style  : Flyology_TUI.Styles.Style;
+      Chrome : Flyology_TUI.Skins.Dock_Chrome)
    is
    begin
       if Result.Width = 0 or else Result.Height = 0 then
@@ -593,7 +599,7 @@ package body Flyology_TUI.Components.Dock_Workspaces is
                  (if Side = Dock_Left then 0 else Result.Width - 1);
             begin
                for Y in 0 .. Result.Height - 1 loop
-                  Result.Put (X, Y, ":", Style);
+                  Result.Put (X, Y, (1 => Chrome.Drop_Vertical), Style);
                end loop;
             end;
          when Dock_Top | Dock_Bottom =>
@@ -602,7 +608,7 @@ package body Flyology_TUI.Components.Dock_Workspaces is
                  (if Side = Dock_Top then 0 else Result.Height - 1);
             begin
                for X in 0 .. Result.Width - 1 loop
-                  Result.Put (X, Y, ":", Style);
+                  Result.Put (X, Y, (1 => Chrome.Drop_Horizontal), Style);
                end loop;
             end;
       end case;
@@ -611,7 +617,16 @@ package body Flyology_TUI.Components.Dock_Workspaces is
    function Present
      (Item       : Model;
       Children   : Surface_Array;
-      Appearance : Dock_Workspaces.Appearance) return Presentation
+      Appearance : Dock_Workspaces.Appearance) return Presentation is
+     (Present
+        (Item, Children, Appearance,
+         Flyology_TUI.Skins.Charm_Default_Skin));
+
+   function Present
+     (Item       : Model;
+      Children   : Surface_Array;
+      Appearance : Dock_Workspaces.Appearance;
+      Skin       : Flyology_TUI.Skins.Skin) return Presentation
    is
       Result : Presentation;
       Top : constant Slot_Index := Item.Top_Floating;
@@ -636,7 +651,8 @@ package body Flyology_TUI.Components.Dock_Workspaces is
          then
             Paint_Dock
               (Result.Image, Item, Result.Panes, Index,
-               Child (Children, Item.Panes (Index).Id), Appearance);
+               Child (Children, Item.Panes (Index).Id), Appearance,
+               Skin.Dock);
          end if;
       end loop;
       for Index in Slot_Index loop
@@ -646,20 +662,29 @@ package body Flyology_TUI.Components.Dock_Workspaces is
          then
             Paint_Floating
               (Result.Image, Item, Result.Panes, Index,
-               Child (Children, Item.Panes (Index).Id), Appearance);
+               Child (Children, Item.Panes (Index).Id), Appearance, Skin);
          end if;
       end loop;
       if Item.Panes (Top).Used and then Item.Panes (Top).Place = Floating then
          Paint_Floating
            (Result.Image, Item, Result.Panes, Top,
-            Child (Children, Item.Panes (Top).Id), Appearance);
+            Child (Children, Item.Panes (Top).Id), Appearance, Skin);
       end if;
       if Item.Has_Drop_Target then
          Paint_Drop_Target
-           (Result.Image, Item.Drop_Target_Side, Appearance.Drop_Target);
+           (Result.Image, Item.Drop_Target_Side, Appearance.Drop_Target,
+            Skin.Dock);
       end if;
       return Result;
    end Present;
+
+   function Present
+     (Item     : Model;
+      Children : Surface_Array;
+      Skin     : Flyology_TUI.Skins.Skin) return Presentation
+   is (Present
+         (Item, Children,
+          From_Theme (Flyology_TUI.Themes.To_Theme (Skin.Palette)), Skin));
 
    function Present
      (Item     : Model;

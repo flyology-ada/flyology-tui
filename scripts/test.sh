@@ -75,6 +75,7 @@ esac
 ./bin/gradient_tests
 ./bin/responsive_geometry_tests
 ./bin/dock_workspace_tests
+./bin/skin_tests
 
 cd "$root_dir"
 ./scripts/test-posix-initial-size.sh

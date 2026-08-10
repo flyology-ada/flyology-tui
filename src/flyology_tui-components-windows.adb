@@ -413,6 +413,18 @@ package body Flyology_TUI.Components.Windows is
       Content    : Flyology_TUI.Surfaces.Surface;
       Workspace  : Flyology_TUI.Geometry.Rectangle;
       Appearance : Windows.Appearance)
+      return Flyology_TUI.Surfaces.Surface is
+     (Render
+        (Item, Title, Content, Workspace, Appearance,
+         Flyology_TUI.Skins.Charm_Default_Skin.Window));
+
+   function Render
+     (Item       : Model;
+      Title      : Wide_Wide_String;
+      Content    : Flyology_TUI.Surfaces.Surface;
+      Workspace  : Flyology_TUI.Geometry.Rectangle;
+      Appearance : Windows.Appearance;
+      Chrome     : Flyology_TUI.Skins.Window_Chrome)
       return Flyology_TUI.Surfaces.Surface
    is
       Frame_Style : constant Flyology_TUI.Styles.Style :=
@@ -445,6 +457,17 @@ package body Flyology_TUI.Components.Windows is
          else (if Item.Area.Width > 3 then Item.Area.Width - 3 else 0));
       Offset_X : constant Integer := Safe_Subtract (Item.Area.X, Workspace.X);
       Offset_Y : constant Integer := Safe_Subtract (Item.Area.Y, Workspace.Y);
+
+      procedure Put_Shadow (X, Y : Long_Long_Integer) is
+      begin
+         if X >= 0 and then Y >= 0
+           and then X < Long_Long_Integer (Result.Width)
+           and then Y < Long_Long_Integer (Result.Height)
+         then
+            Result.Put
+              (Natural (X), Natural (Y), " ", Chrome.Frame.Shadow);
+         end if;
+      end Put_Shadow;
    begin
       if Workspace.Width /= 0
         and then Workspace.Height > Natural'Last / Workspace.Width
@@ -463,30 +486,69 @@ package body Flyology_TUI.Components.Windows is
       Window := Flyology_TUI.Surfaces.Create
         (Item.Area.Width, Item.Area.Height, Content_Style);
 
+      declare
+         Shadow_X : constant Natural :=
+           Natural'Min (Chrome.Frame.Shadow_X, Workspace.Width);
+         Shadow_Y : constant Natural :=
+           Natural'Min (Chrome.Frame.Shadow_Y, Workspace.Height);
+      begin
+         if Shadow_X > 0 then
+            for DX in 0 .. Shadow_X - 1 loop
+               for Y in 0 .. Item.Area.Height - 1 loop
+                  Put_Shadow
+                    (Long_Long_Integer (Offset_X)
+                       + Long_Long_Integer (Item.Area.Width)
+                       + Long_Long_Integer (DX),
+                     Long_Long_Integer (Offset_Y)
+                       + Long_Long_Integer (Shadow_Y)
+                       + Long_Long_Integer (Y));
+               end loop;
+            end loop;
+         end if;
+         if Shadow_Y > 0 then
+            for DY in 0 .. Shadow_Y - 1 loop
+               for X in 0 .. Item.Area.Width - 1 loop
+                  Put_Shadow
+                    (Long_Long_Integer (Offset_X)
+                       + Long_Long_Integer (Shadow_X)
+                       + Long_Long_Integer (X),
+                     Long_Long_Integer (Offset_Y)
+                       + Long_Long_Integer (Item.Area.Height)
+                       + Long_Long_Integer (DY));
+               end loop;
+            end loop;
+         end if;
+      end;
+
       if Item.Area.Height > 0 then
          for X in 0 .. Item.Area.Width - 1 loop
             Window.Put
               (X,
                0,
-               (if X = 0 then "┌"
-                elsif X + 1 = Item.Area.Width then "┐"
-                else "─"),
+               (if X = 0 then (1 => Chrome.Frame.Border.Top_Left)
+                elsif X + 1 = Item.Area.Width
+                then (1 => Chrome.Frame.Border.Top_Right)
+                else (1 => Chrome.Frame.Border.Horizontal)),
                Frame_Style);
             if Item.Area.Height > 1 then
                Window.Put
                  (X,
                   Item.Area.Height - 1,
-                  (if X = 0 then "└"
-                   elsif X + 1 = Item.Area.Width then "┘"
-                   else "─"),
+                  (if X = 0 then (1 => Chrome.Frame.Border.Bottom_Left)
+                   elsif X + 1 = Item.Area.Width
+                   then (1 => Chrome.Frame.Border.Bottom_Right)
+                   else (1 => Chrome.Frame.Border.Horizontal)),
                   Frame_Style);
             end if;
          end loop;
          if Item.Area.Height > 2 then
             for Y in 1 .. Item.Area.Height - 2 loop
-               Window.Put (0, Y, "│", Frame_Style);
+               Window.Put
+                 (0, Y, (1 => Chrome.Frame.Border.Vertical), Frame_Style);
                if Item.Area.Width > 1 then
-                  Window.Put (Item.Area.Width - 1, Y, "│", Frame_Style);
+                  Window.Put
+                    (Item.Area.Width - 1, Y,
+                     (1 => Chrome.Frame.Border.Vertical), Frame_Style);
                end if;
             end loop;
          end if;
@@ -499,7 +561,8 @@ package body Flyology_TUI.Components.Windows is
          Window.Overlay_Clipped (Title_Layer, 2, 0);
       end if;
       if Item.Can_Close and then Item.Area.Width > 1 then
-         Window.Put (Item.Area.Width - 2, 0, "×", Close_Style);
+         Window.Put
+           (Item.Area.Width - 2, 0, (1 => Chrome.Close), Close_Style);
       end if;
       if Client_Width > 0 and then Client_Height > 0 then
          Client_Layer :=
@@ -511,6 +574,18 @@ package body Flyology_TUI.Components.Windows is
       Result.Overlay_Clipped (Window, Offset_X, Offset_Y);
       return Result;
    end Render;
+
+   function Render
+     (Item      : Model;
+      Title     : Wide_Wide_String;
+      Content   : Flyology_TUI.Surfaces.Surface;
+      Workspace : Flyology_TUI.Geometry.Rectangle;
+      Skin      : Flyology_TUI.Skins.Skin)
+      return Flyology_TUI.Surfaces.Surface
+   is (Render
+         (Item, Title, Content, Workspace,
+          From_Theme (Flyology_TUI.Themes.To_Theme (Skin.Palette)),
+          Skin.Window));
 
    function Render
      (Item      : Model;

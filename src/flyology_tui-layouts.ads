@@ -1,5 +1,6 @@
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
+with Flyology_TUI.Skins;
 
 package Flyology_TUI.Layouts is
    type Edges is record
@@ -27,6 +28,14 @@ package Flyology_TUI.Layouts is
    function Render
      (Item    : Block;
       Content : Flyology_TUI.Surfaces.Surface)
+      return Flyology_TUI.Surfaces.Surface;
+
+   --  Render with caller-selected structural chrome. The old overload keeps
+   --  Border_Kind's exact glyphs and has no shadow.
+   function Render
+     (Item    : Block;
+      Content : Flyology_TUI.Surfaces.Surface;
+      Chrome  : Flyology_TUI.Skins.Frame_Chrome)
       return Flyology_TUI.Surfaces.Surface;
 
    function Join_Horizontally

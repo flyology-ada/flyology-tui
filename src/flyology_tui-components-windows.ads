@@ -2,6 +2,7 @@ with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Mouse;
+with Flyology_TUI.Skins;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
 with Flyology_TUI.Themes;
@@ -94,6 +95,23 @@ package Flyology_TUI.Components.Windows is
       Content    : Flyology_TUI.Surfaces.Surface;
       Workspace  : Flyology_TUI.Geometry.Rectangle;
       Appearance : Windows.Appearance)
+      return Flyology_TUI.Surfaces.Surface;
+
+   function Render
+     (Item       : Model;
+      Title      : Wide_Wide_String;
+      Content    : Flyology_TUI.Surfaces.Surface;
+      Workspace  : Flyology_TUI.Geometry.Rectangle;
+      Appearance : Windows.Appearance;
+      Chrome     : Flyology_TUI.Skins.Window_Chrome)
+      return Flyology_TUI.Surfaces.Surface;
+
+   function Render
+     (Item      : Model;
+      Title     : Wide_Wide_String;
+      Content   : Flyology_TUI.Surfaces.Surface;
+      Workspace : Flyology_TUI.Geometry.Rectangle;
+      Skin      : Flyology_TUI.Skins.Skin)
       return Flyology_TUI.Surfaces.Surface;
 
    function Render

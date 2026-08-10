@@ -3,6 +3,7 @@ with Flyology_TUI.Components.Windows;
 with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
 with Flyology_TUI.Mouse;
+with Flyology_TUI.Skins;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
 with Flyology_TUI.Themes;
@@ -118,6 +119,15 @@ package Flyology_TUI.Components.Dock_Workspaces is
      (Item       : Model;
       Children   : Surface_Array;
       Appearance : Dock_Workspaces.Appearance) return Presentation;
+   function Present
+     (Item       : Model;
+      Children   : Surface_Array;
+      Appearance : Dock_Workspaces.Appearance;
+      Skin       : Flyology_TUI.Skins.Skin) return Presentation;
+   function Present
+     (Item     : Model;
+      Children : Surface_Array;
+      Skin     : Flyology_TUI.Skins.Skin) return Presentation;
    function Present
      (Item     : Model;
       Children : Surface_Array;

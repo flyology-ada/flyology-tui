@@ -176,6 +176,16 @@ package body Flyology_TUI.Components.Tabs is
      (Item      : Model;
       Width     : Natural;
       Look      : Appearance;
+      Has_Focus : Boolean := False) return Presentation is
+     (Present
+        (Item, Width, Look, Flyology_TUI.Skins.Charm_Default_Skin.Tabs,
+         Has_Focus));
+
+   function Present
+     (Item      : Model;
+      Width     : Natural;
+      Look      : Appearance;
+      Chrome    : Flyology_TUI.Skins.Tab_Chrome;
       Has_Focus : Boolean := False) return Presentation
    is
       Result : Presentation;
@@ -226,10 +236,16 @@ package body Flyology_TUI.Components.Tabs is
             Tab.Write
               (0, 0,
                (if Item.Active = Index
-                then "[" & Label (Item.Values.Element (Index - 1)) & "]"
+                then Chrome.Active_Left
+                  & Label (Item.Values.Element (Index - 1))
+                  & Chrome.Active_Right
                 elsif Has_Focus and then Item.Focused = Index
-                then ">" & Label (Item.Values.Element (Index - 1)) & " "
-                else " " & Label (Item.Values.Element (Index - 1)) & " "),
+                then Chrome.Focused_Left
+                  & Label (Item.Values.Element (Index - 1))
+                  & Chrome.Focused_Right
+                else Chrome.Normal_Left
+                  & Label (Item.Values.Element (Index - 1))
+                  & Chrome.Normal_Right),
                Style);
             Result.Frame_Value.Overlay_Clipped
               (Tab, Integer (Start) - Integer (View_Start), 0);
@@ -255,6 +271,14 @@ package body Flyology_TUI.Components.Tabs is
       end loop;
       return Result;
    end Present;
+
+   function Present
+     (Item      : Model;
+      Width     : Natural;
+      Skin      : Flyology_TUI.Skins.Skin;
+      Has_Focus : Boolean := False) return Presentation
+   is (Present
+         (Item, Width, From_Palette (Skin.Palette), Skin.Tabs, Has_Focus));
 
    function Present
      (Item      : Model;
@@ -510,6 +534,16 @@ package body Flyology_TUI.Components.Tabs is
      (Item      : Model;
       Look      : Appearance;
       Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface is
+     (Render
+        (Item, Look, Flyology_TUI.Skins.Charm_Default_Skin.Tabs,
+         Has_Focus));
+
+   function Render
+     (Item      : Model;
+      Look      : Appearance;
+      Chrome    : Flyology_TUI.Skins.Tab_Chrome;
+      Has_Focus : Boolean := False)
       return Flyology_TUI.Surfaces.Surface
    is
       Result : Flyology_TUI.Surfaces.Surface :=
@@ -531,16 +565,30 @@ package body Flyology_TUI.Components.Tabs is
             Result.Write
               (X, 0,
                (if Item.Active = Index
-                then "[" & Label (Item.Values.Element (Index - 1)) & "]"
+                then Chrome.Active_Left
+                  & Label (Item.Values.Element (Index - 1))
+                  & Chrome.Active_Right
                 elsif Has_Focus and then Item.Focused = Index
-                then ">" & Label (Item.Values.Element (Index - 1)) & " "
-                else " " & Label (Item.Values.Element (Index - 1)) & " "),
+                then Chrome.Focused_Left
+                  & Label (Item.Values.Element (Index - 1))
+                  & Chrome.Focused_Right
+                else Chrome.Normal_Left
+                  & Label (Item.Values.Element (Index - 1))
+                  & Chrome.Normal_Right),
                Style);
             X := X + Tab_Width (Item, Index);
          end;
       end loop;
       return Result;
    end Render;
+
+   function Render
+     (Item      : Model;
+      Skin      : Flyology_TUI.Skins.Skin;
+      Has_Focus : Boolean := False)
+      return Flyology_TUI.Surfaces.Surface
+   is (Render
+         (Item, From_Palette (Skin.Palette), Skin.Tabs, Has_Focus));
 
    function Render
      (Item      : Model;
