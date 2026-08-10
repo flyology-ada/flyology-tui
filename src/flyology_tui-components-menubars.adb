@@ -9,6 +9,7 @@ package body Flyology_TUI.Components.Menubars is
    use type Flyology_TUI.Events.Mouse_Action;
    use type Flyology_TUI.Events.Mouse_Button;
    use type Flyology_TUI.Events.Terminal_Event_Kind;
+   use type Revision_Number;
 
    function Action
      (Id : Item_Id; Menu : Menu_Id; Enabled : Boolean := True)
@@ -310,6 +311,19 @@ package body Flyology_TUI.Components.Menubars is
       end if;
    end Validate;
 
+   procedure Invalidate_Presentation (Item : in out Model) is
+   begin
+      Item.Presentation_Revision := Item.Presentation_Revision + 1;
+   end Invalidate_Presentation;
+
+   procedure Clear_Open_State (Item : in out Model) is
+   begin
+      Item.Open_Menus.Clear;
+      Item.Highlights.Clear;
+      Item.Armed_Menu := 0;
+      Item.Armed_Item := 0;
+   end Clear_Open_State;
+
    procedure Set_Content
      (Item : in out Model; Menus : Menu_Array; Items : Item_Array)
    is
@@ -322,9 +336,6 @@ package body Flyology_TUI.Components.Menubars is
       Valid_Path     : Boolean := True;
    begin
       Validate (Menus, Items);
-      if Item.Structure_Version = Natural'Last then
-         raise Flyology_TUI.Components.Capacity_Error;
-      end if;
       for Definition of Menus loop
          declare
             Value : Menu_Definition := Definition;
@@ -463,7 +474,7 @@ package body Flyology_TUI.Components.Menubars is
       Item.Focused := New_Focused;
       Item.Armed_Menu := 0;
       Item.Armed_Item := 0;
-      Item.Structure_Version := Item.Structure_Version + 1;
+      Item.Presentation_Revision := Item.Presentation_Revision + 1;
    end Set_Content;
 
    function Create
@@ -489,17 +500,25 @@ package body Flyology_TUI.Components.Menubars is
 
    procedure Close (Item : in out Model) is
    begin
-      Item.Open_Menus.Clear;
-      Item.Highlights.Clear;
-      Item.Armed_Menu := 0;
-      Item.Armed_Item := 0;
+      if not Item.Open_Menus.Is_Empty
+        or else not Item.Highlights.Is_Empty
+        or else Item.Armed_Menu /= 0
+        or else Item.Armed_Item /= 0
+      then
+         Invalidate_Presentation (Item);
+         Clear_Open_State (Item);
+      end if;
    end Close;
 
    procedure Set_Enabled (Item : in out Model; Enabled : Boolean) is
    begin
+      if Item.Enabled = Enabled then
+         return;
+      end if;
+      Invalidate_Presentation (Item);
       Item.Enabled := Enabled;
       if not Enabled then
-         Close (Item);
+         Clear_Open_State (Item);
       end if;
    end Set_Enabled;
 
@@ -513,13 +532,17 @@ package body Flyology_TUI.Components.Menubars is
          raise Flyology_TUI.Components.Structure_Error;
       end if;
       Value := Item.Menus.Element (Index - 1);
+      if Value.Enabled = Enabled then
+         return;
+      end if;
+      Invalidate_Presentation (Item);
       Value.Enabled := Enabled;
       Item.Menus.Replace_Element (Index - 1, Value);
       if not Enabled then
          if Item.Focused = Index then
             Item.Focused := First_Top (Item);
          end if;
-         Close (Item);
+         Clear_Open_State (Item);
       end if;
    end Set_Menu_Enabled;
 
@@ -536,6 +559,10 @@ package body Flyology_TUI.Components.Menubars is
       if Value.Kind = Separator_Item and then Enabled then
          raise Flyology_TUI.Components.Structure_Error;
       end if;
+      if Value.Enabled = Enabled and then Item.Armed_Item = 0 then
+         return;
+      end if;
+      Invalidate_Presentation (Item);
       Value.Enabled := Enabled;
       Item.Items.Replace_Element (Index - 1, Value);
       if not Enabled and then not Item.Highlights.Is_Empty then
@@ -556,30 +583,48 @@ package body Flyology_TUI.Components.Menubars is
    function Open_Depth (Item : Model) return Natural is
      (Natural (Item.Open_Menus.Length));
 
-   procedure Open_Top (Item : in out Model; Index : Natural) is
-   begin
-      Item.Open_Menus.Clear;
-      Item.Highlights.Clear;
-      if Item.Enabled
+   procedure Open_Top
+     (Item : in out Model; Index : Natural; Changed : out Boolean)
+   is
+      Valid : constant Boolean := Item.Enabled
         and then Index > 0
         and then Item.Menus.Element (Index - 1).Top_Level
-        and then Item.Menus.Element (Index - 1).Enabled
-      then
+        and then Item.Menus.Element (Index - 1).Enabled;
+      Highlight : constant Natural :=
+        (if Valid then First_Item (Item, Index, True) else 0);
+   begin
+      Changed :=
+        (if Valid then
+           Item.Focused /= Index
+           or else Natural (Item.Open_Menus.Length) /= 1
+           or else Item.Open_Menus.First_Element /= Index
+           or else Natural (Item.Highlights.Length) /= 1
+           or else Item.Highlights.First_Element /= Highlight
+         else not Item.Open_Menus.Is_Empty
+           or else not Item.Highlights.Is_Empty);
+      if not Changed then
+         return;
+      end if;
+      Invalidate_Presentation (Item);
+      Item.Open_Menus.Clear;
+      Item.Highlights.Clear;
+      if Valid then
          Item.Focused := Index;
          Item.Open_Menus.Append (Index);
-         Item.Highlights.Append (First_Item (Item, Index, True));
+         Item.Highlights.Append (Highlight);
       end if;
    end Open_Top;
 
    procedure Open_Menu (Item : in out Model; Id : Menu_Id) is
       Index : constant Natural := Find_Menu (Item.Menus, Id);
+      Changed : Boolean;
    begin
       if Index = 0
         or else not Item.Menus.Element (Index - 1).Top_Level
       then
          raise Flyology_TUI.Components.Structure_Error;
       end if;
-      Open_Top (Item, Index);
+      Open_Top (Item, Index, Changed);
    end Open_Menu;
 
    function Dismiss (Item : in out Model) return Update_Result is
@@ -587,6 +632,9 @@ package body Flyology_TUI.Components.Menubars is
       Was_Capturing : constant Boolean := Item.Capturing;
    begin
       Close (Item);
+      if Was_Capturing then
+         Invalidate_Presentation (Item);
+      end if;
       Item.Capturing := False;
       return
         (Kind  => No_Result,
@@ -630,6 +678,33 @@ package body Flyology_TUI.Components.Menubars is
       if Definition.Kind not in Check_Item | Radio_Item then
          raise Flyology_TUI.Components.Structure_Error;
       end if;
+      declare
+         State_Changes : Boolean := Item.Armed_Item /= 0;
+      begin
+         if Definition.Kind = Radio_Item and then Checked then
+            for Position in 1 .. Natural (Item.Items.Length) loop
+               declare
+                  Other : constant Stored_Item :=
+                    Item.Items.Element (Position - 1);
+               begin
+                  if Other.Kind = Radio_Item
+                    and then Other.Menu = Definition.Menu
+                    and then Other.Group = Definition.Group
+                    and then Item.Item_State.Element (Position - 1) /=
+                      (Position = Index)
+                  then
+                     State_Changes := True;
+                  end if;
+               end;
+            end loop;
+         elsif Item.Item_State.Element (Index - 1) /= Checked then
+            State_Changes := True;
+         end if;
+         if not State_Changes then
+            return;
+         end if;
+         Invalidate_Presentation (Item);
+      end;
       if Definition.Kind = Radio_Item and then Checked then
          for Position in 1 .. Natural (Item.Items.Length) loop
             declare
@@ -674,7 +749,10 @@ package body Flyology_TUI.Components.Menubars is
      (Item.Group_Id);
 
    procedure Open_Child
-     (Item : in out Model; Parent_Item : Natural; Parent_Depth : Positive)
+     (Item         : in out Model;
+      Parent_Item  : Natural;
+      Parent_Depth : Positive;
+      Changed      : out Boolean)
    is
       Definition : constant Stored_Item :=
         Item.Items.Element (Parent_Item - 1);
@@ -682,12 +760,25 @@ package body Flyology_TUI.Components.Menubars is
         (if Definition.Kind = Submenu_Item
          then Find_Menu (Item.Menus, Definition.Child) else 0);
    begin
+      Changed := False;
       if Child = 0
         or else not Item.Menus.Element (Child - 1).Enabled
         or else Parent_Depth >= Maximum_Depth
       then
          return;
       end if;
+      declare
+         Highlight : constant Natural := First_Item (Item, Child, True);
+      begin
+         Changed := Natural (Item.Open_Menus.Length) /= Parent_Depth + 1
+           or else Item.Open_Menus.Element (Parent_Depth) /= Child
+           or else Natural (Item.Highlights.Length) /= Parent_Depth + 1
+           or else Item.Highlights.Element (Parent_Depth) /= Highlight;
+         if not Changed then
+            return;
+         end if;
+         Invalidate_Presentation (Item);
+      end;
       while Natural (Item.Open_Menus.Length) > Parent_Depth loop
          Item.Open_Menus.Delete_Last;
          Item.Highlights.Delete_Last;
@@ -721,14 +812,14 @@ package body Flyology_TUI.Components.Menubars is
                Event => (Handled => True, others => <>));
          when Submenu_Item =>
             declare
-               Before : constant Natural := Item.Open_Depth;
+               Changed : Boolean;
             begin
-               Open_Child (Item, Index, Depth);
+               Open_Child (Item, Index, Depth, Changed);
                return
                  (Kind => No_Result,
                   Event =>
                     (Handled => True,
-                     Changed => Before /= Item.Open_Depth,
+                     Changed => Changed,
                      others => <>));
             end;
          when Action_Item =>
@@ -786,11 +877,15 @@ package body Flyology_TUI.Components.Menubars is
    end Same_Mnemonic;
 
    procedure Switch_Top
-     (Item : in out Model; Direction : Integer; Keep_Open : Boolean)
+     (Item      : in out Model;
+      Direction : Integer;
+      Keep_Open : Boolean;
+      Changed   : out Boolean)
    is
       Before : constant Natural := Item.Focused;
       Target : Natural;
    begin
+      Changed := False;
       if Item.Focused = 0 then
          Target := First_Top (Item);
       else
@@ -801,11 +896,13 @@ package body Flyology_TUI.Components.Menubars is
          end if;
       end if;
       if Target > 0 then
-         Item.Focused := Target;
          if Keep_Open then
-            Open_Top (Item, Target);
+            Open_Top (Item, Target, Changed);
          elsif Before /= Target then
+            Invalidate_Presentation (Item);
+            Item.Focused := Target;
             Item.Armed_Menu := 0;
+            Changed := True;
          end if;
       end if;
    end Switch_Top;
@@ -830,6 +927,9 @@ package body Flyology_TUI.Components.Menubars is
                     and then Same_Mnemonic
                       (Value, Item_Mnemonic (Definition.Id))
                   then
+                     if Item.Highlights.Last_Element /= Index then
+                        Invalidate_Presentation (Item);
+                     end if;
                      Item.Highlights.Replace_Element
                        (Natural (Item.Highlights.Length) - 1, Index);
                      return Activate_Index
@@ -849,10 +949,14 @@ package body Flyology_TUI.Components.Menubars is
               and then Same_Mnemonic
                 (Value, Menu_Mnemonic (Definition.Id))
             then
-               Open_Top (Item, Index);
-               return Plain
-                 ((Handled => True, Focus_Requested => True,
-                   Changed => True, others => <>));
+               declare
+                  Changed : Boolean;
+               begin
+                  Open_Top (Item, Index, Changed);
+                  return Plain
+                    ((Handled => True, Focus_Requested => True,
+                      Changed => Changed, others => <>));
+               end;
             end if;
          end;
       end loop;
@@ -895,6 +999,7 @@ package body Flyology_TUI.Components.Menubars is
          if not Is_Open (Item) then
             return Plain (Flyology_TUI.Components.Interactions.Ignored);
          elsif Item.Open_Menus.Length > 1 then
+            Invalidate_Presentation (Item);
             Item.Open_Menus.Delete_Last;
             Item.Highlights.Delete_Last;
             return Plain
@@ -908,45 +1013,66 @@ package body Flyology_TUI.Components.Menubars is
 
       if not Is_Open (Item) then
          if Item.Focused = 0 then
+            Invalidate_Presentation (Item);
             Item.Focused := First_Top (Item);
          end if;
          case Event.Key.Kind is
             when Flyology_TUI.Events.Arrow_Left_Key =>
-               Before := Item.Focused;
-               Switch_Top (Item, -1, False);
-               return Plain
-                 ((Handled => True, Focus_Requested => True,
-                   Changed => Before /= Item.Focused, others => <>));
+               declare
+                  Changed : Boolean;
+               begin
+                  Switch_Top (Item, -1, False, Changed);
+                  return Plain
+                    ((Handled => True, Focus_Requested => True,
+                      Changed => Changed, others => <>));
+               end;
             when Flyology_TUI.Events.Arrow_Right_Key =>
-               Before := Item.Focused;
-               Switch_Top (Item, 1, False);
-               return Plain
-                 ((Handled => True, Focus_Requested => True,
-                   Changed => Before /= Item.Focused, others => <>));
+               declare
+                  Changed : Boolean;
+               begin
+                  Switch_Top (Item, 1, False, Changed);
+                  return Plain
+                    ((Handled => True, Focus_Requested => True,
+                      Changed => Changed, others => <>));
+               end;
             when Flyology_TUI.Events.Home_Key =>
                Before := Item.Focused;
-               Item.Focused := First_Top (Item);
+               if Before /= First_Top (Item) then
+                  Invalidate_Presentation (Item);
+                  Item.Focused := First_Top (Item);
+               end if;
                return Plain
                  ((Handled => True, Focus_Requested => True,
                    Changed => Before /= Item.Focused, others => <>));
             when Flyology_TUI.Events.End_Key =>
                Before := Item.Focused;
-               Item.Focused := Last_Top (Item);
+               if Before /= Last_Top (Item) then
+                  Invalidate_Presentation (Item);
+                  Item.Focused := Last_Top (Item);
+               end if;
                return Plain
                  ((Handled => True, Focus_Requested => True,
                    Changed => Before /= Item.Focused, others => <>));
             when Flyology_TUI.Events.Arrow_Down_Key
                | Flyology_TUI.Events.Enter_Key =>
-               Open_Top (Item, Item.Focused);
-               return Plain
-                 ((Handled => True, Focus_Requested => True,
-                   Changed => True, others => <>));
-            when Flyology_TUI.Events.Text_Key =>
-               if Text.To_Wide_Wide_String (Event.Key.Value) = " " then
-                  Open_Top (Item, Item.Focused);
+               declare
+                  Changed : Boolean;
+               begin
+                  Open_Top (Item, Item.Focused, Changed);
                   return Plain
                     ((Handled => True, Focus_Requested => True,
-                      Changed => True, others => <>));
+                      Changed => Changed, others => <>));
+               end;
+            when Flyology_TUI.Events.Text_Key =>
+               if Text.To_Wide_Wide_String (Event.Key.Value) = " " then
+                  declare
+                     Changed : Boolean;
+                  begin
+                     Open_Top (Item, Item.Focused, Changed);
+                     return Plain
+                       ((Handled => True, Focus_Requested => True,
+                         Changed => Changed, others => <>));
+                  end;
                end if;
             when others => null;
          end case;
@@ -966,7 +1092,10 @@ package body Flyology_TUI.Components.Menubars is
                if Target = Highlight and then Highlight > 0 then
                   Target := Last_Item (Item, Menu_Index, True);
                end if;
-               Item.Highlights.Replace_Element (Depth - 1, Target);
+               if Target /= Highlight then
+                  Invalidate_Presentation (Item);
+                  Item.Highlights.Replace_Element (Depth - 1, Target);
+               end if;
                while Natural (Item.Open_Menus.Length) > Depth loop
                   Item.Open_Menus.Delete_Last;
                   Item.Highlights.Delete_Last;
@@ -981,55 +1110,62 @@ package body Flyology_TUI.Components.Menubars is
                if Target = Highlight and then Highlight > 0 then
                   Target := First_Item (Item, Menu_Index, True);
                end if;
-               Item.Highlights.Replace_Element (Depth - 1, Target);
+               if Target /= Highlight then
+                  Invalidate_Presentation (Item);
+                  Item.Highlights.Replace_Element (Depth - 1, Target);
+               end if;
                return Plain
                  ((Handled => True, Changed => Target /= Highlight,
                    others => <>));
             when Flyology_TUI.Events.Home_Key =>
                Target := First_Item (Item, Menu_Index, True);
-               Item.Highlights.Replace_Element (Depth - 1, Target);
+               if Target /= Highlight then
+                  Invalidate_Presentation (Item);
+                  Item.Highlights.Replace_Element (Depth - 1, Target);
+               end if;
                return Plain
                  ((Handled => True, Changed => Target /= Highlight,
                    others => <>));
             when Flyology_TUI.Events.End_Key =>
                Target := Last_Item (Item, Menu_Index, True);
-               Item.Highlights.Replace_Element (Depth - 1, Target);
+               if Target /= Highlight then
+                  Invalidate_Presentation (Item);
+                  Item.Highlights.Replace_Element (Depth - 1, Target);
+               end if;
                return Plain
                  ((Handled => True, Changed => Target /= Highlight,
                    others => <>));
             when Flyology_TUI.Events.Arrow_Left_Key =>
-               declare
-                  Before : constant Natural := Item.Focused;
-               begin
-                  if Depth > 1 then
-                     Item.Open_Menus.Delete_Last;
-                     Item.Highlights.Delete_Last;
+               if Depth > 1 then
+                  Invalidate_Presentation (Item);
+                  Item.Open_Menus.Delete_Last;
+                  Item.Highlights.Delete_Last;
+                  return Plain
+                    ((Handled => True, Changed => True, others => <>));
+               else
+                  declare
+                     Changed : Boolean;
+                  begin
+                     Switch_Top (Item, -1, True, Changed);
                      return Plain
-                       ((Handled => True, Changed => True, others => <>));
-                  else
-                     Switch_Top (Item, -1, True);
-                     return Plain
-                       ((Handled => True, Changed => Before /= Item.Focused,
-                         others => <>));
-                  end if;
-               end;
+                       ((Handled => True, Changed => Changed, others => <>));
+                  end;
+               end if;
             when Flyology_TUI.Events.Arrow_Right_Key =>
                declare
-                  Before_Depth : constant Natural := Item.Open_Depth;
-                  Before_Menu  : constant Natural := Item.Focused;
+                  Changed : Boolean := False;
                begin
                   if Highlight > 0
                     and then Item.Items.Element (Highlight - 1).Kind =
                       Submenu_Item
                   then
-                     Open_Child (Item, Highlight, Depth);
+                     Open_Child (Item, Highlight, Depth, Changed);
                   elsif Depth = 1 then
-                     Switch_Top (Item, 1, True);
+                     Switch_Top (Item, 1, True, Changed);
                   end if;
                   return Plain
                     ((Handled => True,
-                      Changed => Before_Depth /= Item.Open_Depth
-                        or else Before_Menu /= Item.Focused,
+                      Changed => Changed,
                       others => <>));
                end;
             when Flyology_TUI.Events.Enter_Key =>
@@ -1252,7 +1388,7 @@ package body Flyology_TUI.Components.Menubars is
       if Width /= 0 and then Height > Natural'Last / Width then
          raise Flyology_TUI.Components.Capacity_Error;
       end if;
-      Result.Version := Item.Structure_Version;
+      Result.Revision := Item.Presentation_Revision;
       Result.Frame_Value := Flyology_TUI.Surfaces.Create (Width, Height);
       Result.Bar_Value := Clip (X, Y, Width, 1, Width, Height);
       if Width = 0 or else Height = 0 then
@@ -1295,7 +1431,7 @@ package body Flyology_TUI.Components.Menubars is
                         Result.Menus.Append
                           (Menu_Hit'
                              (Id => Definition.Id, Index => Index,
-                              Region => Region));
+                              Depth => 0, Region => Region));
                      end if;
                      Offset := Capped_Add (Offset, Span, Width);
                   end;
@@ -1360,11 +1496,14 @@ package body Flyology_TUI.Components.Menubars is
                Row_Number : Natural := 0;
             begin
                Draw_Border (Popup, Look);
-               if Depth > 1 and then Menu_Region_Value.Width > 0 then
+               if Menu_Region_Value.Width > 0
+                 and then Menu_Region_Value.Height > 0
+               then
                   Result.Menus.Append
                     (Menu_Hit'
                        (Id => Item.Menus.Element (Menu_Index - 1).Id,
-                        Index => Menu_Index, Region => Menu_Region_Value));
+                        Index => Menu_Index, Depth => Depth,
+                        Region => Menu_Region_Value));
                end if;
                for Index in 1 .. Natural (Item.Items.Length) loop
                   declare
@@ -1546,35 +1685,67 @@ package body Flyology_TUI.Components.Menubars is
       return Flyology_TUI.Surfaces.Surface is
      (Frame (Present (Item, Width, Height, X, Y, Theme, Has_Focus)));
 
-   function Hit_Menu
-     (Layout : Presentation; Point : Flyology_TUI.Geometry.Point)
-      return Natural is
-   begin
-      for Hit of Layout.Menus loop
-         if Flyology_TUI.Geometry.Contains (Hit.Region, Point) then
-            return Hit.Index;
-         end if;
-      end loop;
-      return 0;
-   end Hit_Menu;
-
-   procedure Hit_Item
+   procedure Hit_Topmost
      (Layout : Presentation;
       Point  : Flyology_TUI.Geometry.Point;
-      Index  : out Natural;
-      Depth  : out Positive)
+      Menu_Index : out Natural;
+      Item_Index : out Natural;
+      Depth      : out Positive;
+      Overlay    : out Boolean)
    is
    begin
-      Index := 0;
+      Menu_Index := 0;
+      Item_Index := 0;
       Depth := 1;
-      for Hit of Layout.Items loop
-         if Flyology_TUI.Geometry.Contains (Hit.Region, Point) then
-            Index := Hit.Index;
-            Depth := Hit.Depth;
-            return;
-         end if;
-      end loop;
-   end Hit_Item;
+      Overlay := False;
+      if not Layout.Menus.Is_Empty then
+         for Position in reverse 0 .. Natural (Layout.Menus.Length) - 1 loop
+            declare
+               Hit : constant Menu_Hit := Layout.Menus.Element (Position);
+            begin
+               if Hit.Depth > 0
+                 and then Flyology_TUI.Geometry.Contains (Hit.Region, Point)
+               then
+                  Overlay := True;
+                  Depth := Positive (Hit.Depth);
+                  if not Layout.Items.Is_Empty then
+                     for Item_Position in reverse
+                       0 .. Natural (Layout.Items.Length) - 1
+                     loop
+                        declare
+                           Item_Hit_Value : constant Item_Hit :=
+                             Layout.Items.Element (Item_Position);
+                        begin
+                           if Item_Hit_Value.Depth = Depth
+                             and then Flyology_TUI.Geometry.Contains
+                               (Item_Hit_Value.Region, Point)
+                           then
+                              Item_Index := Item_Hit_Value.Index;
+                              return;
+                           end if;
+                        end;
+                     end loop;
+                  end if;
+                  return;
+               end if;
+            end;
+         end loop;
+      end if;
+      if not Layout.Menus.Is_Empty then
+         for Position in reverse 0 .. Natural (Layout.Menus.Length) - 1 loop
+            declare
+               Hit : constant Menu_Hit := Layout.Menus.Element (Position);
+            begin
+               if Hit.Depth = 0
+                 and then Flyology_TUI.Geometry.Contains (Hit.Region, Point)
+               then
+                  Menu_Index := Hit.Index;
+                  return;
+               end if;
+            end;
+         end loop;
+      end if;
+   end Hit_Topmost;
 
    function Handle
      (Item   : in out Model;
@@ -1586,38 +1757,47 @@ package body Flyology_TUI.Components.Menubars is
       Menu_Index : Natural;
       Item_Index : Natural;
       Depth : Positive;
+      Overlay : Boolean;
    begin
       if Event.Action = Flyology_TUI.Events.Mouse_Release
         and then Event.Button = Flyology_TUI.Events.Left_Button
         and then Item.Capturing
       then
-         Item.Capturing := False;
-         if Layout.Version = Item.Structure_Version
-           and then Item.Armed_Item > 0
-         then
-            Hit_Item (Layout, Point, Item_Index, Depth);
-            if Item_Index = Item.Armed_Item then
-               declare
-                  Result : Update_Result :=
-                    Activate_Index (Item, Item_Index, Depth);
-               begin
-                  Result.Event.Capture :=
-                    Flyology_TUI.Components.Interactions.Release_Capture;
-                  Result.Event.Focus_Requested := True;
-                  Item.Armed_Item := 0;
-                  Item.Armed_Menu := 0;
-                  return Result;
-               end;
+         declare
+            Armed : constant Natural := Item.Armed_Item;
+            Can_Activate : constant Boolean := Armed > 0
+              and then Item.Presentation_Revision =
+                Item.Capture_State_Revision
+              and then
+                (Layout.Revision = Item.Capture_Layout_Revision
+                 or else Layout.Revision = Item.Capture_State_Revision);
+         begin
+            Invalidate_Presentation (Item);
+            Item.Capturing := False;
+            Item.Armed_Item := 0;
+            Item.Armed_Menu := 0;
+            if Can_Activate then
+               Hit_Topmost
+                 (Layout, Point, Menu_Index, Item_Index, Depth, Overlay);
+               if Item_Index = Armed then
+                  declare
+                     Result : Update_Result :=
+                       Activate_Index (Item, Item_Index, Depth);
+                  begin
+                     Result.Event.Capture :=
+                       Flyology_TUI.Components.Interactions.Release_Capture;
+                     Result.Event.Focus_Requested := True;
+                     return Result;
+                  end;
+               end if;
             end if;
-         end if;
-         Item.Armed_Item := 0;
-         Item.Armed_Menu := 0;
-         return Plain
-           ((Handled => True,
-             Capture =>
-               Flyology_TUI.Components.Interactions.Release_Capture,
-             others => <>));
-      elsif Layout.Version /= Item.Structure_Version then
+            return Plain
+              ((Handled => True,
+                Capture =>
+                  Flyology_TUI.Components.Interactions.Release_Capture,
+                others => <>));
+         end;
+      elsif Layout.Revision /= Item.Presentation_Revision then
          return Plain
            ((Rejected => True, others => <>));
       elsif not Item.Enabled then
@@ -1626,45 +1806,52 @@ package body Flyology_TUI.Components.Menubars is
          return Plain (Flyology_TUI.Components.Interactions.Ignored);
       end if;
 
-      Menu_Index := Hit_Menu (Layout, Point);
-      if Menu_Index > 0
-        and then not Item.Menus.Element (Menu_Index - 1).Top_Level
-      then
-         Menu_Index := 0;
-      end if;
-      Hit_Item (Layout, Point, Item_Index, Depth);
-
+      Hit_Topmost
+        (Layout, Point, Menu_Index, Item_Index, Depth, Overlay);
       if Event.Action = Flyology_TUI.Events.Mouse_Move then
          if Menu_Index > 0
            and then Item.Menus.Element (Menu_Index - 1).Enabled
            and then Is_Open (Item)
            and then Item.Open_Menus.First_Element /= Menu_Index
          then
-            Open_Top (Item, Menu_Index);
-            return Plain
-              ((Handled => True, Changed => True, others => <>));
+            declare
+               Changed : Boolean;
+            begin
+               Open_Top (Item, Menu_Index, Changed);
+               return Plain
+                 ((Handled => True, Changed => Changed, others => <>));
+            end;
          elsif Item_Index > 0 and then Is_Selectable (Item, Item_Index) then
             declare
                Before : constant Natural :=
                  Item.Highlights.Element (Depth - 1);
                Definition : constant Stored_Item :=
                  Item.Items.Element (Item_Index - 1);
-               Old_Depth : constant Natural :=
-                 Natural (Item.Open_Menus.Length);
+               Changed : Boolean := Before /= Item_Index;
+               Path_Changed : Boolean;
             begin
-               Item.Highlights.Replace_Element (Depth - 1, Item_Index);
+               if Changed then
+                  Invalidate_Presentation (Item);
+                  Item.Highlights.Replace_Element (Depth - 1, Item_Index);
+               end if;
                if Definition.Kind = Submenu_Item then
-                  Open_Child (Item, Item_Index, Depth);
+                  Open_Child (Item, Item_Index, Depth, Path_Changed);
+                  Changed := Changed or else Path_Changed;
                else
-                  while Natural (Item.Open_Menus.Length) > Depth loop
-                     Item.Open_Menus.Delete_Last;
-                     Item.Highlights.Delete_Last;
-                  end loop;
+                  Path_Changed :=
+                    Natural (Item.Open_Menus.Length) > Depth;
+                  if Path_Changed then
+                     Invalidate_Presentation (Item);
+                     while Natural (Item.Open_Menus.Length) > Depth loop
+                        Item.Open_Menus.Delete_Last;
+                        Item.Highlights.Delete_Last;
+                     end loop;
+                     Changed := True;
+                  end if;
                end if;
                return Plain
                  ((Handled => True,
-                   Changed => Before /= Item_Index
-                     or else Old_Depth /= Natural (Item.Open_Menus.Length),
+                   Changed => Changed,
                    others => <>));
             end;
          end if;
@@ -1683,14 +1870,16 @@ package body Flyology_TUI.Components.Menubars is
         and then Item.Menus.Element (Menu_Index - 1).Enabled
       then
          declare
-            Changed : constant Boolean :=
-              not Is_Open (Item)
-              or else Item.Open_Menus.First_Element /= Menu_Index;
+            Changed : Boolean;
+            Press_Revision : constant Revision_Number := Layout.Revision;
          begin
-            Open_Top (Item, Menu_Index);
+            Open_Top (Item, Menu_Index, Changed);
+            Invalidate_Presentation (Item);
             Item.Armed_Menu := Menu_Index;
             Item.Armed_Item := 0;
             Item.Capturing := True;
+            Item.Capture_Layout_Revision := Press_Revision;
+            Item.Capture_State_Revision := Item.Presentation_Revision;
             return Plain
               ((Handled => True, Focus_Requested => True,
                 Changed => Changed,
@@ -1702,18 +1891,29 @@ package body Flyology_TUI.Components.Menubars is
          if not Is_Selectable (Item, Item_Index) then
             return Plain ((Handled => True, others => <>));
          end if;
-         Item.Highlights.Replace_Element (Depth - 1, Item_Index);
-         Item.Armed_Item := Item_Index;
-         Item.Armed_Menu := 0;
-         Item.Capturing := True;
-         return Plain
-           ((Handled => True, Focus_Requested => True,
-             Changed => True,
-             Capture =>
-               Flyology_TUI.Components.Interactions.Acquire_Capture,
-             others => <>));
+         declare
+            Changed : constant Boolean :=
+              Item.Highlights.Element (Depth - 1) /= Item_Index;
+            Press_Revision : constant Revision_Number := Layout.Revision;
+         begin
+            Invalidate_Presentation (Item);
+            if Changed then
+               Item.Highlights.Replace_Element (Depth - 1, Item_Index);
+            end if;
+            Item.Armed_Item := Item_Index;
+            Item.Armed_Menu := 0;
+            Item.Capturing := True;
+            Item.Capture_Layout_Revision := Press_Revision;
+            Item.Capture_State_Revision := Item.Presentation_Revision;
+            return Plain
+              ((Handled => True, Focus_Requested => True,
+                Changed => Changed,
+                Capture =>
+                  Flyology_TUI.Components.Interactions.Acquire_Capture,
+                others => <>));
+         end;
       end if;
-      if Is_Open (Item) then
+      if Overlay or else Is_Open (Item) then
          return Dismiss (Item);
       end if;
       return Plain (Flyology_TUI.Components.Interactions.Ignored);

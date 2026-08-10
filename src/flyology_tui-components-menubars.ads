@@ -1,4 +1,5 @@
 with Ada.Containers.Vectors;
+with Interfaces;
 with Flyology_TUI.Components.Interactions;
 with Flyology_TUI.Events;
 with Flyology_TUI.Geometry;
@@ -204,15 +205,17 @@ package Flyology_TUI.Components.Menubars is
    function Handle
      (Item : in out Model; Event : Flyology_TUI.Events.Terminal_Event)
       return Update_Result;
-   --  Event coordinates are local to Presentation.Frame. A presentation from
-   --  before Set_Content is rejected atomically, except a matching captured
-   --  left release still relinquishes application capture ownership.
+   --  Event coordinates are local to Presentation.Frame. Any presentation
+   --  predating a render- or routing-affecting mutation is rejected. A
+   --  matching captured left release always relinquishes application capture;
+   --  it activates only when no mutation invalidated the original press.
    function Handle
      (Item   : in out Model;
       Event  : Flyology_TUI.Mouse.Local_Event;
       Layout : Presentation) return Update_Result;
 
 private
+   subtype Revision_Number is Interfaces.Unsigned_64;
    type Stored_Item is record
       Kind    : Item_Kind := Action_Item;
       Id      : Item_Id;
@@ -243,7 +246,9 @@ private
       Armed_Item  : Natural := 0;
       Capturing   : Boolean := False;
       Enabled     : Boolean := True;
-      Structure_Version : Natural := 0;
+      Presentation_Revision   : Revision_Number := 0;
+      Capture_Layout_Revision : Revision_Number := 0;
+      Capture_State_Revision  : Revision_Number := 0;
    end record;
 
    type Update_Result (Kind : Result_Kind := No_Result) is record
@@ -267,6 +272,7 @@ private
    type Menu_Hit is record
       Id     : Menu_Id;
       Index  : Natural := 0;
+      Depth  : Natural := 0;
       Region : Flyology_TUI.Geometry.Rectangle;
    end record;
    package Menu_Hit_Vectors is new Ada.Containers.Vectors
@@ -286,6 +292,6 @@ private
       Bar_Value   : Flyology_TUI.Geometry.Rectangle;
       Menus       : Menu_Hit_Vectors.Vector;
       Items       : Item_Hit_Vectors.Vector;
-      Version     : Natural := 0;
+      Revision    : Revision_Number := 0;
    end record;
 end Flyology_TUI.Components.Menubars;

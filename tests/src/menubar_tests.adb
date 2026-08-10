@@ -160,6 +160,17 @@ procedure Menubar_Tests is
      (X => Region.X + Integer (Region.Width / 2),
       Y => Region.Y + Integer (Region.Height / 2));
 
+   procedure Assert_Stale
+     (Item    : in out Menus.Model;
+      Layout  : Menus.Presentation;
+      Message : String)
+   is
+      Result : constant Menus.Update_Result := Item.Handle
+        (Pointer (-1, -1, Flyology_TUI.Events.Mouse_Move), Layout);
+   begin
+      Assert (Menus.Interaction (Result).Rejected, Message);
+   end Assert_Stale;
+
    procedure Test_Create_And_State is
       Item : Menus.Model;
    begin
@@ -382,6 +393,7 @@ procedure Menubar_Tests is
             "later left release did not unwind capture without activation");
       end;
 
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
       Result := Item.Handle
         (Pointer (79, 19, Flyology_TUI.Events.Mouse_Click), Layout);
       Assert
@@ -449,6 +461,208 @@ procedure Menubar_Tests is
         (not Menus.Interaction (Result).Handled,
          "disabled menubar consumed keyboard input");
    end Test_Mouse_Capture_And_Nesting;
+
+   procedure Test_Presentation_Revisions is
+      Item : Menus.Model := Menus.Create (Base_Menus, Base_Items);
+      Layout : Menus.Presentation;
+      Result : Menus.Update_Result;
+   begin
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      Item.Set_Enabled (False);
+      Assert_Stale (Item, Layout, "Set_Enabled retained stale routing");
+      Item.Set_Enabled (True);
+
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      Item.Set_Menu_Enabled (Edit_Menu, False);
+      Assert_Stale
+        (Item, Layout, "Set_Menu_Enabled retained stale routing");
+      Item.Set_Menu_Enabled (Edit_Menu, True);
+
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      Item.Set_Item_Enabled (New_Item, False);
+      Assert_Stale
+        (Item, Layout, "Set_Item_Enabled retained stale routing");
+      Item.Set_Item_Enabled (New_Item, True);
+
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      Item.Set_Checked (Auto_Save_Item, True);
+      Assert_Stale (Item, Layout, "Set_Checked retained stale marker routing");
+
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Right_Key));
+      Assert
+        (Menus.Interaction (Result).Changed,
+         "focus-changing keyboard input reported no change");
+      Assert_Stale (Item, Layout, "keyboard focus retained stale routing");
+
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      Item.Open_Menu (File_Menu);
+      Assert_Stale (Item, Layout, "Open_Menu retained stale routing");
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      Item.Close;
+      Assert_Stale
+        (Item, Layout, "Close retained stale item depths or crashed");
+
+      Item.Open_Menu (File_Menu);
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Down_Key));
+      Assert
+        (Menus.Interaction (Result).Changed,
+         "highlight-changing keyboard input reported no change");
+      Assert_Stale
+        (Item, Layout, "keyboard highlight retained stale routing");
+
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      declare
+         Region : constant Flyology_TUI.Geometry.Rectangle :=
+           Menus.Item_Region (Layout, Mode_A_Item);
+         Point : constant Flyology_TUI.Geometry.Point := Center (Region);
+      begin
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Move),
+            Layout);
+         Assert
+           (Menus.Interaction (Result).Changed,
+            "highlight-changing hover reported no change");
+      end;
+      Assert_Stale (Item, Layout, "mouse hover retained stale routing");
+
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      declare
+         Region : constant Flyology_TUI.Geometry.Rectangle :=
+           Menus.Item_Region (Layout, Mode_A_Item);
+         Point : constant Flyology_TUI.Geometry.Point := Center (Region);
+      begin
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Click),
+            Layout);
+         Assert
+           (not Menus.Interaction (Result).Changed
+            and then Menus.Interaction (Result).Capture =
+              Flyology_TUI.Components.Interactions.Acquire_Capture,
+            "same-highlight press confused capture with presentation change");
+      end;
+      Assert_Stale (Item, Layout, "mouse press retained stale routing");
+      Result := Item.Handle
+        (Pointer (-1, -1, Flyology_TUI.Events.Mouse_Release), Layout);
+      Assert
+        (Menus.Interaction (Result).Capture =
+           Flyology_TUI.Components.Interactions.Release_Capture,
+         "press snapshot did not permit its matching stale release");
+
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      Result := Item.Dismiss;
+      Assert
+        (Menus.Interaction (Result).Changed,
+         "dismissal did not report its open-state change");
+      Assert_Stale (Item, Layout, "Dismiss retained stale routing");
+   end Test_Presentation_Revisions;
+
+   procedure Test_Exact_Submenu_And_Overlay_Routing is
+      Item : Menus.Model := Menus.Create (Base_Menus, Base_Items);
+      Layout : Menus.Presentation;
+      Result : Menus.Update_Result;
+
+      procedure Open_Recent is
+      begin
+         Item.Open_Menu (File_Menu);
+         Result := Item.Handle (Key (Flyology_TUI.Events.End_Key));
+         Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Right_Key));
+         Assert (Item.Open_Depth = 2, "nested overlay setup failed");
+      end Open_Recent;
+   begin
+      Open_Recent;
+      Result := Item.Handle (Key (Flyology_TUI.Events.Arrow_Down_Key));
+      Assert
+        (Item.Highlighted_Item = More_Submenu_Item,
+         "submenu highlight setup failed");
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      declare
+         Region : constant Flyology_TUI.Geometry.Rectangle :=
+           Menus.Item_Region (Layout, Recent_Submenu_Item);
+         Point : constant Flyology_TUI.Geometry.Point := Center (Region);
+      begin
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Click),
+            Layout);
+         Assert
+           (not Menus.Interaction (Result).Changed,
+            "unchanged parent press reported a presentation change");
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Release),
+            Layout);
+         Assert
+           (Menus.Interaction (Result).Changed
+            and then Item.Highlighted_Item = Recent_One_Item,
+            "same-depth submenu reset was not reported as changed");
+      end;
+
+      Layout := Item.Present (80, 20, 0, 0, Flyology_TUI.Themes.Default);
+      declare
+         Region : constant Flyology_TUI.Geometry.Rectangle :=
+           Menus.Item_Region (Layout, Recent_Submenu_Item);
+         Point : constant Flyology_TUI.Geometry.Point := Center (Region);
+      begin
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Click),
+            Layout);
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Release),
+            Layout);
+         Assert
+           (not Menus.Interaction (Result).Changed,
+            "unchanged open submenu reported a presentation change");
+      end;
+
+      Item.Close;
+      Open_Recent;
+      Layout := Item.Present (12, 4, 0, 0, Flyology_TUI.Themes.Default);
+      declare
+         Child : constant Flyology_TUI.Geometry.Rectangle :=
+           Menus.Item_Region (Layout, Recent_One_Item);
+         Parent : constant Flyology_TUI.Geometry.Rectangle :=
+           Menus.Item_Region (Layout, New_Item);
+         Point : constant Flyology_TUI.Geometry.Point := Center (Child);
+      begin
+         Assert
+           (Flyology_TUI.Geometry.Contains (Parent, Point),
+            "tiny popup setup did not overlap parent and child rows");
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Click),
+            Layout);
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Release),
+            Layout);
+         Assert
+           (Result.Kind = Menus.Action_Activated
+            and then Menus.Activated_Item (Result) = Recent_One_Item,
+            "topmost child item did not win overlapping hit routing");
+      end;
+
+      Open_Recent;
+      Layout := Item.Present (12, 4, 0, 0, Flyology_TUI.Themes.Default);
+      declare
+         Header : constant Flyology_TUI.Geometry.Rectangle :=
+           Menus.Menu_Region (Layout, File_Menu);
+         Child : constant Flyology_TUI.Geometry.Rectangle :=
+           Menus.Menu_Region (Layout, Recent_Menu);
+         Point : constant Flyology_TUI.Geometry.Point := Center (Header);
+      begin
+         Assert
+           (Flyology_TUI.Geometry.Contains (Child, Point),
+            "tiny popup setup did not overlap its bar header");
+         Result := Item.Handle
+           (Pointer (Point.X, Point.Y, Flyology_TUI.Events.Mouse_Click),
+            Layout);
+         Assert
+           (Menus.Interaction (Result).Handled
+            and then Menus.Interaction (Result).Changed
+            and then Menus.Interaction (Result).Capture =
+              Flyology_TUI.Components.Interactions.No_Capture_Change
+            and then not Item.Is_Open,
+            "covered header routed ahead of the topmost child overlay");
+      end;
+   end Test_Exact_Submenu_And_Overlay_Routing;
 
    procedure Test_Stable_Atomic_And_Stale is
       Item : Menus.Model := Menus.Create (Base_Menus, Base_Items);
@@ -677,6 +891,8 @@ begin
    Test_Keyboard;
    Test_Mouse_And_Presentation;
    Test_Mouse_Capture_And_Nesting;
+   Test_Presentation_Revisions;
+   Test_Exact_Submenu_And_Overlay_Routing;
    Test_Stable_Atomic_And_Stale;
    Test_Structure_Failures;
    Test_Tiny_Extreme_And_Appearance;
