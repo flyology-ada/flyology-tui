@@ -940,32 +940,34 @@ procedure Kitchen_Sink is
    function Text_Area_Look (Item : Model)
      return Flyology_TUI.Components.Text_Areas.Appearance;
 
+   function Panel_Block
+     (Width, Height : Natural;
+      Appearance    : Flyology_TUI.Styles.Style :=
+        Flyology_TUI.Styles.Default)
+      return Flyology_TUI.Layouts.Block
+   is
+     ((Width      => Width,
+       Height     => Height,
+       Padding    => (Top => 1, Right => 1, Bottom => 1, Left => 1),
+       Border     => Flyology_TUI.Layouts.Rounded,
+       Appearance => Appearance,
+       others     => <>));
+
    function Panel_Content
      (Item   : Model;
       Region : Flyology_TUI.Geometry.Rectangle)
       return Flyology_TUI.Geometry.Rectangle
    is
       Skin : constant Flyology_TUI.Skins.Skin := Active_Skin (Item);
-      Left : constant Natural := 2;
-      Centered : constant Boolean :=
-        Skin.Panel.Title = Flyology_TUI.Skins.Centered_Title;
-      Top : constant Natural := (if Centered then 2 else 4);
-      Right : constant Natural :=
-        (if Centered then 2 + Skin.Panel.Frame.Shadow_X else 2);
-      Bottom : constant Natural :=
-        (if Centered then 2 + Skin.Panel.Frame.Shadow_Y else 1);
-      Horizontal : constant Natural := Left + Right;
-      Vertical : constant Natural := Top + Bottom;
+      Local : constant Flyology_TUI.Geometry.Rectangle :=
+        Flyology_TUI.Layouts.Panel_Content_Region
+          (Panel_Block (Region.Width, Region.Height), Skin.Panel);
    begin
       return
-        (X      => Region.X + Integer (Natural'Min (Left, Region.Width)),
-         Y      => Region.Y + Integer (Natural'Min (Top, Region.Height)),
-         Width  =>
-           (if Region.Width > Horizontal
-            then Region.Width - Horizontal else 0),
-         Height =>
-           (if Region.Height > Vertical
-            then Region.Height - Vertical else 0));
+        (X      => Region.X + Local.X,
+         Y      => Region.Y + Local.Y,
+         Width  => Local.Width,
+         Height => Local.Height);
    end Panel_Content;
 
    function Origin
@@ -1166,7 +1168,7 @@ procedure Kitchen_Sink is
 
       case Current_Page (Item) is
          when Basics_Page | Controls_Page =>
-            Four_Cards (112, Natural'Min (23, Result.Content.Height));
+            Four_Cards (112, Natural'Min (24, Result.Content.Height));
          when Navigation_Page =>
             Frame := Centered (120, Natural'Min (32, Result.Content.Height));
             Gap := (if Frame.Height > 2 then 1 else 0);
@@ -3866,15 +3868,12 @@ procedure Kitchen_Sink is
       Styled_Body : constant Flyology_TUI.Surfaces.Surface :=
         Body_Surface.Inherit_Colors (Skin.Dialog);
       Box : constant Flyology_TUI.Layouts.Block :=
-        (Width      => Width,
-         Height     => Height,
-         Padding    => (Top => 1, Right => 1, Bottom => 1, Left => 1),
-         Border     => Flyology_TUI.Layouts.Rounded,
-         Appearance =>
+        Panel_Block
+          (Width,
+           Height,
            (if Skin.Panel.Title = Flyology_TUI.Skins.Centered_Title
             then Dialog_Frame
-            elsif Is_Active then Accent else Muted),
-         others     => <>);
+            elsif Is_Active then Accent else Muted));
       Result : Flyology_TUI.Surfaces.Surface :=
         Flyology_TUI.Layouts.Render (Box, Styled_Body, Skin.Panel.Frame);
    begin
@@ -5441,7 +5440,7 @@ procedure Kitchen_Sink is
       Assert
         (Geometry.First.X = 39
          and then Geometry.First.Width + Geometry.Second.Width + 2 = 112
-         and then Geometry.First.Height + Geometry.Third.Height + 2 = 23,
+         and then Geometry.First.Height + Geometry.Third.Height + 2 = 24,
          "wide gallery was not centered at its maximum working size");
       Assert
         (Geometry.Vertical_Scroll_Region.Height > 2
@@ -5943,7 +5942,12 @@ procedure Kitchen_Sink is
       Geometry := Layout (Item);
       Assert
         (Visible_Dropdown_Bounds (Item, Geometry).Height = 0
-         and then Geometry.Dropdown_Origin.Y = Geometry.Help.Y,
+         and then Fits
+           (Geometry.Fourth,
+            (Geometry.Dropdown_Origin.X,
+             Geometry.Dropdown_Origin.Y,
+             0,
+             0)),
          "small layout did not fully clip the retained dropdown");
       Handle_Mouse
         (Item,

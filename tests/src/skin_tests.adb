@@ -180,6 +180,140 @@ procedure Skin_Tests is
          "oversized frame content overwrote the reserved hard shadow");
    end Test_Frame_Chrome;
 
+   procedure Test_Panel_Content_Geometry is
+      Charm : constant Flyology_TUI.Skins.Skin :=
+        Flyology_TUI.Skins.Charm_Default_Skin;
+      Turbo : constant Flyology_TUI.Skins.Skin :=
+        Flyology_TUI.Skins.Turbo_Vision_Skin;
+      Box : constant Flyology_TUI.Layouts.Block :=
+        (Width => 12, Height => 9,
+         Padding => (Top => 1, Right => 1, Bottom => 1, Left => 1),
+         Border => Flyology_TUI.Layouts.Rounded,
+         others => <>);
+      Charm_Region : constant Flyology_TUI.Geometry.Rectangle :=
+        Flyology_TUI.Layouts.Panel_Content_Region (Box, Charm.Panel);
+      Turbo_Region : constant Flyology_TUI.Geometry.Rectangle :=
+        Flyology_TUI.Layouts.Panel_Content_Region (Box, Turbo.Panel);
+
+      function Filled
+        (Width, Height : Natural;
+         Value         : Wide_Wide_Character;
+         Appearance    : Flyology_TUI.Styles.Style)
+         return Flyology_TUI.Surfaces.Surface
+      is
+         Result : Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Surfaces.Create (Width, Height, Appearance);
+      begin
+         if Width > 0 and then Height > 0 then
+            for Y in 0 .. Height - 1 loop
+               for X in 0 .. Width - 1 loop
+                  Result.Put (X, Y, (1 => Value), Appearance);
+               end loop;
+            end loop;
+         end if;
+         return Result;
+      end Filled;
+
+      Charm_Content : constant Flyology_TUI.Surfaces.Surface :=
+        Filled
+          (Charm_Region.Width, Charm_Region.Height, 'c',
+           Charm.Palette.Content);
+      Charm_Heading : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.From_Text ("title", Charm.Palette.Title);
+      Charm_Frame : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Render
+          (Box,
+           Flyology_TUI.Layouts.Join_Vertically
+             (Charm_Heading, Charm_Content, Gap => 1),
+           Charm.Panel.Frame);
+      Turbo_Content : constant Flyology_TUI.Surfaces.Surface :=
+        Filled
+          (Turbo_Region.Width, Turbo_Region.Height, 't',
+           Turbo.Palette.Content);
+      Turbo_Frame : constant Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Layouts.Render
+          (Box, Turbo_Content, Turbo.Panel.Frame);
+   begin
+      Assert
+        (Charm_Region = (2, 4, 8, 3),
+         "Charm panel content geometry lost its heading reservation");
+      Assert
+        (Turbo_Region = (2, 2, 7, 4),
+         "Turbo panel content geometry included its hard shadow");
+
+      for Y in 0 .. Charm_Region.Height - 1 loop
+         for X in 0 .. Charm_Region.Width - 1 loop
+            Assert
+              (Glyph
+                 (Charm_Frame,
+                  Natural (Charm_Region.X) + X,
+                  Natural (Charm_Region.Y) + Y) = "c",
+               "Charm rendered content diverged from its published region");
+         end loop;
+      end loop;
+      for Y in 0 .. Turbo_Region.Height - 1 loop
+         for X in 0 .. Turbo_Region.Width - 1 loop
+            Assert
+              (Glyph
+                 (Turbo_Frame,
+                  Natural (Turbo_Region.X) + X,
+                  Natural (Turbo_Region.Y) + Y) = "t",
+               "Turbo rendered content diverged from its published region");
+         end loop;
+      end loop;
+      Assert
+        (Turbo_Frame.Element (11, 3).Appearance = Turbo.Panel.Frame.Shadow
+         and then
+           Turbo_Frame.Element (3, 8).Appearance = Turbo.Panel.Frame.Shadow,
+         "Turbo shadow entered the published content region");
+
+      declare
+         Tiny_Box : constant Flyology_TUI.Layouts.Block :=
+           (Width => 3, Height => 3,
+            Padding => (Top => 1, Right => 1, Bottom => 1, Left => 1),
+            Border => Flyology_TUI.Layouts.Square,
+            others => <>);
+         Tiny_Region : constant Flyology_TUI.Geometry.Rectangle :=
+           Flyology_TUI.Layouts.Panel_Content_Region
+             (Tiny_Box, Charm.Panel);
+         Tiny_Frame : constant Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Layouts.Render
+             (Tiny_Box,
+              Filled (4, 4, 'x', Charm.Palette.Error),
+              Charm.Panel.Frame);
+      begin
+         Assert
+           (Tiny_Region.Width = 0 and then Tiny_Region.Height = 0,
+            "tiny panel published a clipped content hit region");
+         Assert
+           (Glyph (Tiny_Frame, 2, 2) =
+              [1 => Charm.Panel.Frame.Border.Bottom_Right],
+            "tiny panel content overwrote clipped frame chrome");
+      end;
+
+      declare
+         Shadow_Box : constant Flyology_TUI.Layouts.Block :=
+           (Width => 1, Height => 1,
+            Padding => (others => 1),
+            Border => Flyology_TUI.Layouts.Square,
+            others => <>);
+         Shadow_Region : constant Flyology_TUI.Geometry.Rectangle :=
+           Flyology_TUI.Layouts.Panel_Content_Region
+             (Shadow_Box, Turbo.Panel);
+         Shadow_Frame : constant Flyology_TUI.Surfaces.Surface :=
+           Flyology_TUI.Layouts.Render
+             (Shadow_Box,
+              Filled (2, 2, 'x', Turbo.Palette.Error),
+              Turbo.Panel.Frame);
+      begin
+         Assert
+           (Shadow_Region = (0, 0, 0, 0)
+            and then Shadow_Frame.Element (0, 0).Appearance =
+              Turbo.Panel.Frame.Shadow,
+            "one-cell shadowed panel did not clip to immutable geometry");
+      end;
+   end Test_Panel_Content_Geometry;
+
    procedure Test_Color_Inheritance is
       Parent : constant Flyology_TUI.Styles.Style :=
         Flyology_TUI.Skins.Turbo_Vision_Skin.Palette.Content;
@@ -327,6 +461,7 @@ procedure Skin_Tests is
 begin
    Test_Presets;
    Test_Frame_Chrome;
+   Test_Panel_Content_Geometry;
    Test_Color_Inheritance;
    Test_Tab_Chrome;
    Test_Window_Chrome;

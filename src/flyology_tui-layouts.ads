@@ -1,3 +1,4 @@
+with Flyology_TUI.Geometry;
 with Flyology_TUI.Styles;
 with Flyology_TUI.Surfaces;
 with Flyology_TUI.Skins;
@@ -37,6 +38,23 @@ package Flyology_TUI.Layouts is
       Content : Flyology_TUI.Surfaces.Surface;
       Chrome  : Flyology_TUI.Skins.Frame_Chrome)
       return Flyology_TUI.Surfaces.Surface;
+
+   --  Return the local rectangle available to content after the block's
+   --  border, padding, and frame shadow. Item.Width and Item.Height are exact
+   --  outer extents for this query, including zero; intrinsic dimensions have
+   --  no content slot until the caller supplies an explicit block extent.
+   function Content_Region
+     (Item   : Block;
+      Chrome : Flyology_TUI.Skins.Frame_Chrome)
+      return Flyology_TUI.Geometry.Rectangle;
+
+   --  Return a panel's local content rectangle. Leading titles reserve their
+   --  rendered heading and gap; centered titles occupy the border and reserve
+   --  no content row. The result excludes the frame shadow.
+   function Panel_Content_Region
+     (Item   : Block;
+      Chrome : Flyology_TUI.Skins.Panel_Chrome)
+      return Flyology_TUI.Geometry.Rectangle;
 
    function Join_Horizontally
      (Left, Right : Flyology_TUI.Surfaces.Surface;
