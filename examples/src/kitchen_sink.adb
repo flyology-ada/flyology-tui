@@ -1,6 +1,12 @@
 with Ada.Command_Line;
 with Ada.Exceptions;
+with Ada.Strings;
+with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
+with Ada.Strings.UTF_Encoding.Wide_Wide_Strings;
 with Ada.Strings.Wide_Wide_Unbounded;
+with Ada.Streams;
+with Ada.Streams.Stream_IO;
 with Ada.Text_IO;
 with Flyology_TUI.Application_Events;
 with Flyology_TUI.Backends;
@@ -59,6 +65,7 @@ with Flyology_TUI.Views;
 
 procedure Kitchen_Sink is
    package Text renames Ada.Strings.Wide_Wide_Unbounded;
+   package Narrow_Text renames Ada.Strings.Unbounded;
 
    function U (Value : Wide_Wide_String)
       return Text.Unbounded_Wide_Wide_String
@@ -4984,6 +4991,218 @@ procedure Kitchen_Sink is
       Produced := True;
    end Execute;
 
+   function Trimmed (Value : Integer) return String is
+     (Ada.Strings.Fixed.Trim (Integer'Image (Value), Ada.Strings.Both));
+
+   function Escape_XML (Value : Wide_Wide_String) return String is
+      Encoded : constant String :=
+        Ada.Strings.UTF_Encoding.Wide_Wide_Strings.Encode (Value);
+      Result : Narrow_Text.Unbounded_String;
+   begin
+      for Character of Encoded loop
+         case Character is
+            when '&' => Narrow_Text.Append (Result, "&amp;");
+            when '<' => Narrow_Text.Append (Result, "&lt;");
+            when '>' => Narrow_Text.Append (Result, "&gt;");
+            when '"' => Narrow_Text.Append (Result, "&quot;");
+            when others => Narrow_Text.Append (Result, Character);
+         end case;
+      end loop;
+      return Narrow_Text.To_String (Result);
+   end Escape_XML;
+
+   function Color_CSS
+     (Value : Flyology_TUI.Colors.Color;
+      Default_Value : String) return String
+   is
+      type RGB_Value is record
+         Red, Green, Blue : Natural;
+      end record;
+      Basic_RGB : constant array (Flyology_TUI.Colors.ANSI_Color) of RGB_Value :=
+        [Flyology_TUI.Colors.Black          => (0, 0, 0),
+         Flyology_TUI.Colors.Red            => (168, 0, 0),
+         Flyology_TUI.Colors.Green          => (0, 168, 0),
+         Flyology_TUI.Colors.Yellow         => (168, 84, 0),
+         Flyology_TUI.Colors.Blue           => (0, 0, 168),
+         Flyology_TUI.Colors.Magenta        => (168, 0, 168),
+         Flyology_TUI.Colors.Cyan           => (0, 168, 168),
+         Flyology_TUI.Colors.White          => (168, 168, 168),
+         Flyology_TUI.Colors.Bright_Black   => (84, 84, 84),
+         Flyology_TUI.Colors.Bright_Red     => (255, 85, 85),
+         Flyology_TUI.Colors.Bright_Green   => (85, 255, 85),
+         Flyology_TUI.Colors.Bright_Yellow  => (255, 255, 85),
+         Flyology_TUI.Colors.Bright_Blue    => (85, 85, 255),
+         Flyology_TUI.Colors.Bright_Magenta => (255, 85, 255),
+         Flyology_TUI.Colors.Bright_Cyan    => (85, 255, 255),
+         Flyology_TUI.Colors.Bright_White   => (255, 255, 255)];
+      Resolved : RGB_Value;
+   begin
+      case Value.Kind is
+         when Flyology_TUI.Colors.Default_Color =>
+            return Default_Value;
+         when Flyology_TUI.Colors.ANSI =>
+            Resolved := Basic_RGB (Value.Name);
+         when Flyology_TUI.Colors.Indexed =>
+            Resolved := (Value.Index, Value.Index, Value.Index);
+         when Flyology_TUI.Colors.RGB =>
+            Resolved :=
+              (Value.Red_Value, Value.Green_Value, Value.Blue_Value);
+      end case;
+      return
+        "rgb(" & Trimmed (Resolved.Red) & ","
+        & Trimmed (Resolved.Green) & ","
+        & Trimmed (Resolved.Blue) & ")";
+   end Color_CSS;
+
+   procedure Write_SVG
+     (Frame : Flyology_TUI.Surfaces.Surface;
+      Skin  : Flyology_TUI.Skins.Skin_Id;
+      Page  : Page_Id;
+      Path  : String)
+   is
+      Cell_Width  : constant Natural := 10;
+      Cell_Height : constant Natural := 20;
+      Margin      : constant Natural := 18;
+      Width       : constant Natural := Frame.Width * Cell_Width + Margin * 2;
+      Height      : constant Natural := Frame.Height * Cell_Height + Margin * 2;
+      Foreground  : constant String :=
+        (if Skin = Flyology_TUI.Skins.Charm_Dark
+         then "#fffdf5" else "#232323");
+      Background  : constant String :=
+        (case Skin is
+            when Flyology_TUI.Skins.Charm_Dark => "#17171b",
+            when Flyology_TUI.Skins.Turbo_Vision => "#00a8a8",
+            when others => "#fffdf5");
+      Output : Ada.Streams.Stream_IO.File_Type;
+
+      procedure Put (Value : String) is
+         Bytes : Ada.Streams.Stream_Element_Array
+           (1 .. Ada.Streams.Stream_Element_Offset (Value'Length));
+      begin
+         for Index in Value'Range loop
+            Bytes
+              (Ada.Streams.Stream_Element_Offset
+                 (Index - Value'First + 1)) :=
+              Character'Pos (Value (Index));
+         end loop;
+         Ada.Streams.Stream_IO.Write (Output, Bytes);
+      end Put;
+   begin
+      Ada.Streams.Stream_IO.Create
+        (Output, Ada.Streams.Stream_IO.Out_File, Path);
+      Put
+        ("<svg xmlns=""http://www.w3.org/2000/svg"" width="""
+         & Trimmed (Width) & """ height=""" & Trimmed (Height)
+         & """ viewBox=""0 0 " & Trimmed (Width) & " "
+         & Trimmed (Height) & """ role=""img"">"
+         & "<title>Flyology TUI " & Escape_XML (Page_Label (Page))
+         & " page rendered in the "
+         & Escape_XML (Flyology_TUI.Skins.Label (Skin))
+         & " skin</title><desc>Build-generated capture of the real Ada "
+         & "component gallery.</desc><rect width=""100%"" height=""100%"" "
+         & "rx=""14"" fill=""" & Background & """/>");
+      for Y in 0 .. Frame.Height - 1 loop
+         for X in 0 .. Frame.Width - 1 loop
+            declare
+               Cell : constant Flyology_TUI.Surfaces.Cell :=
+                 Frame.Element (X, Y);
+               Glyph : constant Wide_Wide_String :=
+                 Text.To_Wide_Wide_String (Cell.Glyph);
+               Look : constant Flyology_TUI.Styles.Style := Cell.Appearance;
+               Raw_Foreground : constant String :=
+                 Color_CSS (Look.Foreground, Foreground);
+               Raw_Background : constant String :=
+                 Color_CSS (Look.Background, Background);
+               Cell_Foreground : constant String :=
+                 (if Look.Reverse_Video
+                  then Raw_Background else Raw_Foreground);
+               Cell_Background : constant String :=
+                 (if Look.Reverse_Video
+                  then Raw_Foreground else Raw_Background);
+            begin
+               if Cell_Background /= Background then
+                  Put
+                    ("<rect x=""" & Trimmed (Margin + X * Cell_Width)
+                     & """ y=""" & Trimmed (Margin + Y * Cell_Height)
+                     & """ width=""" & Trimmed (Cell_Width)
+                     & """ height=""" & Trimmed (Cell_Height)
+                     & """ fill=""" & Cell_Background & """/>");
+               end if;
+               if not Cell.Continuation and then Glyph /= " " then
+                  Put
+                    ("<text x=""" & Trimmed (Margin + X * Cell_Width)
+                     & """ y=""" & Trimmed
+                       (Margin + Y * Cell_Height + Cell_Height - 4)
+                     & """ fill=""" & Cell_Foreground
+                     & """ font-family=""ui-monospace,SFMono-Regular,Menlo,"
+                     & "Consolas,monospace"" font-size=""16"""
+                     & (if Look.Bold then " font-weight=""700""" else "")
+                     & (if Look.Italic then " font-style=""italic""" else "")
+                     & (if Look.Faint then " opacity=""0.62""" else "")
+                     & ">" & Escape_XML (Glyph) & "</text>");
+                  if Look.Underline then
+                     Put
+                       ("<line x1=""" & Trimmed (Margin + X * Cell_Width)
+                        & """ x2="""
+                        & Trimmed (Margin + (X + 1) * Cell_Width - 1)
+                        & """ y1="""
+                        & Trimmed (Margin + (Y + 1) * Cell_Height - 2)
+                        & """ y2="""
+                        & Trimmed (Margin + (Y + 1) * Cell_Height - 2)
+                        & """ stroke=""" & Cell_Foreground & """/>");
+                  end if;
+               end if;
+            end;
+         end loop;
+      end loop;
+      Put ("</svg>");
+      Ada.Streams.Stream_IO.Close (Output);
+   exception
+      when others =>
+         if Ada.Streams.Stream_IO.Is_Open (Output) then
+            Ada.Streams.Stream_IO.Close (Output);
+         end if;
+         raise;
+   end Write_SVG;
+
+   function Page_From_Name (Value : String) return Page_Id is
+     (if Value = "basics" then Basics_Page
+      elsif Value = "controls" then Controls_Page
+      elsif Value = "navigation" then Navigation_Page
+      elsif Value = "editors" then Editors_Page
+      elsif Value = "markdown" then Markdown_Page
+      elsif Value = "telemetry" then Telemetry_Page
+      elsif Value = "chat" then Chat_Page
+      elsif Value = "menus" then Menus_Page
+      elsif Value = "color" then Color_Page
+      elsif Value = "panels" then Panels_Page
+      elsif Value = "docking" then Docking_Page
+      elsif Value = "windows" then Windows_Page
+      else raise Constraint_Error with "unknown documentation page");
+
+   function Skin_From_Name (Value : String) return Flyology_TUI.Skins.Skin_Id is
+     (if Value = "charm-default" then Flyology_TUI.Skins.Charm_Default
+      elsif Value = "charm-dark" then Flyology_TUI.Skins.Charm_Dark
+      elsif Value = "charm-light" then Flyology_TUI.Skins.Charm_Light
+      elsif Value = "turbo-vision" then Flyology_TUI.Skins.Turbo_Vision
+      else raise Constraint_Error with "unknown documentation skin");
+
+   procedure Run_Documentation_Capture
+     (Page_Name, Skin_Name, Path : String)
+   is
+      Item : Model;
+      Next : Transitions.Transition;
+      Page : constant Page_Id := Page_From_Name (Page_Name);
+      Skin : constant Flyology_TUI.Skins.Skin_Id :=
+        Skin_From_Name (Skin_Name);
+   begin
+      Initialize (Item, Next);
+      Item.Skin := Skin;
+      Activate_Page (Item, Page);
+      Set_Terminal_Size (Item, 112, 30);
+      Write_SVG (Present (Item).Frame, Skin, Page, Path);
+   end Run_Documentation_Capture;
+
    procedure Run_Responsive_Self_Test is
       use type Flyology_TUI.Colors.Color_Kind;
       Item : Model;
@@ -6164,7 +6383,19 @@ procedure Kitchen_Sink is
    State : Model;
    Terminal : Flyology_TUI.Backends.POSIX.POSIX_Backend;
 begin
-   if Ada.Command_Line.Argument_Count = 1
+   if Ada.Command_Line.Argument_Count = 3
+     and then Ada.Command_Line.Argument (1)'Length > 15
+     and then Ada.Command_Line.Argument (1) (1 .. 15) = "--docs-capture="
+     and then Ada.Command_Line.Argument (2)'Length > 12
+     and then Ada.Command_Line.Argument (2) (1 .. 12) = "--docs-skin="
+     and then Ada.Command_Line.Argument (3)'Length > 14
+     and then Ada.Command_Line.Argument (3) (1 .. 14) = "--docs-output="
+   then
+      Run_Documentation_Capture
+        (Ada.Command_Line.Argument (1) (16 .. Ada.Command_Line.Argument (1)'Last),
+         Ada.Command_Line.Argument (2) (13 .. Ada.Command_Line.Argument (2)'Last),
+         Ada.Command_Line.Argument (3) (15 .. Ada.Command_Line.Argument (3)'Last));
+   elsif Ada.Command_Line.Argument_Count = 1
      and then Ada.Command_Line.Argument (1) = "--responsive-self-test"
    then
       Run_Responsive_Self_Test;

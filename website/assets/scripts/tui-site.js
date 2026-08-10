@@ -13,10 +13,7 @@
       .split("-").map((part) => part[0].toUpperCase() + part.slice(1)).join("")}`];
     if (!image || !source) return;
     image.src = source;
-    image.alt = image.alt.replace(
-      /rendered in the .+ skin$/,
-      `rendered in the ${skinLabels[skin]} skin`
-    );
+    image.alt = `${image.dataset.previewName || "Component"} demonstrated in the ${skinLabels[skin]} kitchen sink`;
     root.querySelectorAll("[data-skin-choice]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.skinChoice === skin));
     });
