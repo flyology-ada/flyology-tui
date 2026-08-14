@@ -91,6 +91,25 @@
   pin.
 - Do not commit generated `alire`, `config`, `obj`, `lib`, or test binaries.
 
+## Releases
+
+- Publish `flyology_tui` through an immutable annotated tag named
+  `flyology_tui/v<version>`, for example `flyology_tui/v0.1.0`.
+- Before tagging, set the root `alire.toml` to the exact stable version,
+  replace inappropriate `-dev` dependency constraints with stable constraints,
+  and run `./scripts/test.sh`, `alr show`, and `git diff --check`. The
+  manifest must declare `name = "flyology_tui"` and the same version as the
+  tag.
+- Create and push the tag only after committing the release-ready manifest:
+
+  ```sh
+  git tag -a flyology_tui/v<version> -m "Release flyology_tui <version>"
+  git push origin refs/tags/flyology_tui/v<version>
+  ```
+
+- Never move, replace, or reuse a published release tag. Put the next
+  development-version change in a later commit.
+
 ## Commits
 
 Use focused Problem/Solution commit messages:
