@@ -1,6 +1,6 @@
 name = "flyology_tui_examples"
 description = "Interactive examples for flyology_tui"
-version = "0.1.0-dev"
+version = "0.1.1-dev"
 
 authors = ["Yurii Rashkovskii"]
 maintainers = ["Yurii Rashkovskii <yrashk@gmail.com>"]
