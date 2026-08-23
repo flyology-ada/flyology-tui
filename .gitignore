@@ -1,3 +1,6 @@
+/.agents/
+/.claude/rules/
+/.claude/skills/
 /obj/
 /lib/
 /alire/
@@ -7,3 +10,4 @@
 /docs/gnatdoc/html/
 /examples/bin/
 /examples/obj/
+apm_modules/
