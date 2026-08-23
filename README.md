@@ -258,7 +258,7 @@ Flyology TUI is available under either the MIT License or the Apache License
 
 ## Agent setup
 
-This repository uses APM 0.28.0 to provision pinned shared instructions and
+This repository uses APM 0.28.0 to provision locked shared instructions and
 skills for Codex and Claude. Before starting either client in a new clone or
 worktree, run:
 
@@ -272,6 +272,15 @@ apm compile --target codex
 
 Start a fresh client session afterward so it discovers the generated skills.
 Repository-specific instructions are packaged under `agent-packages/`; shared
-instructions and skills come from `flyology-ada/agents`. Updating
-`apm.lock.yaml` is a reviewed dependency change.
-Updating `apm.lock.yaml` is a reviewed dependency change.
+instructions and skills follow `flyology-ada/agents` `main`.
+`apm.lock.yaml` records the exact dependency commits and content hashes, so
+frozen installs do not float. Review an upstream update explicitly:
+
+```sh
+apm outdated
+apm update flyology-ada/agents
+apm compile --target codex
+apm audit --ci
+```
+
+Commit the reviewed lockfile and generated `AGENTS.md` changes together.
