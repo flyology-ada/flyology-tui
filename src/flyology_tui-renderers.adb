@@ -294,12 +294,19 @@ package body Flyology_TUI.Renderers is
       Desired : Flyology_TUI.Views.View;
       Output  : out Bytes.Unbounded_String)
    is
+      Before_Frame  : Natural;
+      Frame_Changed : Boolean;
    begin
       Output := Bytes.Null_Unbounded_String;
       Mode_Changes (Item, Desired, Output);
+      Before_Frame := Bytes.Length (Output);
       Frame_Changes (Item, Desired, Output);
+      Frame_Changed := Bytes.Length (Output) > Before_Frame;
+      --  A terminal transition may reveal the hardware cursor independently
+      --  of the last declared view, so restate hidden state after repainting.
       if not Item.Initialized
         or else Desired.Cursor /= Item.Previous.Cursor
+        or else (Frame_Changed and then not Desired.Cursor.Visible)
         or else Desired.Cursor.Visible
       then
          Cursor_Change (Desired, Output);
