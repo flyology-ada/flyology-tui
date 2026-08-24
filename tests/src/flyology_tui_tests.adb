@@ -204,6 +204,11 @@ procedure Flyology_TUI_Tests is
    end Test_Glyphs_And_Surfaces;
 
    procedure Test_Layout_And_Renderer is
+      function Ends_With (Source, Suffix : String) return Boolean is
+        (Source'Length >= Suffix'Length
+         and then Source
+           (Source'Last - Suffix'Length + 1 .. Source'Last) = Suffix);
+
       Accent : constant Flyology_TUI.Styles.Style :=
         Flyology_TUI.Styles.With_Foreground
           (Flyology_TUI.Styles.Default,
@@ -244,14 +249,27 @@ procedure Flyology_TUI_Tests is
       Assert
         (Ada.Strings.Fixed.Index (Bytes.To_String (Output), "x") /= 0,
          "changed cell was not rendered");
+      Assert
+        (Ends_With (Bytes.To_String (Output), ESC & "[?25l"),
+         "changed frame did not end by hiding the declarative cursor");
       View.Cursor.Visible := True;
       View.Cursor.Shape := Flyology_TUI.Views.Cursor_Bar;
       Renderer.Render (View, Output);
+      Assert
+        (Ada.Strings.Fixed.Index
+           (Bytes.To_String (Output), ESC & "[?25h") /= 0
+         and then not Ends_With (Bytes.To_String (Output), ESC & "[?25l"),
+         "visible cursor was hidden after rendering");
       View.Alternate_Screen := True;
       Renderer.Render (View, Output);
       Assert
         (Ada.Strings.Fixed.Index (Bytes.To_String (Output), "x") /= 0,
          "alternate-screen transition did not repaint the frame");
+      Assert
+        (Ada.Strings.Fixed.Index
+           (Bytes.To_String (Output), ESC & "[?25h") /= 0
+         and then not Ends_With (Bytes.To_String (Output), ESC & "[?25l"),
+         "changed frame did not retain its visible declarative cursor");
       Renderer.Reset (Output);
       Assert
         (Bytes.Length (Output) > 0,
@@ -260,6 +278,10 @@ procedure Flyology_TUI_Tests is
         (Ada.Strings.Fixed.Index
            (Bytes.To_String (Output), ESC & "[0 q") /= 0,
          "renderer reset did not restore the default cursor shape");
+      Assert
+        (Ada.Strings.Fixed.Index
+           (Bytes.To_String (Output), ESC & "[?25h") /= 0,
+         "renderer reset did not restore cursor visibility");
       Assert
         (Ada.Strings.Fixed.Index
            (Bytes.To_String (Output), ESC & "[?1000l") /= 0,
