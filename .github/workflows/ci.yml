@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: flyology-tui-ci-${{ github.ref }}
+  group: >-
+    flyology-tui-ci-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
