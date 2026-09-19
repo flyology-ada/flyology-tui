@@ -40,7 +40,7 @@ test -f "$SITE/api/index.html"
 
 COMPONENT_PAGES=$(find "$SITE/components" -mindepth 2 -maxdepth 2 -name index.html | wc -l | tr -d ' ')
 PREVIEWS=$(find "$SITE/assets/captures" -name '*.svg' | wc -l | tr -d ' ')
-test "$COMPONENT_PAGES" = 34
-test "$PREVIEWS" = 136
+test "$COMPONENT_PAGES" = 38
+test "$PREVIEWS" = 152
 
 echo "site built at $SITE ($COMPONENT_PAGES component pages, $PREVIEWS Ada captures)"

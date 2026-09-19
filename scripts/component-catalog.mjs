@@ -50,6 +50,14 @@ export const components = [
     kind: "checkbox",
   }),
   component({
+    slug: "completions", title: "Completions", group: "Editing",
+    summary: "Offer bounded completion candidates as a tabulated grid or an annotated menu.",
+    use: "Use completions when a prompt or editor must show what a partial word could become. The component never decides what completes; the application supplies candidates and the buffer range they replace.",
+    model: "The model owns candidates, the half-open replacement range, the selection, and scroll offset. One immutable presentation drives rendering, hit testing, and the clipped-candidate counter.",
+    interaction: "Arrow keys and Tab move the wrapping selection, Left and Right step whole columns, Enter activates, and Escape closes. A click selects and activates the candidate it was drawn on.",
+    kind: "completions",
+  }),
+  component({
     slug: "dock-workspaces", sourceSlug: "dock_workspaces", title: "Dock workspaces", group: "Layout",
     summary: "Dock, collapse, float, move, and restore caller-owned panes.",
     use: "Use a dock workspace when users must reorganize major tool panes while the application retains global ownership.",
@@ -99,6 +107,24 @@ export const components = [
     kind: "help",
   }),
   component({
+    slug: "highlights", title: "Highlights", group: "Editing",
+    summary: "Borrow a styled span overlay at render time instead of retaining syntax state.",
+    use: "Use a highlight overlay to color a caller-owned buffer without coupling the component that draws it to any lexer. A nested generic builds the overlay from the same token contract syntax editors use.",
+    model: "Nothing is retained. A span array is an ordered set of styled half-open code-point ranges that a Render call borrows, exactly as it borrows a theme.",
+    interaction: "The overlay is a value, not a control. Later spans win on overlap, so an unsorted set still resolves deterministically.",
+    kind: "highlights",
+    passive: true,
+  }),
+  component({
+    slug: "histories", title: "Histories", group: "Editing",
+    summary: "Retain bounded command history with recall, incremental search, prefix hinting, and pluggable stores.",
+    use: "Use a history to remember what a prompt has submitted, to walk it newest first, and to search it incrementally. It renders nothing and performs no I/O; a nested generic moves entries to and from whatever the application already persists with, so a prompt can pick up after a restart.",
+    model: "The model owns ring storage bounded by both entry count and total code points, a duplicate policy, one walk position, and one incremental query with its match range.",
+    interaction: "Browsing and searching are mutually exclusive walks over the same entries. Both report whether a further entry matched rather than moving silently.",
+    kind: "histories",
+    passive: true,
+  }),
+  component({
     slug: "indicators", title: "Indicators", group: "Feedback",
     passive: true,
     ownership: ["Indicator functions retain no model state.", "The caller supplies values, width, and appearance for each render."],
@@ -122,6 +148,14 @@ export const components = [
       "Present the next frame from the updated component and application state."
     ],
     kind: "interaction",
+  }),
+  component({
+    slug: "line-editors", sourceSlug: "line_editors", title: "Line editors", group: "Editing",
+    summary: "Prompt, recall, hint, complete, and search one bounded input buffer.",
+    use: "Use a line editor for a shell or REPL prompt. It reports submission and completion as actions the application answers, so completeness and candidate policy stay with the caller.",
+    model: "The model owns a text area, a command history, a kill buffer, and the prompt markers. A borrowed highlight overlay styles the buffer at render time and is never retained.",
+    interaction: "A fixed readline vocabulary moves, kills, yanks, recalls, and searches. Enter reports intent rather than submitting, Ctrl+O continues a multi-line input, and Tab asks the application for candidates.",
+    kind: "line-editor",
   }),
   component({
     slug: "lists", title: "Lists", group: "Navigation",

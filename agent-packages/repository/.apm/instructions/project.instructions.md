@@ -86,9 +86,9 @@ description: Preserve Flyology TUI's project-specific repository rules and verif
 - Preserve unrelated changes.
 - Run `./scripts/test.sh`, `alr show`, and `git diff --check` for normal
   changes. The script builds the library, runs the nested suite, and compiles
-  both interactive examples.
+  the interactive examples.
 - Run `./scripts/build-site.sh` for website, public API, component catalog, or
-  website build changes. It must produce 34 component pages, 136 real Ada
+  website build changes. It must produce 38 component pages, 152 real Ada
   captures from dedicated component examples, and exact GNATdoc links. Use the
   `flyology-website-content` skill for authored site content.
 - Tests live in the nested `tests` crate and depend on the parent through a path

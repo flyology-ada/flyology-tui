@@ -68,6 +68,11 @@ the same state transition.
   follow-tail, unseen chunks, trim and reject policies, terminal states,
   scrolling, and responsive wrapping without requiring users to infer the
   component from the Chat page.
+- Add a readline kitchen-sink page for the prompt primitives. Demonstrate the
+  prompt gutter, multi-line continuation, ghost hinting, history recall,
+  reverse search, and both completion presentations in one responsive page.
+  The `repl` example already composes them end to end, but the gallery still
+  requires users to leave it to see the components working together.
 
 ## Interaction and accessibility
 

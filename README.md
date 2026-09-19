@@ -34,9 +34,15 @@ Flyology-aware adapter can be added separately.
 - bounded text areas, syntax and semantically annotated Markdown
   editors/viewers, streaming text, and
   heterogeneous chat transcripts with caller-owned composers;
+- prompted readline editing with bounded command history, incremental
+  reverse search, inline hinting, tabulated completion candidates, and
+  borrowed render-time syntax overlays; command history moves through a
+  pluggable store contract, so a prompt resumes after a restart;
 - sRGB- and linear-light-interpolated foreground/background gradients;
-- interactive counter and responsive kitchen-sink examples plus a nested
-  behavioral test crate.
+- interactive counter, read-eval-print loop, and responsive kitchen-sink
+  examples plus a nested behavioral test crate. The loop demonstrates
+  inline, docked, and windowed prompts, multi-line editing, three
+  highlighters, context-aware completion, and a file-backed history.
 
 Unicode handling covers the combining marks, variation selectors, emoji
 modifiers, ZWJ sequences, and wide ranges commonly used by terminals. It is a
@@ -238,8 +244,8 @@ alr install gnatdoc_bin
 
 The result is written to `build/site`. The build resolves authored API links
 against GNATdoc's generated search index. It also compiles
-`examples/src/component_examples.adb` and exports 136 real captures: one exact
-component scenario in four skins for each of 34 packages. The build fails when
+`examples/src/component_examples.adb` and exports 152 real captures: one exact
+component scenario in four skins for each of 38 packages. The build fails when
 a component page, GNATdoc target, dedicated example, or required capture is
 missing.
 

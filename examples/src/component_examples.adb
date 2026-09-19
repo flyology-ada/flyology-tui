@@ -11,13 +11,17 @@ with Flyology_TUI.Components.Breadcrumbs;
 with Flyology_TUI.Components.Buttons;
 with Flyology_TUI.Components.Chats;
 with Flyology_TUI.Components.Check_Boxes;
+with Flyology_TUI.Components.Completions;
 with Flyology_TUI.Components.Dock_Workspaces;
 with Flyology_TUI.Components.Dropdowns;
 with Flyology_TUI.Components.Forms;
 with Flyology_TUI.Components.Gradients;
 with Flyology_TUI.Components.Help;
+with Flyology_TUI.Components.Highlights;
+with Flyology_TUI.Components.Histories;
 with Flyology_TUI.Components.Indicators;
 with Flyology_TUI.Components.Interactions;
+with Flyology_TUI.Components.Line_Editors;
 with Flyology_TUI.Components.Lists;
 with Flyology_TUI.Components.Markdown_Editors;
 with Flyology_TUI.Components.Markdown_Viewers;
@@ -302,6 +306,21 @@ procedure Component_Examples is
       Initial_State => Normal, Maximum_Tokens_Per_Line => 20,
       Next_Token => Next_Token);
 
+   --  The same token contract drives the full editor and the borrowed
+   --  overlay a prompt renders with.
+   package Prompt_Marks is new Flyology_TUI.Components.Highlights.Lexers
+     (Token_Kind => Token_Kind, Lexer_State => Lexer_State,
+      Initial_State => Normal, Next_Token => Next_Token);
+
+   type Completion_Kind is (Plain_Candidate, Keyword_Candidate);
+
+   package Candidates is new Flyology_TUI.Components.Completions
+     (Category => Completion_Kind, Capacity => 16);
+
+   use type Candidates.Offer_Result;
+   use type Prompt_Marks.Scan_State;
+   use type Flyology_TUI.Components.Histories.Add_Result;
+
    function Skin_From_Name (Value : String)
       return Flyology_TUI.Skins.Skin_Id is
      (if Value = "charm-default" then Flyology_TUI.Skins.Charm_Default
@@ -329,7 +348,10 @@ procedure Component_Examples is
       Stage_Body : constant Flyology_TUI.Surfaces.Surface :=
         Stack (Heading, Content, 1).Inherit_Colors (Skin.Dialog);
       Width : constant Natural := Natural'Max (48, Content.Width + 4);
-      Height : constant Natural := Natural'Max (8, Content.Height + 5);
+      --  The box height is an outer extent. Border and padding take four
+      --  rows and the heading and its gap take two, so content taller than
+      --  three rows needs Content.Height + 6 to avoid losing its last row.
+      Height : constant Natural := Natural'Max (8, Content.Height + 6);
       Box : constant Flyology_TUI.Layouts.Block :=
         (Width => Width, Height => Height,
          Padding => (Top => 1, Right => 1, Bottom => 1, Left => 1),
@@ -756,6 +778,186 @@ procedure Component_Examples is
       return Item.Render (Look);
    end Example_Syntax;
 
+   --  Seed a prompt with a recorded history so recall and hinting have
+   --  something to show in a still capture.
+   function New_Prompt
+     (Width : Positive; Height : Positive; Placeholder : Wide_Wide_String)
+      return Flyology_TUI.Components.Line_Editors.Model
+   is (Flyology_TUI.Components.Line_Editors.Create
+         (Max_Code_Points          => 512,
+          Max_Lines                => 16,
+          Max_Undo_Entries         => 16,
+          Max_Undo_Code_Points     => 2_048,
+          Max_Recalled_Entries     => 32,
+          Max_Recalled_Code_Points => 2_048,
+          Width                    => Width,
+          Height                   => Height,
+          Primary                  => "> ",
+          Continuation             => ". ",
+          Word_Separators          => " " & Wide_Wide_Character'Val (10),
+          Duplicates               => Flyology_TUI.Components.Histories
+                                        .Ignore_Consecutive,
+          Placeholder              => Placeholder));
+
+   function Example_Line_Editor (Skin : Flyology_TUI.Skins.Skin)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Item : Flyology_TUI.Components.Line_Editors.Model :=
+        New_Prompt (46, 3, "enter a command");
+      Look : Flyology_TUI.Components.Line_Editors.Appearance :=
+        Flyology_TUI.Components.Line_Editors.From_Palette (Skin.Palette);
+      Source : constant Wide_Wide_String :=
+        "procedure Hello is" & Wide_Wide_Character'Val (10)
+        & "begin  -- multiline continuation";
+      Spans : Flyology_TUI.Components.Highlights.Span_Array (1 .. 48);
+      Count : Natural;
+      Status : Prompt_Marks.Scan_State;
+      Palette : Prompt_Marks.Token_Appearance :=
+        (others => Skin.Palette.Content);
+      Accepted : Boolean;
+   begin
+      Item.Focus;
+      Item.Try_Set_Value (Source, Accepted);
+      if not Accepted then
+         raise Program_Error with "line editor seed rejected";
+      end if;
+      Palette (Keyword) := Skin.Palette.Interaction;
+      Palette (String_Literal) := Skin.Palette.Success;
+      Palette (Comment) := Skin.Palette.Muted;
+      Prompt_Marks.Scan (Item.Value, Palette, Spans, Count, Status);
+      Item.Set_Hint (" Hello;");
+      return Item.Render (Look, Spans (1 .. Count));
+   end Example_Line_Editor;
+
+   function Example_Completions (Skin : Flyology_TUI.Skins.Skin)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Grid : Candidates.Model :=
+        Candidates.Create (Candidates.Tabulated_Grid, 46, 3);
+      Menu : Candidates.Model :=
+        Candidates.Create (Candidates.Detailed_Menu, 46, 3);
+      Look : constant Candidates.Appearance :=
+        Candidates.From_Palette (Skin.Palette);
+      Words : constant Candidates.Candidate_Array :=
+        (Candidates.Candidate_Of ("procedure", Kind => Keyword_Candidate),
+         Candidates.Candidate_Of ("private", Kind => Keyword_Candidate),
+         Candidates.Candidate_Of ("protected", Kind => Keyword_Candidate),
+         Candidates.Candidate_Of ("pragma", Kind => Keyword_Candidate),
+         Candidates.Candidate_Of ("package", Kind => Keyword_Candidate),
+         Candidates.Candidate_Of ("parameter"),
+         Candidates.Candidate_Of ("position"),
+         Candidates.Candidate_Of ("prefix"));
+      Detailed : constant Candidates.Candidate_Array :=
+        (Candidates.Candidate_Of
+           ("procedure", Detail => "declaration"),
+         Candidates.Candidate_Of ("package", Detail => "unit"),
+         Candidates.Candidate_Of ("pragma", Detail => "directive"),
+         Candidates.Candidate_Of ("private", Detail => "visibility"));
+      Offered : Candidates.Offer_Result;
+   begin
+      Offered := Grid.Offer (Words, 0, 1);
+      Offered := Menu.Offer (Detailed, 0, 1);
+      Menu.Select_Next;
+      if Offered = Candidates.Rejected_Span then
+         raise Program_Error with "completion seed rejected";
+      end if;
+      return Stack
+        (Flyology_TUI.Surfaces.From_Text
+           ("tabulated grid", Skin.Palette.Muted),
+         Stack
+           (Grid.Render (Look),
+            Stack
+              (Flyology_TUI.Surfaces.From_Text
+                 ("detailed menu", Skin.Palette.Muted),
+               Menu.Render (Look),
+               0),
+            1),
+         0);
+   end Example_Completions;
+
+   function Example_Histories (Skin : Flyology_TUI.Skins.Skin)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Item : Flyology_TUI.Components.Histories.Model :=
+        Flyology_TUI.Components.Histories.Create
+          (16, 512, Flyology_TUI.Components.Histories.Ignore_Consecutive);
+      Recorded : Flyology_TUI.Components.Histories.Add_Result;
+      Rows : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.From_Text
+          ("retained entries", Skin.Palette.Muted);
+      First, Last : Natural;
+   begin
+      Recorded := Item.Add ("build --release");
+      Recorded := Item.Add ("test --all");
+      Recorded := Item.Add ("build --debug");
+      if Recorded = Flyology_TUI.Components.Histories.Rejected_Capacity then
+         raise Program_Error with "history seed rejected";
+      end if;
+      for Position in reverse 1 .. Item.Length loop
+         Rows := Stack
+           (Rows,
+            Flyology_TUI.Surfaces.From_Text
+              ("  " & Item.Entry_At (Position), Skin.Palette.Content),
+            0);
+      end loop;
+
+      --  Show an incremental search and the span it reports for styling.
+      Item.Begin_Search;
+      Item.Set_Query ("build");
+      Item.Match_Range (First, Last);
+      Rows := Stack
+        (Rows,
+         Flyology_TUI.Surfaces.From_Text
+           ("search `build'", Skin.Palette.Muted),
+         1);
+      Rows := Stack
+        (Rows,
+         Flyology_TUI.Surfaces.From_Text
+           ("  " & Item.Match_Value, Skin.Palette.Selected),
+         0);
+      Rows := Stack
+        (Rows,
+         Flyology_TUI.Surfaces.From_Text
+           ("  hint: " & Item.Suggestion ("te"), Skin.Palette.Placeholder),
+         0);
+      return Rows;
+   end Example_Histories;
+
+   function Example_Highlights (Skin : Flyology_TUI.Skins.Skin)
+      return Flyology_TUI.Surfaces.Surface
+   is
+      Source : constant Wide_Wide_String :=
+        "with Ada.Text_IO;  -- borrowed overlay";
+      Spans : Flyology_TUI.Components.Highlights.Span_Array (1 .. 32);
+      Count : Natural;
+      Status : Prompt_Marks.Scan_State;
+      Palette : Prompt_Marks.Token_Appearance :=
+        (others => Skin.Palette.Content);
+      Result : Flyology_TUI.Surfaces.Surface :=
+        Flyology_TUI.Surfaces.Create (Source'Length, 1, Skin.Palette.Content);
+   begin
+      Palette (Keyword) := Skin.Palette.Interaction;
+      Palette (String_Literal) := Skin.Palette.Success;
+      Palette (Comment) := Skin.Palette.Muted;
+      Prompt_Marks.Scan (Source, Palette, Spans, Count, Status);
+      if Status /= Prompt_Marks.Scan_Complete then
+         raise Program_Error with "highlight scan did not complete";
+      end if;
+      for Offset in 0 .. Source'Length - 1 loop
+         Result.Put
+           (Offset,
+            0,
+            (1 => Source (Source'First + Offset)),
+            Flyology_TUI.Components.Highlights.Style_At
+              (Spans (1 .. Count), Offset, Skin.Palette.Content));
+      end loop;
+      return Stack
+        (Flyology_TUI.Surfaces.From_Text
+           ("one overlay, applied at render time", Skin.Palette.Muted),
+         Result,
+         0);
+   end Example_Highlights;
+
    Markdown_Source : constant Wide_Wide_String :=
      "# Component examples" & Wide_Wide_Character'Val (10)
      & Wide_Wide_Character'Val (10)
@@ -958,6 +1160,8 @@ procedure Component_Examples is
          Name := U ("Chats"); Content := Example_Chat (Skin);
       elsif Slug = "check-boxes" then
          Name := U ("Check boxes"); Content := Example_Check_Box (Skin);
+      elsif Slug = "completions" then
+         Name := U ("Completions"); Content := Example_Completions (Skin);
       elsif Slug = "dock-workspaces" then
          Name := U ("Dock workspaces"); Content := Example_Dock (Skin);
       elsif Slug = "dropdowns" then
@@ -968,11 +1172,17 @@ procedure Component_Examples is
          Name := U ("Gradients"); Content := Example_Gradient;
       elsif Slug = "help" then
          Name := U ("Help"); Content := Example_Help (Skin);
+      elsif Slug = "highlights" then
+         Name := U ("Highlights"); Content := Example_Highlights (Skin);
+      elsif Slug = "histories" then
+         Name := U ("Histories"); Content := Example_Histories (Skin);
       elsif Slug = "indicators" then
          Name := U ("Indicators"); Content := Example_Indicators (Skin);
       elsif Slug = "interactions" then
          Name := U ("Interaction results");
          Content := Example_Interaction (Skin);
+      elsif Slug = "line-editors" then
+         Name := U ("Line editors"); Content := Example_Line_Editor (Skin);
       elsif Slug = "lists" then
          Name := U ("Lists"); Content := Example_List (Skin);
       elsif Slug = "markdown-editors" then
