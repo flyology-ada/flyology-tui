@@ -10,4 +10,5 @@
 /docs/gnatdoc/html/
 /examples/bin/
 /examples/obj/
+.flyology_repl_history
 apm_modules/
