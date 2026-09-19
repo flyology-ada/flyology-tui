@@ -18,6 +18,7 @@ executables = [
   "accordion_tests",
   "data_navigation_tests",
   "editing_tests",
+  "line_editor_tests",
   "streaming_text_tests",
   "chat_tests",
   "panel_group_tests",

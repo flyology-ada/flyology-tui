@@ -680,6 +680,27 @@ package body Flyology_TUI.Components.Text_Areas is
       return Try_Replace (Item, First, Last, Inserted);
    end Insert_Text;
 
+   procedure Try_Replace_Range
+     (Item        : in out Model;
+      First, Last : Natural;
+      Value       : Wide_Wide_String;
+      Success     : out Boolean) is
+   begin
+      if not Item.Enabled or else Item.Read_Only then
+         Success := False;
+         return;
+      end if;
+      Success :=
+        Try_Replace
+          (Item,
+           First,
+           Last,
+           Text.To_Unbounded_Wide_Wide_String (Value));
+      if Success then
+         Ensure_Visible (Item);
+      end if;
+   end Try_Replace_Range;
+
    procedure Move_To
      (Item : in out Model; Offset : Natural; Selecting : Boolean) is
    begin

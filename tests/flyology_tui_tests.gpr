@@ -14,6 +14,7 @@ project Flyology_Tui_Tests is
       "accordion_tests.adb",
       "data_navigation_tests.adb",
       "editing_tests.adb",
+      "line_editor_tests.adb",
       "streaming_text_tests.adb",
       "chat_tests.adb",
       "panel_group_tests.adb",

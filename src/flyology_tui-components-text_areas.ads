@@ -57,6 +57,36 @@ package Flyology_TUI.Components.Text_Areas is
       Value   : Wide_Wide_String;
       Success : out Boolean);
 
+   --  Replace the half-open code-point range [First, Last) with Value as
+   --  one undoable edit, leaving the cursor after the inserted text. This
+   --  is the range primitive a component layered on this one needs in order
+   --  to implement kill, yank, and completion insertion without discarding
+   --  undo history the way Try_Set_Text does.
+   --
+   --  The edit is atomic: a range outside the buffer, a disabled or
+   --  read-only model, or an insertion that would exceed Max_Code_Points or
+   --  Max_Lines leaves content, cursor, selection, and history unchanged.
+   --
+   --  Value is normalized to LF exactly as Try_Set_Text normalizes it, so a
+   --  CRLF pair becomes one code point and the resulting cursor offset can
+   --  be smaller than First + Value'Length. Read Cursor_Offset rather than
+   --  computing a follow-up offset from the supplied length.
+   --
+   --  First and Last are not required to fall on grapheme-cluster
+   --  boundaries and are not snapped to them. A caller that derives the
+   --  range from cluster-aware navigation, as Completion_Span does, keeps
+   --  clusters intact; an arbitrary range can split one.
+   --  @param Item Text area to edit
+   --  @param First Code-point offset the replacement starts at
+   --  @param Last Code-point offset after the replaced range
+   --  @param Value Text to put in that range
+   --  @param Success Whether the edit was applied
+   procedure Try_Replace_Range
+     (Item        : in out Model;
+      First, Last : Natural;
+      Value       : Wide_Wide_String;
+      Success     : out Boolean);
+
    function Value (Item : Model) return Wide_Wide_String;
    function Line_Count (Item : Model) return Positive;
 

@@ -67,6 +67,7 @@ esac
 ./bin/accordion_tests
 ./bin/data_navigation_tests
 ./bin/editing_tests
+./bin/line_editor_tests
 ./bin/streaming_text_tests
 ./bin/chat_tests
 ./bin/panel_group_tests
