@@ -189,6 +189,19 @@ package body Flyology_TUI.Renderers is
            (Output,
             CSI & (if Desired.Bracketed_Paste then "?2004h" else "?2004l"));
       end if;
+      --  The protocol is a stack rather than a mode, so a pop is only
+      --  correct for an entry this renderer pushed. A first frame that does
+      --  not want the protocol therefore emits nothing at all, which also
+      --  keeps the byte stream of an application that never asks for it
+      --  exactly as it was. Flag 1 disambiguates otherwise ambiguous keys
+      --  and leaves plain text reporting alone.
+      if (if First then Desired.Enhanced_Keyboard
+          else Desired.Enhanced_Keyboard /= Item.Previous.Enhanced_Keyboard)
+      then
+         Append
+           (Output,
+            (if Desired.Enhanced_Keyboard then CSI & ">1u" else CSI & "<u"));
+      end if;
       if First
         or else Desired.Window_Title /= Item.Previous.Window_Title
       then
@@ -328,6 +341,8 @@ package body Flyology_TUI.Renderers is
       Output := Bytes.To_Unbounded_String
         (CSI & "0m"
          & Mouse_Disable
+         --  Popping is only correct for an entry this renderer pushed.
+         & (if Item.Previous.Enhanced_Keyboard then CSI & "<u" else "")
          & CSI & "?1004l"
          & CSI & "?2004l"
          & CSI & "?25h"

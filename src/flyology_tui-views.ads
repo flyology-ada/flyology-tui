@@ -30,6 +30,12 @@ package Flyology_TUI.Views is
       Mouse             : Mouse_Mode := Mouse_Disabled;
       Report_Focus      : Boolean := False;
       Bracketed_Paste   : Boolean := True;
+      --  Request the terminal's enhanced keyboard protocol, which reports
+      --  modified keys a legacy encoding cannot express, such as
+      --  Shift-Enter. Terminals that do not implement it ignore the
+      --  request, so enabling it is safe everywhere. The backend pops the
+      --  mode when it closes, including after an exception.
+      Enhanced_Keyboard : Boolean := False;
       Window_Title      : Text.Unbounded_Wide_Wide_String;
       Cursor            : Cursor_Description;
    end record;

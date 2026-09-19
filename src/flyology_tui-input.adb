@@ -259,6 +259,78 @@ package body Flyology_TUI.Input is
          when 'Z' =>
             Modified.Shift := True;
             Push (Item, Special_Key (Flyology_TUI.Events.Tab_Key, Modified));
+         when 'P' | 'Q' | 'R' | 'S' =>
+            --  The enhanced keyboard protocol reports F1 to F4 in this CSI
+            --  form instead of the legacy SS3 form, because SS3 cannot
+            --  carry a modifier. It always sends 1 as the first parameter.
+            --  Requiring that also keeps a cursor position report, whose
+            --  first parameter is a row, from being read as a function key.
+            declare
+               Last : constant Natural :=
+                 (if Separator = 0 then Params'Last else Separator - 1);
+               Number_Of : constant Positive :=
+                 (if Final = 'P' then 1
+                  elsif Final = 'Q' then 2
+                  elsif Final = 'R' then 3
+                  else 4);
+               Leading : Natural := 1;
+               Usable : Boolean := True;
+            begin
+               if Params'Length > 0 then
+                  Leading := Number (Params (Params'First .. Last), Good);
+                  Usable := Good and then Leading = 1;
+               end if;
+               if Usable then
+                  Push (Item, Function_Key (Number_Of, Modified));
+               end if;
+            end;
+         when 'u' =>
+            --  Kitty keyboard protocol: CSI <code> ; <modifiers> u. The
+            --  disambiguating flag this toolkit requests reports only keys
+            --  a legacy encoding cannot express, so ordinary text still
+            --  arrives as text and only modified keys take this path. A
+            --  leading '?' marks the terminal's flag report, not a key.
+            if Params'Length > 0 and then Params (Params'First) /= '?' then
+               declare
+                  Last : constant Natural :=
+                    (if Separator = 0 then Params'Last else Separator - 1);
+               begin
+                  Primary := Number (Params (Params'First .. Last), Good);
+                  if Good then
+                     case Primary is
+                        when 13 =>
+                           Push
+                             (Item,
+                              Special_Key
+                                (Flyology_TUI.Events.Enter_Key, Modified));
+                        when 9 =>
+                           Push
+                             (Item,
+                              Special_Key
+                                (Flyology_TUI.Events.Tab_Key, Modified));
+                        when 27 =>
+                           Push
+                             (Item,
+                              Special_Key
+                                (Flyology_TUI.Events.Escape_Key, Modified));
+                        when 8 | 127 =>
+                           Push
+                             (Item,
+                              Special_Key
+                                (Flyology_TUI.Events.Backspace_Key,
+                                 Modified));
+                        when others =>
+                           if Primary in 32 .. 16#10FFFF# then
+                              Push
+                                (Item,
+                                 Text_Key
+                                   ((1 => Wide_Wide_Character'Val (Primary)),
+                                    Modified));
+                           end if;
+                     end case;
+                  end if;
+               end;
+            end if;
          when '~' =>
             declare
                Last : constant Natural :=
